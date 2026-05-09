@@ -5,6 +5,9 @@ import CategoryCard from "./components/CategoryCard";
 import ProductCard from "./components/ProductCard";
 import AIBanner from "./components/AIBanner";
 import Hero from "./components/Hero";
+import HiCarAIChatUI from "./components/HiCarAIChatUI";
+
+
 function Icon({ d }: { d: string }) {
   return (
     <svg className="w-4 h-4 fill-violet-600" viewBox="0 0 24 24"><path d={d} /></svg>
@@ -41,6 +44,7 @@ export default function Home() {
     <>
       <Navbar />
       <Hero/> 
+      <HiCarAIChatUI/>
       {/* HERO */}
       {/* <section className="hero-gradient px-6 pt-12 pb-9">
         <div className="max-w-6xl mx-auto">

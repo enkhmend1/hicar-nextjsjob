@@ -12,7 +12,8 @@ export default function AIBanner() {
           Зураг оруулахад AI Japan сайтуудаас OEM дугаарыг хайж олно
         </div>
       </div>
-      <span className="ml-auto text-gray-400 text-lg">→</span>
+      <span className="ml-auto text-gray-400 text-lg">→</span> 
+      
     </div>
   );
 }
