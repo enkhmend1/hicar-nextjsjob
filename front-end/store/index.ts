@@ -1,8 +1,11 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { CartItem, Product, User, Order } from "@/app/types";
+import { CartItem, Product, User } from "@/app/types";
 import { DELIVERY_PRICE } from "@/lib/data";
+import { setToken, onAuthExpired, api } from "@/lib/api";
+
+const pid = (p: Product) => (p._id ?? p.id) as string;
 
 /* ── Cart ─────────────────────────────────────────────────────── */
 interface CartStore {
@@ -20,15 +23,16 @@ export const useCartStore = create<CartStore>()(
     items: [],
     addItem: (product, dt = "normal") =>
       set(s => {
-        const ex = s.items.find(i => i.product.id === product.id);
-        if (ex) return { items: s.items.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i) };
+        const k = pid(product);
+        const ex = s.items.find(i => pid(i.product) === k);
+        if (ex) return { items: s.items.map(i => pid(i.product) === k ? { ...i, quantity: i.quantity + 1 } : i) };
         return { items: [...s.items, { product, quantity: 1, deliveryType: dt }] };
       }),
-    removeItem: id => set(s => ({ items: s.items.filter(i => i.product.id !== id) })),
+    removeItem: id => set(s => ({ items: s.items.filter(i => pid(i.product) !== id) })),
     updateQty: (id, qty) =>
-      set(s => ({ items: qty <= 0 ? s.items.filter(i => i.product.id !== id) : s.items.map(i => i.product.id === id ? { ...i, quantity: qty } : i) })),
+      set(s => ({ items: qty <= 0 ? s.items.filter(i => pid(i.product) !== id) : s.items.map(i => pid(i.product) === id ? { ...i, quantity: qty } : i) })),
     updateDelivery: (id, dt) =>
-      set(s => ({ items: s.items.map(i => i.product.id === id ? { ...i, deliveryType: dt } : i) })),
+      set(s => ({ items: s.items.map(i => pid(i.product) === id ? { ...i, deliveryType: dt } : i) })),
     clearCart: () => set({ items: [] }),
     total: () => get().items.reduce((s, i) => s + i.product.price * i.quantity + DELIVERY_PRICE[i.deliveryType], 0),
     count: () => get().items.reduce((s, i) => s + i.quantity, 0),
@@ -38,43 +42,77 @@ export const useCartStore = create<CartStore>()(
 /* ── Auth ─────────────────────────────────────────────────────── */
 interface AuthStore {
   user: User | null;
-  login: (u: User) => void;
+  token: string | null;
+  _hasHydrated: boolean;
+  setSession: (user: User, token: string) => void;
+  setUser: (user: User) => void;
   logout: () => void;
-  topUpWallet: (amount: number) => void;
-  deductWallet: (amount: number) => void;
 }
 export const useAuthStore = create<AuthStore>()(
   persist((set) => ({
     user: null,
-    login: user => set({ user }),
-    logout: () => set({ user: null }),
-    topUpWallet: amount => set(s => s.user ? { user: { ...s.user, walletBalance: s.user.walletBalance + amount } } : s),
-    deductWallet: amount => set(s => s.user ? { user: { ...s.user, walletBalance: s.user.walletBalance - amount } } : s),
-  }), { name: "hicar-auth" })
+    token: null,
+    _hasHydrated: false,
+    setSession: (user, token) => { setToken(token); set({ user, token }); },
+    setUser: user => set({ user }),
+    logout: () => {
+      api.logout().catch(() => {}); // fire-and-forget — clears refresh cookie server-side
+      set({ user: null, token: null });
+    },
+  }), {
+    name: "hicar-auth",
+    partialize: (s) => ({ user: s.user, token: s.token }),
+    onRehydrateStorage: () => (state) => {
+      if (state?.token) setToken(state.token);
+      queueMicrotask(() => useAuthStore.setState({ _hasHydrated: true }));
+    },
+  })
 );
 
-/* ── Orders ───────────────────────────────────────────────────── */
-interface OrderStore {
-  orders: Order[];
-  addOrder: (order: Order) => void;
-  updateStatus: (id: string, status: Order["status"]) => void;
+// Wire api → store so that a 401 on any request resets the session
+if (typeof window !== "undefined") {
+  onAuthExpired(() => {
+    useAuthStore.setState({ user: null, token: null });
+    // Clear cross-feature in-memory state that depends on session
+    import("./wishlist").then(m => m.useWishlistStore.getState().clear());
+  });
+  // Lazy-load wishlist whenever user transitions from null → non-null
+  useAuthStore.subscribe((state, prev) => {
+    if (state.user && !prev.user) {
+      import("./wishlist").then(m => m.useWishlistStore.getState().load());
+    } else if (!state.user && prev.user) {
+      import("./wishlist").then(m => m.useWishlistStore.getState().clear());
+    }
+  });
 }
-export const useOrderStore = create<OrderStore>()(
-  persist((set) => ({
-    orders: [],
-    addOrder: order => set(s => ({ orders: [order, ...s.orders] })),
-    updateStatus: (id, status) => set(s => ({ orders: s.orders.map(o => o.id === id ? { ...o, status } : o) })),
-  }), { name: "hicar-orders" })
-);
 
-/* ── Car ──────────────────────────────────────────────────────── */
+/* ── Car / Active vehicle context ─────────────────────────────────
+ * Anything that needs to scope a search/chat to "the vehicle the user is
+ * currently looking at" reads from this store. /lookup page sets it after
+ * a successful plate identification; AIChatWidget reads it to switch from
+ * generic chat → vehicle-aware /search/smart.
+ */
+export interface ActiveVehicle {
+  id: string;                   // backend Vehicle._id
+  plate: string;
+  manufacturer: string;
+  model: string;
+  generation?: string;
+  engineCode?: string;
+  engineType?: string;
+}
+
 interface CarStore {
-  selectedCar: import("@/app/types").Car | null;
+  selectedCar: import("@/app/types").Car | null;   // legacy display obj
+  activeVehicle: ActiveVehicle | null;             // canonical id-based context
   setCar: (car: import("@/app/types").Car | null) => void;
+  setActiveVehicle: (v: ActiveVehicle | null) => void;
 }
 export const useCarStore = create<CarStore>()(
   persist((set) => ({
     selectedCar: null,
-    setCar: car => set({ selectedCar: car }),
+    activeVehicle: null,
+    setCar: (car) => set({ selectedCar: car }),
+    setActiveVehicle: (v) => set({ activeVehicle: v }),
   }), { name: "hicar-car" })
 );
