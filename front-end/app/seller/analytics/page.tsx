@@ -11,7 +11,7 @@ import {
 // ── Types ───────────────────────────────────────────────────────────
 interface Analytics {
   range: { from: string; to: string };
-  commissionRate: number;
+  platformFeePercent: number;
   totals: {
     orders: number; revenue: number; units: number;
     commission: number; profit: number; avgOrderValue: number;
@@ -149,7 +149,7 @@ export default function SellerAnalyticsPage() {
           {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kpi label="Орлого" value={`₮${data.totals.revenue.toLocaleString()}`} sub={`${data.totals.orders} захиалга`} icon={Coins} tone="violet" />
-            <Kpi label="Цэвэр ашиг" value={`₮${data.totals.profit.toLocaleString()}`} sub={`Хураамж ${data.commissionRate}% (₮${data.totals.commission.toLocaleString()})`} icon={TrendingUp} tone="emerald" />
+            <Kpi label="Цэвэр ашиг" value={`₮${data.totals.profit.toLocaleString()}`} sub={`Хураамж ${data.platformFeePercent}% (₮${data.totals.commission.toLocaleString()})`} icon={TrendingUp} tone="emerald" />
             <Kpi label="Дундаж захиалга" value={`₮${data.totals.avgOrderValue.toLocaleString()}`} sub={`${data.totals.units} ширхэг`} icon={ShoppingBag} tone="fuchsia" />
             <Kpi label="Нөөц" value={`₮${data.inventory.stockValue.toLocaleString()}`} sub={`${data.inventory.totalStock} ширхэг`} icon={Package} tone="indigo" />
           </div>

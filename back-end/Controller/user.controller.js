@@ -74,10 +74,25 @@ export const listSellers = async (req, res) => {
   }
 };
 
-/** Approve / reject a pending seller. */
+/**
+ * Approve / reject a pending seller.
+ *
+ * Body: { action: "approve"|"reject", reason?, platformFeePercent? }
+ * `platformFeePercent` is optional on approve — admin can leave the default
+ * (5%) and tune it later via PATCH /:id/economics. We accept the legacy
+ * `commissionRate` field too so older clients keep working through the
+ * transition window.
+ */
 export const moderateSeller = async (req, res) => {
   try {
-    const { action, reason, commissionRate } = req.body;
+    const { action, reason } = req.body;
+    // Accept either the new name or the legacy alias.
+    const incomingFee =
+      typeof req.body.platformFeePercent === "number"
+        ? req.body.platformFeePercent
+        : typeof req.body.commissionRate === "number"
+          ? req.body.commissionRate
+          : undefined;
     if (!["approve", "reject"].includes(action)) {
       return res.status(400).json({ message: "action: approve | reject" });
     }
@@ -90,8 +105,8 @@ export const moderateSeller = async (req, res) => {
         ...(user.sellerProfile || {}),
         approvedAt: new Date(),
         rejectedReason: "",
-        ...(typeof commissionRate === "number"
-          ? { commissionRate: Math.max(0, Math.min(50, commissionRate)) }
+        ...(typeof incomingFee === "number"
+          ? { platformFeePercent: Math.max(0, Math.min(50, incomingFee)) }
           : {}),
       };
       if (user.role === "user") user.role = "seller";

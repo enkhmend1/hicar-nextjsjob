@@ -92,6 +92,31 @@ export const enqueue = async (name, data, opts = {}) => {
 };
 
 /**
+ * Cancel a queued/delayed job. Only meaningful in BullMQ mode — inline jobs
+ * have already run. Returns true if the job was actually removed, false if
+ * it was already past the cancellable state or didn't exist.
+ *
+ * Used by the escrow flow: when a dispute opens we cancel the delayed
+ * release job so the worker doesn't pay the seller while we investigate.
+ */
+export const cancelJob = async (name, id) => {
+  if (!id) return false;
+  const entry = registry.get(name);
+  if (!entry?.queue) return false;
+  try {
+    const job = await entry.queue.getJob(id);
+    if (!job) return false;
+    const state = await job.getState();
+    // Only cancellable while still queued / delayed / waiting.
+    if (!["waiting", "delayed", "paused", "waiting-children"].includes(state)) return false;
+    await job.remove();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Fetch a job's status by id (Redis-only — sync jobs are already done).
  */
 export const getJob = async (name, id) => {
