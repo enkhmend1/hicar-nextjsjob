@@ -133,7 +133,7 @@ export default function SellerProfilePage() {
             </Field>
 
             <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
-              <Stat label="Хураамж"  value={`${user.sellerProfile?.commissionRate ?? 10}%`} />
+              <Stat label="Хураамж"  value={`${user.sellerProfile?.platformFeePercent ?? 5}%`} />
               <Stat label="Үнэлгээ"  value={user.sellerProfile?.rating ? `${user.sellerProfile.rating.toFixed(1)} (${user.sellerProfile.ratingCount ?? 0})` : "—"} />
               <Stat label="Нийт бор." value={`₮${(user.sellerProfile?.totalSales ?? 0).toLocaleString()}`} />
             </div>

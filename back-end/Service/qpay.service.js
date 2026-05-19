@@ -111,3 +111,60 @@ export const cancelInvoice = async (invoiceId) => {
     });
   } catch { /* ignore */ }
 };
+
+/**
+ * Issue a refund against a paid QPay invoice.
+ *
+ * QPay v2 refund endpoint expects the underlying PAYMENT ID (the one
+ * inside checkPayment's `rows[].payment_id`), not the invoice id — so we
+ * always do a check first to surface the most-recent successful payment.
+ *
+ * Returns { ok: true, refundId, amount } on success.
+ * If QPay is disabled, returns a synthetic refund id so the dispute flow
+ * can still complete in dev/test without crashing.
+ */
+export const refundPayment = async ({ invoiceId, amount, note }) => {
+  if (!qpayEnabled) {
+    return {
+      ok: true,
+      refundId: `mock-refund-${Date.now()}`,
+      amount,
+      mocked: true,
+    };
+  }
+  const token = await getAuthToken();
+
+  // 1. Resolve the most recent successful payment for this invoice.
+  const check = await checkPayment(invoiceId);
+  const successful = (check.rows || []).find(
+    (r) => String(r.payment_status || "").toUpperCase() === "PAID"
+        || Number(r.payment_amount || 0) > 0,
+  );
+  if (!successful?.payment_id) {
+    throw new Error(`QPay refund: no successful payment found for invoice ${invoiceId}`);
+  }
+
+  // 2. Hit /payment/refund. The API supports a refund-amount param for partials.
+  const res = await fetch(`${BASE}/payment/refund/${successful.payment_id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      note: note || "HiCar dispute refund",
+      refund_amount: amount,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`QPay refund failed: ${res.status} ${text}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  return {
+    ok: true,
+    refundId: data.refund_id || data.id || `qpay-refund-${successful.payment_id}`,
+    amount,
+    raw: data,
+  };
+};

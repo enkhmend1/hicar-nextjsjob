@@ -2,6 +2,7 @@ import Order from "../Model/order.model.js";
 import Product from "../Model/product.model.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
+import { scheduleRelease, cancelScheduledRelease } from "../Queue/escrowRelease.queue.js";
 
 const DELIVERY_PRICE = { fast: 15000, normal: 8000, cheap: 0 };
 const STATUS_LABEL_MN = {
@@ -52,7 +53,14 @@ export const createOrder = async (req, res) => {
       const dt = ["fast", "normal", "cheap"].includes(i.deliveryType) ? i.deliveryType : "normal";
       total += p.price * qty;
       deliveryFee += DELIVERY_PRICE[dt];
-      enriched.push({ product: p._id, name: p.name, oem: p.oem, price: p.price, quantity: qty, deliveryType: dt });
+      // `seller` is denormalised onto the order line so per-seller payout
+      // queries don't need a populate(). Escrow split fields (lineRevenue /
+      // platformFee / sellerPayout / bankSnapshot) stay zero here — they're
+      // filled in atomically by the QPay callback once the payment lands.
+      enriched.push({
+        product: p._id, seller: p.seller,
+        name: p.name, oem: p.oem, price: p.price, quantity: qty, deliveryType: dt,
+      });
     }
     total += deliveryFee;
 
@@ -161,9 +169,10 @@ export const updateStatus = async (req, res) => {
 
     const wasCancelled = order.status === "cancelled";
     const becomingCancelled = status === "cancelled";
+    const becomingDelivered = status === "delivered" && order.status !== "delivered";
 
     // Rollback stock only on first cancellation. Money refund is handled
-    // by the dispute / refund flow (QPay refund API) — see Phase 2.
+    // by the dispute / refund flow (QPay refund API).
     if (becomingCancelled && !wasCancelled) {
       for (const it of order.items) {
         await Product.updateOne(
@@ -171,10 +180,24 @@ export const updateStatus = async (req, res) => {
           { $inc: { stockQty: it.quantity }, $set: { inStock: true } },
         );
       }
+      // No point holding escrow for a cancelled order — cancel the worker.
+      await cancelScheduledRelease(order).catch(() => {});
+    }
+
+    if (becomingDelivered) {
+      order.deliveredAt = new Date();
     }
 
     order.status = status;
     await order.save();
+
+    // Schedule the escrow-release worker AFTER persisting deliveredAt so
+    // the worker has a stable point of truth. Skipped if a dispute is
+    // already open — the dispute flow will reschedule on resolution.
+    if (becomingDelivered && order.paymentStatus === "PAID" && !order.hasOpenDispute) {
+      await scheduleRelease(order).catch((e) =>
+        console.warn("[order.delivered] scheduleRelease failed:", e.message));
+    }
     const populated = await order.populate("user", "name email phone");
 
     // Notify the customer about the status change

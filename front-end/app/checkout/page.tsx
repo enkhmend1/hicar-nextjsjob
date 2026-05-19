@@ -7,7 +7,7 @@ import { useCartStore, useAuthStore } from "@/store";
 import { api, ApiError } from "@/lib/api";
 import { Order } from "@/app/types";
 import { DELIVERY_PRICE } from "@/lib/data";
-import { CheckCircle, Wallet, QrCode, CreditCard, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
+import { CheckCircle, QrCode, CreditCard, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface QPayInvoice {
@@ -19,7 +19,9 @@ interface QPayInvoice {
 }
 
 type Step = "info" | "payment" | "qpay" | "done";
-type PayMethod = "qpay" | "wallet" | "card";
+// Wallet removed in Phase 1 — money flow goes through QPay (card is a stub
+// route that will be wired to a real processor later).
+type PayMethod = "qpay" | "card";
 
 // Stable QR pattern keyed by total amount — does NOT regenerate on tick
 const FakeQR = ({ seed }: { seed: number }) => {
@@ -55,7 +57,7 @@ const FakeQR = ({ seed }: { seed: number }) => {
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, total, clearCart, removeItem } = useCartStore();
-  const { user, setUser } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [step, setStep] = useState<Step>("info");
   const [payMethod, setPayMethod] = useState<PayMethod>("qpay");
@@ -65,11 +67,17 @@ export default function CheckoutPage() {
   const [err, setErr] = useState("");
   const [qpayTimer, setQpayTimer] = useState(300);
   const [qpayInvoice, setQpayInvoice] = useState<QPayInvoice | null>(null);
-  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  // Tracked so future code can resume the QPay-pending state across reloads.
+  const [, setPendingOrderId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Cleanup must be registered BEFORE the empty-cart early return — moving an
+  // effect after a conditional return breaks rules-of-hooks.
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+  }, []);
+
   const orderTotal = total();
-  const canPayWallet = !!user && user.walletBalance >= orderTotal;
 
   if (items.length === 0) return (
     <>
@@ -142,17 +150,12 @@ export default function CheckoutPage() {
       } finally {
         setBusy(false);
       }
-    } else if (payMethod === "wallet") {
-      if (!canPayWallet) return;
-      placeOrder("wallet");
     } else {
+      // "card" → currently routes through the same backend path; real card
+      // processor integration is Phase 2 work.
       placeOrder("card");
     }
   };
-
-  useEffect(() => () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-  }, []);
 
   const placeOrder = async (method: PayMethod) => {
     setBusy(true); setErr("");
@@ -166,9 +169,6 @@ export default function CheckoutPage() {
         address, phone, paymentMethod: method,
       };
       const { order } = await api.post<{ order: Order }>("/orders", payload);
-      if (method === "wallet" && user) {
-        setUser({ ...user, walletBalance: user.walletBalance - orderTotal });
-      }
       clearCart();
       router.push(`/orders?new=${order._id ?? order.id}`);
     } catch (e) {
@@ -275,22 +275,6 @@ export default function CheckoutPage() {
                   <div className="text-[12px] text-gray-500">QR код скан хийж төлнө</div>
                 </div>
                 <span className="text-[11px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full font-medium">Түгээмэл</span>
-              </label>
-
-              <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "wallet" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"} ${!canPayWallet ? "opacity-60" : ""}`}>
-                <input type="radio" name="pay" value="wallet" checked={payMethod === "wallet"} onChange={() => setPayMethod("wallet")}
-                  disabled={!canPayWallet} className="accent-violet-600" />
-                <div className="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center shrink-0">
-                  <Wallet size={20} className="text-violet-600" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[14px] font-semibold text-gray-900">HiCar Wallet</div>
-                  <div className="text-[12px] text-gray-500">
-                    Үлдэгдэл: ₮{(user?.walletBalance ?? 0).toLocaleString()}
-                    {!canPayWallet && <span className="text-red-400 ml-1">· Хүрэлцэхгүй</span>}
-                  </div>
-                </div>
-                {canPayWallet && <CheckCircle size={16} className="text-emerald-500" />}
               </label>
 
               <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "card" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"}`}>

@@ -5,7 +5,7 @@ import { useCartStore, useAuthStore } from "@/store";
 import { useT } from "@/lib/i18n";
 import LangSwitcher from "./LangSwitcher";
 import NotificationBell from "./NotificationBell";
-import { ShoppingCart, User, Menu, X, Wallet, LogOut, Package, Shield, Store, Heart, Car } from "lucide-react";
+import { ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car } from "lucide-react";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -50,9 +50,6 @@ export default function Navbar() {
           <NotificationBell />
           {user ? (
             <>
-              <div className="flex items-center gap-1.5 bg-violet-50 border border-violet-200 rounded-lg px-3 py-1.5 text-[13px] text-violet-700 font-medium cursor-default">
-                <Wallet size={13} /> ₮{user.walletBalance.toLocaleString()}
-              </div>
               <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-1.5 text-[13px] text-gray-600">
                 <User size={13} />{user.name.split(" ")[0]}
               </div>

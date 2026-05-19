@@ -1,6 +1,7 @@
 import Order from "../Model/order.model.js";
 import { createInvoice, checkPayment, qpayEnabled } from "../Service/qpay.service.js";
 import { notify } from "../Service/notification.service.js";
+import { settleOrderPaid } from "../Service/escrow.service.js";
 
 /**
  * POST /api/qpay/invoice
@@ -43,8 +44,26 @@ export const createOrderInvoice = async (req, res) => {
 };
 
 /**
+ * Fire the "payment confirmed" notification. Extracted so the polling path
+ * and the callback path send the exact same message — and only ONCE per
+ * order (escrow.settleOrderPaid returns false on duplicate calls).
+ */
+const notifyPaid = (order) => {
+  notify({
+    user: order.user,
+    type: "payment_received",
+    title: "Төлбөр баталгаажлаа ✓",
+    body: `#${String(order._id).slice(-8).toUpperCase()} — ₮${order.total.toLocaleString()} төлөгдсөн`,
+    link: "/orders",
+    data: { orderId: String(order._id) },
+    email: true,
+  });
+};
+
+/**
  * GET /api/qpay/check/:orderId
- * Polls QPay to see if the invoice was paid. If yes, marks order as paid.
+ * Polls QPay to see if the invoice was paid. If yes, marks order as paid
+ * AND atomically freezes the escrow split via escrow.service.
  */
 export const checkOrderPayment = async (req, res) => {
   try {
@@ -54,27 +73,20 @@ export const checkOrderPayment = async (req, res) => {
     if (!order.qpayInvoice?.invoice_id) {
       return res.status(400).json({ message: "QPay invoice байхгүй" });
     }
-    if (order.status === "paid" || order.status === "processing" || order.status === "shipped" || order.status === "delivered") {
-      return res.json({ status: order.status, paid: true });
+    // Already past PENDING — no need to call upstream.
+    if (order.paymentStatus !== "PENDING") {
+      return res.json({ status: order.status, paymentStatus: order.paymentStatus, paid: order.paymentStatus !== "FAILED" });
     }
 
     const result = await checkPayment(order.qpayInvoice.invoice_id);
     const paid = (result.count || 0) > 0 && Number(result.paid_amount || 0) >= order.total;
-    if (paid && order.status === "pending") {
-      order.status = "paid";
-      order.qpayInvoice.paid_at = new Date();
-      await order.save();
-      notify({
-        user: order.user,
-        type: "payment_received",
-        title: "Төлбөр баталгаажлаа ✓",
-        body: `#${String(order._id).slice(-8).toUpperCase()} — ₮${order.total.toLocaleString()} төлөгдсөн`,
-        link: "/orders",
-        data: { orderId: String(order._id) },
-        email: true,
-      });
+    if (paid) {
+      const transitioned = await settleOrderPaid(order._id);
+      if (transitioned) notifyPaid(order);
     }
-    return res.json({ status: order.status, paid });
+    // Re-read to return the canonical post-transition state.
+    const fresh = await Order.findById(order._id).select("status paymentStatus");
+    return res.json({ status: fresh.status, paymentStatus: fresh.paymentStatus, paid });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -83,6 +95,9 @@ export const checkOrderPayment = async (req, res) => {
 /**
  * POST /api/qpay/callback?orderId=...
  * Public — QPay calls this when payment confirmed. No auth (verify by checking with QPay).
+ *
+ * Idempotent: if the order is already PAID this is a no-op. Same flow as the
+ * polling path so a callback and a poll that race only flip the order once.
  */
 export const callback = async (req, res) => {
   try {
@@ -92,22 +107,12 @@ export const callback = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order || !order.qpayInvoice?.invoice_id) return res.status(404).json({ message: "Захиалга олдсонгүй" });
 
-    // Verify with QPay (don't trust the callback body blindly)
+    // Verify with QPay — don't trust the callback body blindly.
     const result = await checkPayment(order.qpayInvoice.invoice_id);
     const paid = (result.count || 0) > 0 && Number(result.paid_amount || 0) >= order.total;
-    if (paid && order.status === "pending") {
-      order.status = "paid";
-      order.qpayInvoice.paid_at = new Date();
-      await order.save();
-      notify({
-        user: order.user,
-        type: "payment_received",
-        title: "Төлбөр баталгаажлаа ✓",
-        body: `#${String(order._id).slice(-8).toUpperCase()} — ₮${order.total.toLocaleString()} төлөгдсөн`,
-        link: "/orders",
-        data: { orderId: String(order._id) },
-        email: true,
-      });
+    if (paid) {
+      const transitioned = await settleOrderPaid(order._id);
+      if (transitioned) notifyPaid(order);
     }
     return res.json({ ok: true, paid });
   } catch (err) {

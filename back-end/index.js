@@ -14,6 +14,8 @@ import './Service/proxyPool.service.js';
 import './Service/garage.service.js';
 import './Service/jobQueue.service.js';
 import './Queue/vehicleLookup.queue.js';
+import './Queue/escrowRelease.queue.js';      // Phase-2 escrow worker
+import './Queue/disputeDeadline.queue.js';    // Phase-2 dispute SLA worker
 import './Service/notification.service.js';
 import './Service/qpay.service.js';
 
@@ -36,6 +38,7 @@ import trainingRoutes     from './Routes/training.route.js';
 import proxyRoutes        from './Routes/proxy.route.js';
 import smartSearchRoutes  from './Routes/smartSearch.route.js';
 import sellerImportRoutes from './Routes/sellerImport.route.js';
+import disputeRoutes      from './Routes/dispute.route.js';
 
 connectDB();
 
@@ -76,6 +79,7 @@ app.use('/api/training',      trainingRoutes);
 app.use('/api/admin/proxy',   proxyRoutes);
 app.use('/api/search',        smartSearchRoutes);
 app.use('/api/seller/import', sellerImportRoutes);
+app.use('/api/disputes',      disputeRoutes);   // Phase-2: refund / dispute system
 
 app.use((err, _req, res, _next) => {
   console.error(chalk.red(err.stack || err.message));

@@ -3,10 +3,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
+import DisputeModal from "@/app/components/DisputeModal";
 import { useAuthStore } from "@/store";
 import { api } from "@/lib/api";
 import { Order } from "@/app/types";
-import { Package, ChevronRight } from "lucide-react";
+import { Package, Scale, ShieldCheck } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Хүлээгдэж буй",
@@ -24,20 +25,47 @@ const STATUS_COLOR: Record<string, string> = {
   delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
 };
+const PAYMENT_LABEL: Record<string, { label: string; cls: string }> = {
+  PAID:           { label: "Escrow",        cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  DISPUTED:       { label: "Escrow LOCKED", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  PARTIAL_REFUND: { label: "Хэсэг буцаалт", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  REFUNDED:       { label: "Бүрэн буцаалт", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  PAID_OUT:       { label: "Төлбөр явсан",  cls: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+
+/**
+ * An order is disputable when:
+ *   • money is in escrow (PAID or PARTIAL_REFUND — there's still something to refund)
+ *   • goods have been promised (status != pending / cancelled)
+ *   • there isn't already a live dispute on the order
+ *
+ * Mirrors the server-side guard in dispute.service.createDispute, so the
+ * button only appears when the action would succeed.
+ */
+const isDisputable = (o: Order) =>
+  (o.paymentStatus === "PAID" || o.paymentStatus === "PARTIAL_REFUND") &&
+  ["paid", "processing", "shipped", "delivered"].includes(o.status) &&
+  !o.hasOpenDispute;
 
 export default function OrdersPage() {
   const router = useRouter();
   const { user, _hasHydrated } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [disputeFor, setDisputeFor] = useState<Order | null>(null);
+
+  const reload = () => {
+    setLoading(true);
+    api.get<{ orders: Order[] }>("/orders/mine")
+      .then((d) => setOrders(d.orders))
+      .catch(() => setOrders([]))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     if (!_hasHydrated) return;
     if (!user) { router.push("/auth/login"); return; }
-    api.get<{ orders: Order[] }>("/orders/mine")
-      .then(d => setOrders(d.orders))
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
+    reload();
   }, [user, router, _hasHydrated]);
 
   if (!_hasHydrated || !user) return null;
@@ -64,34 +92,68 @@ export default function OrdersPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {orders.map(o => (
-              <div key={o._id ?? o.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[12px] text-gray-400 font-mono">#{(o._id ?? o.id ?? "").toString().slice(-8).toUpperCase()}</div>
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUS_COLOR[o.status]}`}>
-                    {STATUS_LABEL[o.status]}
-                  </span>
-                </div>
-                <div className="text-[12px] text-gray-500 mb-2">
-                  {new Date(o.createdAt).toLocaleString("mn-MN")} · {o.paymentMethod.toUpperCase()}
-                </div>
-                <div className="space-y-1 mb-3">
-                  {(o.items as { name: string; quantity: number; price: number }[]).map((i, idx) => (
-                    <div key={idx} className="flex justify-between text-[13px]">
-                      <span className="text-gray-600 truncate flex-1 mr-3">{i.name} ×{i.quantity}</span>
-                      <span className="text-gray-500 shrink-0">₮{(i.price * i.quantity).toLocaleString()}</span>
+            {orders.map((o) => {
+              const pay = o.paymentStatus ? PAYMENT_LABEL[o.paymentStatus] : null;
+              return (
+                <div key={o._id ?? o.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                    <div className="text-[12px] text-gray-400 font-mono">#{(o._id ?? o.id ?? "").toString().slice(-8).toUpperCase()}</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUS_COLOR[o.status]}`}>
+                        {STATUS_LABEL[o.status]}
+                      </span>
+                      {pay && (
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${pay.cls}`}>
+                          {pay.label}
+                        </span>
+                      )}
+                      {o.hasOpenDispute && (
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200 inline-flex items-center gap-1">
+                          <Scale size={10} /> Маргаан
+                        </span>
+                      )}
                     </div>
-                  ))}
+                  </div>
+                  <div className="text-[12px] text-gray-500 mb-2">
+                    {new Date(o.createdAt).toLocaleString("mn-MN")} · {o.paymentMethod.toUpperCase()}
+                  </div>
+                  <div className="space-y-1 mb-3">
+                    {(o.items as { name: string; quantity: number; price: number }[]).map((i, idx) => (
+                      <div key={idx} className="flex justify-between text-[13px]">
+                        <span className="text-gray-600 truncate flex-1 mr-3">{i.name} ×{i.quantity}</span>
+                        <span className="text-gray-500 shrink-0">₮{(i.price * i.quantity).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                      <ShieldCheck size={12} className="text-emerald-500" /> Escrow хамгаалалт
+                    </div>
+                    <span className="text-[15px] font-bold text-violet-600">₮{o.total.toLocaleString()}</span>
+                  </div>
+
+                  {isDisputable(o) && (
+                    <div className="mt-2 pt-2 border-t border-gray-100 flex justify-end">
+                      <button onClick={() => setDisputeFor(o)}
+                        className="inline-flex items-center gap-1.5 text-[12px] text-rose-600 hover:text-rose-700 bg-transparent border-none cursor-pointer font-semibold font-sans">
+                        <Scale size={12} /> Маргаан гаргах
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                  <span className="text-[13px] text-gray-500">Нийт</span>
-                  <span className="text-[15px] font-bold text-violet-600">₮{o.total.toLocaleString()}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
+
+      {disputeFor && (
+        <DisputeModal
+          order={disputeFor}
+          onClose={() => setDisputeFor(null)}
+          onCreated={() => { setDisputeFor(null); reload(); }}
+        />
+      )}
     </>
   );
 }

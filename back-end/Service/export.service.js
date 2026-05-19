@@ -21,7 +21,7 @@ export const buildXlsx = (analytics, { shopName = "" } = {}) => {
   const summary = [
     ["Дэлгүүр", shopName || "—"],
     ["Хугацаа", `${fmtDate(analytics.range.from)} – ${fmtDate(analytics.range.to)}`],
-    ["Хураамж", `${analytics.commissionRate}%`],
+    ["Хураамж", `${analytics.platformFeePercent}%`],
     [],
     ["Захиалга", analytics.totals.orders],
     ["Ширхэг борлуулсан", analytics.totals.units],
@@ -121,7 +121,7 @@ export const buildCsv = (analytics, { shopName = "" } = {}) => {
   const lines = [];
   lines.push(csvRow(["Дэлгүүр", shopName || "—"]));
   lines.push(csvRow(["Хугацаа", `${fmtDate(analytics.range.from)} – ${fmtDate(analytics.range.to)}`]));
-  lines.push(csvRow(["Хураамж %", analytics.commissionRate]));
+  lines.push(csvRow(["Хураамж %", analytics.platformFeePercent]));
   lines.push("");
 
   lines.push(csvRow(["Үзүүлэлт", "Утга"]));
@@ -222,7 +222,7 @@ export const buildPdf = (analytics, { shopName = "" } = {}) =>
           ["Захиалга", t.orders],
           ["Ширхэг борлуулсан", t.units],
           ["Орлого", fmtCur(t.revenue)],
-          ["Хураамж (" + analytics.commissionRate + "%)", fmtCur(t.commission)],
+          ["Хураамж (" + analytics.platformFeePercent + "%)", fmtCur(t.commission)],
           ["Цэвэр ашиг", fmtCur(t.profit)],
           ["Дундаж захиалгын дүн", fmtCur(t.avgOrderValue)],
         ],

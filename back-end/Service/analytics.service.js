@@ -41,7 +41,7 @@ export const getSellerAnalytics = async (sellerId, range) => {
     return emptyPayload(from, to, await loadCommission(sellerId));
   }
 
-  const commissionRate = await loadCommission(sellerId);
+  const platformFeePercent = await loadCommission(sellerId);
 
   const baseMatch = {
     "items.product": { $in: productIds },
@@ -192,13 +192,13 @@ export const getSellerAnalytics = async (sellerId, range) => {
     inStockCount: 0, outOfStockCount: 0, totalStock: 0, stockValue: 0,
   };
 
-  const commission = Math.round((totals.revenue * commissionRate) / 100);
+  const commission = Math.round((totals.revenue * platformFeePercent) / 100);
   const profit = totals.revenue - commission;
   const avgOrderValue = totals.orders ? Math.round(totals.revenue / totals.orders) : 0;
 
   return {
     range: { from, to },
-    commissionRate,
+    platformFeePercent,
     totals: {
       orders: totals.orders,
       revenue: totals.revenue,
@@ -222,9 +222,9 @@ const loadCommission = async (sellerId) => {
   return s?.sellerProfile?.platformFeePercent ?? 5;
 };
 
-const emptyPayload = (from, to, commissionRate) => ({
+const emptyPayload = (from, to, platformFeePercent) => ({
   range: { from, to },
-  commissionRate,
+  platformFeePercent,
   totals: { orders: 0, revenue: 0, units: 0, commission: 0, profit: 0, avgOrderValue: 0 },
   daily: [],
   monthly: [],
