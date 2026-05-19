@@ -1,0 +1,279 @@
+/**
+ * Seller bulk-import controller.
+ *
+ * Endpoints (all require an approved seller):
+ *
+ *   POST /api/seller/import/enrich        — single row enrich, sync
+ *   POST /api/seller/import/enrich-bulk   — N rows enrich, sync (bounded concurrency)
+ *   POST /api/seller/import/parse         — parse uploaded .csv/.xlsx file → rows
+ *   POST /api/seller/import/commit        — persist enriched rows as Products
+ *   POST /api/seller/import/ocr           — image URL → GPT-4V → extract → enrich
+ *
+ * Design:
+ *   • Enrichment is a separate step from commit on purpose — the seller sees
+ *     a preview and can correct AI mistakes before anything is written.
+ *   • Bulk commit decrements nothing and creates products with status=pending,
+ *     identical to the manual create flow.
+ *   • Duplicate detection: products with the same (seller, cleaned_oem_code)
+ *     skip-or-update based on the `onDuplicate` flag.
+ */
+
+import * as XLSX from "xlsx";
+import Product from "../Model/product.model.js";
+import { upload } from "../Middleware/upload.middleware.js";
+import { enrichProduct, enrichBulk } from "../Service/productEnricher.service.js";
+import { openai, openaiEnabled, openaiModel } from "../Config/openai.js";
+import { rememberInputs } from "./seller.controller.js";
+
+// ── Helpers ────────────────────────────────────────────────────────────
+const num = (v, dflt = 0) => {
+  if (v == null || v === "") return dflt;
+  const n = Number(String(v).replace(/[^\d.\-]/g, ""));
+  return Number.isFinite(n) ? n : dflt;
+};
+
+const enrichedToProductDoc = (e, sellerId) => ({
+  seller:      sellerId,
+  status:      "pending",
+  name:        e.display_name_mn || e.raw_name || "Unnamed",
+  oem:         e.cleaned_oem_code || "",
+  price:       num(e.price),
+  category:    (e.standard_category || "other").toLowerCase(),
+  brand:       e.brand || "",
+  source:      "local",
+  stockQty:    num(e.stock, 0),
+  inStock:     num(e.stock, 0) > 0,
+  description: [
+    e.display_name_en ? `EN: ${e.display_name_en}` : null,
+    e.condition_grade ? `Grade: ${e.condition_grade}` : null,
+    e.location ? `Location: ${e.location}` : null,
+  ].filter(Boolean).join("\n"),
+  tags: [
+    e.standard_category,
+    e.condition_grade?.toLowerCase().replace(/\s+/g, "_"),
+    ...(e.compatible_vehicles || []).slice(0, 5).map((v) =>
+      [v.make, v.model, v.chassis].filter(Boolean).join(" ").toLowerCase()
+    ),
+  ].filter(Boolean),
+  compatible: (e.compatible_vehicles || []).map((v) =>
+    [v.make, v.model, v.chassis, v.engine, v.years].filter(Boolean).join(" ")
+  ),
+});
+
+// ── 1. Single-row enrich ──────────────────────────────────────────────
+export const enrichOne = async (req, res) => {
+  try {
+    const out = await enrichProduct(req.body);
+    return res.json({ enriched: out });
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+// ── 2. Bulk enrich ────────────────────────────────────────────────────
+export const enrichBulkHandler = async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!rows) return res.status(400).json({ message: "rows массив шаардлагатай" });
+    if (rows.length > 500) return res.status(413).json({ message: "Нэг удаа 500-аас цөөн мөр" });
+
+    const enriched = await enrichBulk(rows, { concurrency: 5 });
+    return res.json({
+      enriched,
+      total: enriched.length,
+      withWarnings: enriched.filter((e) => (e._meta?.warnings || []).length > 0).length,
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+// ── 3. CSV / XLSX upload — multer reads file into req.file ────────────
+export const parseUploadedFile = [
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "file шаардлагатай" });
+      // Read the file from disk (multer disk) or buffer (multer memory).
+      // Our multer config writes to disk; XLSX.read handles both via 'file' arg.
+      const wb = req.file.path
+        ? XLSX.readFile(req.file.path)
+        : XLSX.read(req.file.buffer, { type: "buffer" });
+
+      const sheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+
+      // Header heuristic — accept Mongolian or English headers
+      const HEADER_MAP = {
+        name:       ["raw_name", "name", "нэр", "barааны нэр", "барааны нэр", "product"],
+        input_code: ["input_code", "oem", "код", "code", "part_number", "part no"],
+        brand:      ["brand", "брэнд"],
+        price:      ["price", "үнэ", "unit price"],
+        stock:      ["stock", "qty", "ширхэг", "үлдэгдэл"],
+        location:   ["location", "салбар", "branch", "warehouse"],
+      };
+      const headerKey = (raw) => {
+        const k = String(raw || "").trim().toLowerCase();
+        for (const [target, opts] of Object.entries(HEADER_MAP)) {
+          if (opts.some((o) => o.toLowerCase() === k)) return target;
+        }
+        return null;
+      };
+
+      // The first row is already turned into keys by sheet_to_json — map them.
+      const rows = json.map((row) => {
+        const mapped = {};
+        for (const [origKey, val] of Object.entries(row)) {
+          const k = headerKey(origKey);
+          if (k) mapped[k] = val;
+        }
+        return {
+          raw_name:   mapped.name || "",
+          input_code: mapped.input_code || "",
+          brand:      mapped.brand || "",
+          price:      num(mapped.price),
+          stock:      num(mapped.stock, 0),
+          location:   mapped.location || "",
+        };
+      }).filter((r) => r.raw_name || r.input_code);
+
+      return res.json({
+        rows,
+        total: rows.length,
+        detectedHeaders: Object.keys(json[0] || {}),
+        sheetName,
+      });
+    } catch (err) {
+      return res.status(400).json({ message: err.message });
+    }
+  },
+];
+
+// ── 4. Commit — turn enriched rows into Product docs ──────────────────
+export const commitHandler = async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!rows?.length) return res.status(400).json({ message: "rows шаардлагатай" });
+
+    const onDuplicate = ["skip", "update"].includes(req.body?.onDuplicate)
+      ? req.body.onDuplicate : "skip";
+
+    let created = 0, updated = 0, skipped = 0, failed = 0;
+    const failures = [];
+    const createdIds = [];
+
+    for (const r of rows) {
+      try {
+        const doc = enrichedToProductDoc(r, req.user._id);
+        if (!doc.name?.trim() || doc.price < 0) {
+          throw new Error("Нэр / үнэ буруу");
+        }
+
+        // Same-seller dedupe by OEM
+        const existing = doc.oem
+          ? await Product.findOne({ seller: req.user._id, oem: doc.oem })
+          : null;
+
+        if (existing) {
+          if (onDuplicate === "skip") { skipped++; continue; }
+          // update mode: refresh mutable fields, keep status as-is (don't re-trigger moderation)
+          existing.price       = doc.price;
+          existing.stockQty    = doc.stockQty;
+          existing.inStock     = doc.inStock;
+          existing.description = doc.description;
+          existing.tags        = doc.tags;
+          existing.compatible  = doc.compatible;
+          await existing.save();
+          updated++;
+          continue;
+        }
+
+        const item = await Product.create(doc);
+        createdIds.push(String(item._id));
+        created++;
+      } catch (e) {
+        failed++;
+        failures.push({ row: r.cleaned_oem_code || r.raw_name, error: e.message });
+      }
+    }
+
+    // Persist this seller's free-text history (brand etc.) — best-effort
+    try {
+      const uniqueBrands  = [...new Set(rows.map((r) => r.brand).filter(Boolean))];
+      for (const brand of uniqueBrands) {
+        await rememberInputs(req.user._id, { brand });
+      }
+    } catch { /* swallow */ }
+
+    return res.json({
+      created, updated, skipped, failed,
+      total: rows.length,
+      createdIds,
+      failures: failures.slice(0, 50),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// ── 5. OCR enrich — image URL → GPT-4V extracts code/name → enrich ────
+export const ocrHandler = async (req, res) => {
+  try {
+    if (!openaiEnabled) {
+      return res.status(503).json({ message: "OCR backend OpenAI key шаардана" });
+    }
+    const { imageUrl } = req.body || {};
+    if (!imageUrl) return res.status(400).json({ message: "imageUrl шаардлагатай" });
+
+    // Step 1: vision extracts the visible part info via function calling
+    const tool = {
+      type: "function",
+      function: {
+        name: "extract_part_info",
+        description: "Extract the visible part info from a product label/box/barcode image.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          required: ["raw_name", "input_code"],
+          properties: {
+            raw_name:    { type: "string", description: "Best-guess product name visible on the package (any language)" },
+            input_code:  { type: "string", description: "OEM / part number visible (UPPER, spaces ok, will be cleaned later)" },
+            brand:       { type: "string", description: "Manufacturer brand if visible" },
+          },
+        },
+      },
+    };
+    const visionResp = await openai.chat.completions.create({
+      model: openaiModel,
+      temperature: 0.0,
+      tool_choice: { type: "function", function: { name: tool.function.name } },
+      tools: [tool],
+      messages: [
+        { role: "system", content: "You read product packaging in any language. Return ONLY what you can clearly see — no guessing." },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Read this auto-parts label / barcode. Extract part name, OEM code, and brand if visible." },
+            { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
+          ],
+        },
+      ],
+    });
+
+    const call = visionResp.choices[0]?.message?.tool_calls?.[0];
+    if (!call) return res.status(422).json({ message: "OCR таних боломжгүй зураг" });
+    const ocr = JSON.parse(call.function.arguments || "{}");
+
+    // Step 2: feed into the regular enricher
+    const enriched = await enrichProduct({
+      raw_name:   ocr.raw_name,
+      input_code: ocr.input_code,
+      brand:      ocr.brand,
+    });
+
+    return res.json({ ocr, enriched });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

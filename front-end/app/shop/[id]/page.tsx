@@ -1,15 +1,25 @@
 "use client";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Navbar from "@/app/components/Navbar";
-import { PRODUCTS, DELIVERY_PRICE } from "@/lib/data";
+import ReviewSection from "@/app/components/ReviewSection";
+import { DELIVERY_PRICE } from "@/lib/data";
 import { useCartStore } from "@/store";
-import { ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock } from "lucide-react";
+import { api } from "@/lib/api";
+import { Product } from "@/app/types";
+import { ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package } from "lucide-react";
 
-const SRC_INFO: Record<string, { label: string; flag: string; color: string }> = {
+const KNOWN_SOURCES: Record<string, { label: string; flag: string; color: string }> = {
   amayama:  { label: "Amayama Japan",    flag: "🇯🇵", color: "text-blue-600 bg-blue-50 border-blue-100" },
   partsouq: { label: "Partsouq UAE",     flag: "🇦🇪", color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
   local:    { label: "Монгол дэлгүүр",  flag: "🇲🇳", color: "text-orange-600 bg-orange-50 border-orange-100" },
+};
+const FALLBACK_SOURCE = { flag: "🌐", color: "text-gray-600 bg-gray-50 border-gray-200" };
+const srcMeta = (s: string) => {
+  const known = KNOWN_SOURCES[s?.toLowerCase?.()];
+  if (known) return known;
+  return { label: s || "—", ...FALLBACK_SOURCE };
 };
 const DEL_INFO = {
   fast:   { label: "Яаралтай",  desc: "Онгоцоор", color: "border-orange-200 bg-orange-50", active: "border-orange-400 bg-orange-50" },
@@ -19,16 +29,35 @@ const DEL_INFO = {
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const p = PRODUCTS.find(x => x.id === id);
+  const [p, setP] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [delivery, setDelivery] = useState<"fast" | "normal" | "cheap">("normal");
   const [added, setAdded] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
   const addItem = useCartStore(s => s.addItem);
   const router = useRouter();
 
+  useEffect(() => {
+    api.get<{ item: Product }>(`/products/${id}`)
+      .then(d => setP(d.item))
+      .catch(() => setP(null))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return (
+    <>
+      <Navbar />
+      <div className="min-h-[70vh] flex items-center justify-center text-gray-400">Уншиж байна...</div>
+    </>
+  );
+
   if (!p) return (
-    <div className="min-h-screen flex items-center justify-center text-gray-400">
-      <div className="text-center"><div className="text-5xl mb-3">🔍</div><p>Бараа олдсонгүй</p></div>
-    </div>
+    <>
+      <Navbar />
+      <div className="min-h-[70vh] flex items-center justify-center text-gray-400">
+        <div className="text-center"><div className="text-5xl mb-3">🔍</div><p>Бараа олдсонгүй</p></div>
+      </div>
+    </>
   );
 
   const handleAdd = () => {
@@ -36,7 +65,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     setAdded(true);
     setTimeout(() => setAdded(false), 2500);
   };
-  const src = SRC_INFO[p.source];
+  const src = srcMeta(p.source);
   const totalPrice = p.price + DELIVERY_PRICE[delivery];
 
   return (
@@ -49,23 +78,44 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         </button>
 
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          {/* Product image */}
-          <div className="h-56 bg-gradient-to-br from-violet-50 to-purple-100 flex items-center justify-center relative">
-            <svg className="w-24 h-24 fill-violet-300" viewBox="0 0 24 24"><path d={p.iconPath} /></svg>
+          <div className="h-72 bg-gradient-to-br from-violet-50 to-purple-100 flex items-center justify-center relative overflow-hidden">
+            {p.images && p.images.length > 0 ? (
+              <Image src={p.images[activeImg] || p.images[0]} alt={p.name} fill sizes="(max-width: 640px) 100vw, 600px" className="object-contain p-4" priority />
+            ) : p.iconPath ? (
+              <svg className="w-24 h-24 fill-violet-300" viewBox="0 0 24 24"><path d={p.iconPath} /></svg>
+            ) : (
+              <Package className="w-20 h-20 text-violet-200" />
+            )}
             {p.badge && (
               <span className="absolute top-4 left-4 bg-violet-600 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full">{p.badge}</span>
             )}
           </div>
+          {p.images && p.images.length > 1 && (
+            <div className="px-5 pt-3 flex gap-2 overflow-x-auto">
+              {p.images.map((url, i) => (
+                <button key={url} onClick={() => setActiveImg(i)} type="button"
+                  className={`relative w-14 h-14 rounded-lg overflow-hidden shrink-0 cursor-pointer border-2 transition-all bg-white ${i === activeImg ? "border-violet-500" : "border-gray-200 hover:border-violet-300"}`}>
+                  <Image src={url} alt={`thumb-${i}`} fill sizes="56px" className="object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="p-5">
-            {/* Badges */}
             <div className="flex flex-wrap gap-2 mb-3">
               <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full border ${src.color}`}>
                 {src.flag} {src.label}
               </span>
-              <span className="text-[11px] bg-violet-50 text-violet-700 border border-violet-100 px-2.5 py-1 rounded-full font-mono font-medium">
-                {p.oem}
-              </span>
+              {p.oem && (
+                <span className="text-[11px] bg-violet-50 text-violet-700 border border-violet-100 px-2.5 py-1 rounded-full font-mono font-medium">
+                  {p.oem}
+                </span>
+              )}
+              {p.tags && p.tags.slice(0, 3).map((t) => (
+                <span key={t} className="text-[11px] bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1 rounded-full">
+                  #{t}
+                </span>
+              ))}
               <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full border ${p.inStock ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-500 border-red-100"}`}>
                 {p.inStock ? "✓ Нөөцөд байна" : "✗ Дууссан"}
               </span>
@@ -75,19 +125,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-[13px] text-gray-500 mb-1">{p.brand}</p>
             <p className="text-[14px] text-gray-600 mt-3 mb-5 leading-relaxed">{p.description}</p>
 
-            {/* Compatible */}
-            <div className="bg-gray-50 rounded-xl p-4 mb-5">
-              <div className="text-[13px] font-semibold text-gray-700 mb-2.5 flex items-center gap-1.5">
-                <Shield size={13} className="text-violet-500" /> Тохирох загварууд
-              </div>
-              {p.compatible.map(c => (
-                <div key={c} className="flex items-center gap-2 text-[13px] text-gray-600 py-1">
-                  <CheckCircle size={12} className="text-emerald-500 shrink-0" />{c}
+            {p.compatible.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-5">
+                <div className="text-[13px] font-semibold text-gray-700 mb-2.5 flex items-center gap-1.5">
+                  <Shield size={13} className="text-violet-500" /> Тохирох загварууд
                 </div>
-              ))}
-            </div>
+                {p.compatible.map(c => (
+                  <div key={c} className="flex items-center gap-2 text-[13px] text-gray-600 py-1">
+                    <CheckCircle size={12} className="text-emerald-500 shrink-0" />{c}
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* Delivery options */}
             <div className="mb-5">
               <div className="text-[13px] font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
                 <Truck size={13} className="text-violet-500" /> Хүргэлтийн хугацаа сонгох
@@ -110,7 +160,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            {/* Price + CTA */}
             <div className="flex items-end justify-between pt-4 border-t border-gray-100">
               <div>
                 <div className="text-[11px] text-gray-400 mb-0.5">Нийт үнэ (хүргэлттэй)</div>
@@ -128,6 +177,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 {added ? <><CheckCircle size={17} />Нэмэгдлээ!</> : <><ShoppingCart size={17} />Сагсанд нэмэх</>}
               </button>
             </div>
+
+            <ReviewSection
+              productId={(p._id ?? p.id) as string}
+              rating={p.rating}
+              ratingCount={p.ratingCount}
+            />
           </div>
         </div>
       </div>

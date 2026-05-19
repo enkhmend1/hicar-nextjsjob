@@ -1,50 +1,75 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Navbar from "@/app/components/Navbar";
-import { useCartStore, useAuthStore, useOrderStore } from "@/store";
+import { useCartStore, useAuthStore } from "@/store";
+import { api, ApiError } from "@/lib/api";
+import { Order } from "@/app/types";
 import { DELIVERY_PRICE } from "@/lib/data";
-import { CheckCircle, Wallet, QrCode, CreditCard, ArrowLeft, AlertCircle } from "lucide-react";
+import { CheckCircle, Wallet, QrCode, CreditCard, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
+
+interface QPayInvoice {
+  invoice_id: string;
+  qr_text: string;
+  qr_image: string; // base64 data url or absolute URL
+  urls?: Array<{ name: string; description?: string; logo?: string; link?: string }>;
+  qPay_shortUrl?: string;
+}
 
 type Step = "info" | "payment" | "qpay" | "done";
 type PayMethod = "qpay" | "wallet" | "card";
 
-// Fake QPay QR code (SVG pattern)
-function FakeQR() {
+// Stable QR pattern keyed by total amount — does NOT regenerate on tick
+const FakeQR = ({ seed }: { seed: number }) => {
+  // Deterministic pseudo-random from seed (mulberry32)
+  const rand = (s: number) => () => {
+    let t = (s += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const r = rand(seed || 1);
+  const cells: Array<{ row: number; col: number }> = [];
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 7; col++) {
+      if (r() > 0.4) cells.push({ row, col });
+    }
+  }
   return (
     <div className="w-48 h-48 bg-white border-2 border-gray-200 rounded-xl mx-auto p-3 flex items-center justify-center">
       <svg width="160" height="160" viewBox="0 0 160 160" className="fill-gray-900">
-        {/* Fake QR pattern */}
-        {[0,1,2,3,4,5,6].map(r => [0,1,2,3,4,5,6].map(c => (
-          Math.random() > 0.4 ? <rect key={`${r}-${c}`} x={c*23} y={r*23} width={18} height={18} rx="2"/> : null
-        )))}
-        <rect x="0" y="0" width="62" height="62" rx="4" fill="none" stroke="#111" strokeWidth="5"/>
-        <rect x="8" y="8" width="46" height="46" rx="2"/>
-        <rect x="98" y="0" width="62" height="62" rx="4" fill="none" stroke="#111" strokeWidth="5"/>
-        <rect x="106" y="8" width="46" height="46" rx="2"/>
-        <rect x="0" y="98" width="62" height="62" rx="4" fill="none" stroke="#111" strokeWidth="5"/>
-        <rect x="8" y="106" width="46" height="46" rx="2"/>
+        {cells.map((c, i) => <rect key={i} x={c.col * 23} y={c.row * 23} width={18} height={18} rx="2" />)}
+        <rect x="0" y="0" width="62" height="62" rx="4" fill="none" stroke="#111" strokeWidth="5" />
+        <rect x="8" y="8" width="46" height="46" rx="2" />
+        <rect x="98" y="0" width="62" height="62" rx="4" fill="none" stroke="#111" strokeWidth="5" />
+        <rect x="106" y="8" width="46" height="46" rx="2" />
+        <rect x="0" y="98" width="62" height="62" rx="4" fill="none" stroke="#111" strokeWidth="5" />
+        <rect x="8" y="106" width="46" height="46" rx="2" />
       </svg>
     </div>
   );
-}
+};
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, total, clearCart } = useCartStore();
-  const { user, deductWallet } = useAuthStore();
-  const { addOrder } = useOrderStore();
+  const { items, total, clearCart, removeItem } = useCartStore();
+  const { user, setUser } = useAuthStore();
 
   const [step, setStep] = useState<Step>("info");
   const [payMethod, setPayMethod] = useState<PayMethod>("qpay");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(user?.phone || "");
-  const [qpayChecking, setQpayChecking] = useState(false);
-  const [qpayTimer, setQpayTimer] = useState(300); // 5 min
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [qpayTimer, setQpayTimer] = useState(300);
+  const [qpayInvoice, setQpayInvoice] = useState<QPayInvoice | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const orderTotal = total();
-  const canPayWallet = user && user.walletBalance >= orderTotal;
+  const canPayWallet = !!user && user.walletBalance >= orderTotal;
 
   if (items.length === 0) return (
     <>
@@ -58,55 +83,112 @@ export default function CheckoutPage() {
     </>
   );
 
-  // Step 1: Info
   const submitInfo = (e: React.FormEvent) => {
     e.preventDefault();
     setStep("payment");
   };
 
-  // Step 2: Payment
-  const submitPayment = () => {
+  const submitPayment = async () => {
+    setErr("");
     if (payMethod === "qpay") {
-      setStep("qpay");
-      // Start countdown
-      const interval = setInterval(() => {
-        setQpayTimer(t => { if (t <= 1) { clearInterval(interval); return 0; } return t - 1; });
-      }, 1000);
+      // Create the order first (status=pending), then ask backend for a real QPay invoice
+      setBusy(true);
+      try {
+        const payload = {
+          items: items.map(i => ({
+            product: i.product._id ?? i.product.id,
+            quantity: i.quantity,
+            deliveryType: i.deliveryType,
+          })),
+          address, phone, paymentMethod: "qpay" as const,
+        };
+        const { order } = await api.post<{ order: Order }>("/orders", payload);
+        const orderId = (order._id ?? order.id) as string;
+        setPendingOrderId(orderId);
+
+        // Try to fetch a real QPay invoice
+        try {
+          const { invoice } = await api.post<{ invoice: QPayInvoice }>("/qpay/invoice", { orderId });
+          setQpayInvoice(invoice);
+        } catch (e) {
+          // QPay not configured — show fallback mock screen
+          if ((e as ApiError).status !== 503) throw e;
+        }
+        setStep("qpay");
+        // Countdown
+        const interval = setInterval(() => {
+          setQpayTimer(t => { if (t <= 1) { clearInterval(interval); return 0; } return t - 1; });
+        }, 1000);
+        // Poll backend for payment confirmation
+        pollRef.current = setInterval(async () => {
+          try {
+            const r = await api.get<{ status: string; paid: boolean }>(`/qpay/check/${orderId}`);
+            if (r.paid) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              clearInterval(interval);
+              clearCart();
+              router.push(`/orders?new=${orderId}`);
+            }
+          } catch { /* ignore */ }
+        }, 3000);
+      } catch (e) {
+        if (e instanceof ApiError && typeof e.data.missingProductId === "string") {
+          removeItem(e.data.missingProductId);
+          setErr(`${e.message}. Сагснаас автоматаар хасагдлаа.`);
+          setTimeout(() => router.push("/cart"), 1800);
+        } else {
+          setErr((e as Error).message || "Алдаа гарлаа");
+        }
+      } finally {
+        setBusy(false);
+      }
     } else if (payMethod === "wallet") {
       if (!canPayWallet) return;
-      completeOrder("wallet");
+      placeOrder("wallet");
     } else {
-      completeOrder("card");
+      placeOrder("card");
     }
   };
 
-  // Simulate QPay check
-  const checkQPay = async () => {
-    setQpayChecking(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setQpayChecking(false);
-    completeOrder("qpay");
-  };
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+  }, []);
 
-  const completeOrder = (method: PayMethod) => {
-    if (method === "wallet") deductWallet(orderTotal);
-    const order = {
-      id: "ORD-" + Date.now().toString().slice(-6),
-      items: items,
-      total: orderTotal,
-      status: "paid" as const,
-      paymentMethod: method,
-      createdAt: new Date().toISOString(),
-      address,
-    };
-    addOrder(order);
-    clearCart();
-    router.push(`/checkout/success?id=${order.id}`);
+  const placeOrder = async (method: PayMethod) => {
+    setBusy(true); setErr("");
+    try {
+      const payload = {
+        items: items.map(i => ({
+          product: i.product._id ?? i.product.id,
+          quantity: i.quantity,
+          deliveryType: i.deliveryType,
+        })),
+        address, phone, paymentMethod: method,
+      };
+      const { order } = await api.post<{ order: Order }>("/orders", payload);
+      if (method === "wallet" && user) {
+        setUser({ ...user, walletBalance: user.walletBalance - orderTotal });
+      }
+      clearCart();
+      router.push(`/orders?new=${order._id ?? order.id}`);
+    } catch (e) {
+      // If backend returned a missingProductId, auto-remove it from cart
+      if (e instanceof ApiError && typeof e.data.missingProductId === "string") {
+        removeItem(e.data.missingProductId);
+        setErr(`${e.message}. Сагснаас автоматаар хасагдлаа.`);
+        // Bounce to cart so user can review remaining items
+        setTimeout(() => router.push("/cart"), 1800);
+      } else {
+        setErr((e as Error).message || "Алдаа гарлаа");
+      }
+      setStep("payment");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const fmtTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // Step indicator
   const steps = ["Мэдээлэл", "Төлбөр", "Баталгаа"];
   const stepIdx = step === "info" ? 0 : step === "payment" ? 1 : 2;
 
@@ -114,7 +196,6 @@ export default function CheckoutPage() {
     <>
       <Navbar />
       <div className="max-w-xl mx-auto px-5 py-5">
-        {/* Step bar */}
         <div className="flex items-center gap-2 mb-6">
           {steps.map((s, i) => (
             <div key={s} className="flex items-center gap-2 flex-1">
@@ -127,11 +208,10 @@ export default function CheckoutPage() {
           ))}
         </div>
 
-        {/* Order summary card */}
         <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 mb-5">
           <div className="text-[12px] text-violet-600 font-semibold mb-1.5">ЗАХИАЛГЫН ДҮН</div>
           {items.map(i => (
-            <div key={i.product.id} className="flex justify-between text-[13px] text-gray-600 py-0.5">
+            <div key={i.product._id ?? i.product.id} className="flex justify-between text-[13px] text-gray-600 py-0.5">
               <span className="truncate flex-1 mr-3">{i.product.name} ×{i.quantity}</span>
               <span className="shrink-0">₮{(i.product.price * i.quantity).toLocaleString()}</span>
             </div>
@@ -146,7 +226,10 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* STEP: Info */}
+        {err && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-[13px] rounded-xl px-3.5 py-2.5 mb-4">⚠️ {err}</div>
+        )}
+
         {step === "info" && (
           <form onSubmit={submitInfo}>
             <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
@@ -173,7 +256,6 @@ export default function CheckoutPage() {
           </form>
         )}
 
-        {/* STEP: Payment */}
         {step === "payment" && (
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <button onClick={() => setStep("info")}
@@ -183,7 +265,6 @@ export default function CheckoutPage() {
             <h2 className="text-[16px] font-semibold text-gray-900 mb-4">Төлбөрийн арга</h2>
 
             <div className="space-y-3 mb-5">
-              {/* QPay */}
               <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "qpay" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"}`}>
                 <input type="radio" name="pay" value="qpay" checked={payMethod === "qpay"} onChange={() => setPayMethod("qpay")} className="accent-violet-600" />
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
@@ -196,7 +277,6 @@ export default function CheckoutPage() {
                 <span className="text-[11px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full font-medium">Түгээмэл</span>
               </label>
 
-              {/* Wallet */}
               <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "wallet" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"} ${!canPayWallet ? "opacity-60" : ""}`}>
                 <input type="radio" name="pay" value="wallet" checked={payMethod === "wallet"} onChange={() => setPayMethod("wallet")}
                   disabled={!canPayWallet} className="accent-violet-600" />
@@ -213,7 +293,6 @@ export default function CheckoutPage() {
                 {canPayWallet && <CheckCircle size={16} className="text-emerald-500" />}
               </label>
 
-              {/* Card */}
               <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "card" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"}`}>
                 <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-violet-600" />
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
@@ -232,14 +311,13 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            <button onClick={submitPayment} disabled={!user}
+            <button onClick={submitPayment} disabled={!user || busy}
               className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 text-white rounded-xl py-3.5 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans shadow-lg shadow-violet-200">
-              ₮{orderTotal.toLocaleString()} — Төлбөр хийх
+              {busy ? "Уншиж байна..." : `₮${orderTotal.toLocaleString()} — Төлбөр хийх`}
             </button>
           </div>
         )}
 
-        {/* STEP: QPay QR */}
         {step === "qpay" && (
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
             <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -248,41 +326,59 @@ export default function CheckoutPage() {
             <h2 className="text-[18px] font-semibold text-gray-900 mb-1">QPay QR код</h2>
             <p className="text-[13px] text-gray-500 mb-5">Утсандаа QPay app нээж QR скан хийнэ үү</p>
 
-            <FakeQR />
+            {qpayInvoice ? (
+              <div className="w-56 h-56 mx-auto bg-white border-2 border-gray-200 rounded-xl p-3 flex items-center justify-center">
+                <Image
+                  src={qpayInvoice.qr_image.startsWith("data:") ? qpayInvoice.qr_image : `data:image/png;base64,${qpayInvoice.qr_image}`}
+                  alt="QPay QR" width={208} height={208} className="object-contain" unoptimized
+                />
+              </div>
+            ) : (
+              <FakeQR seed={orderTotal} />
+            )}
 
             <div className="mt-4 mb-5 bg-blue-50 border border-blue-100 rounded-xl p-3">
               <div className="text-[12px] text-blue-600 font-medium mb-0.5">Төлөх дүн</div>
               <div className="text-[22px] font-bold text-blue-700">₮{orderTotal.toLocaleString()}</div>
-              <div className="text-[11px] text-blue-500 mt-1">Invoice ID: QPY-{Date.now().toString().slice(-8)}</div>
+              {qpayInvoice ? (
+                <div className="text-[11px] text-blue-500 mt-1 font-mono">Invoice: {qpayInvoice.invoice_id.slice(0, 16)}…</div>
+              ) : (
+                <div className="text-[11px] text-amber-600 mt-1">⚠ QPay тохируулагдаагүй (mock QR)</div>
+              )}
             </div>
+
+            {/* Bank app deep links (from QPay urls) */}
+            {qpayInvoice?.urls && qpayInvoice.urls.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {qpayInvoice.urls.slice(0, 6).map((u, i) => (
+                  <a key={i} href={u.link} target="_blank" rel="noopener noreferrer"
+                    className="text-[11px] bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 hover:border-violet-400 hover:bg-violet-50 transition-colors text-gray-700 font-medium" style={{ textDecoration: "none" }}>
+                    {u.name}
+                  </a>
+                ))}
+              </div>
+            )}
 
             <div className="text-[12px] text-gray-400 mb-4">
               QR код хүчинтэй байх хугацаа:{" "}
               <span className={`font-bold ${qpayTimer < 60 ? "text-red-500" : "text-gray-700"}`}>{fmtTime(qpayTimer)}</span>
             </div>
 
-            {/* Bank apps */}
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              {[
-                { name: "Khan Bank", color: "bg-green-600" },
-                { name: "TDB", color: "bg-blue-700" },
-                { name: "Golomt", color: "bg-red-600" },
-                { name: "XacBank", color: "bg-orange-500" },
-                { name: "Capitron", color: "bg-purple-600" },
-                { name: "Bogd", color: "bg-teal-600" },
-              ].map(b => (
-                <button key={b.name} onClick={checkQPay}
-                  className={`${b.color} text-white rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer border-none hover:opacity-90 transition-opacity`}>
-                  {b.name}
-                </button>
-              ))}
+            <div className="flex items-center justify-center gap-2 text-[13px] text-violet-600 font-medium py-3">
+              <Loader2 size={14} className="animate-spin" />
+              Төлбөрийг хүлээж байна...
             </div>
 
-            <button onClick={checkQPay} disabled={qpayChecking}
-              className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3.5 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans">
-              {qpayChecking ? "Шалгаж байна..." : "✓ Төлбөр баталгаажуулах"}
-            </button>
-            <button onClick={() => setStep("payment")}
+            {!qpayInvoice && (
+              <button onClick={() => placeOrder("qpay")} disabled={busy}
+                className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+                Mock төлбөр баталгаажуулах
+              </button>
+            )}
+            <button onClick={() => {
+              if (pollRef.current) clearInterval(pollRef.current);
+              setStep("payment");
+            }}
               className="w-full mt-2 text-[13px] text-gray-400 hover:text-violet-600 cursor-pointer bg-transparent border-none py-1.5 transition-colors">
               ← Буцах
             </button>

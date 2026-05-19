@@ -1,9 +1,11 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import ProductCard from "@/app/components/ProductCard";
-import { PRODUCTS, CATEGORIES } from "@/lib/data";
+import { CATEGORIES } from "@/lib/data";
+import { api } from "@/lib/api";
+import { Product } from "@/app/types";
 import { Search, SlidersHorizontal } from "lucide-react";
 
 function ShopInner() {
@@ -12,22 +14,28 @@ function ShopInner() {
   const [q, setQ] = useState(params.get("q") || "");
   const [sort, setSort] = useState("default");
   const [srcFilter, setSrcFilter] = useState("all");
+  const [items, setItems] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = PRODUCTS
-    .filter(p => cat === "all" || p.category === cat)
-    .filter(p => srcFilter === "all" || p.source === srcFilter)
-    .filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()) || p.oem.includes(q) || p.brand.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) =>
-      sort === "price_asc" ? a.price - b.price :
-      sort === "price_desc" ? b.price - a.price :
-      sort === "name" ? a.name.localeCompare(b.name) : 0
-    );
+  useEffect(() => {
+    setLoading(true);
+    const usp = new URLSearchParams();
+    if (cat !== "all") usp.set("category", cat);
+    if (srcFilter !== "all") usp.set("source", srcFilter);
+    if (q) usp.set("q", q);
+    if (sort !== "default") usp.set("sort", sort);
+    const ctrl = new AbortController();
+    api.get<{ items: Product[] }>(`/products?${usp.toString()}`)
+      .then(d => setItems(d.items))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+    return () => ctrl.abort();
+  }, [cat, srcFilter, q, sort]);
 
   return (
     <>
       <Navbar />
       <div className="max-w-6xl mx-auto px-5 py-5">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -49,11 +57,11 @@ function ShopInner() {
               <option value="price_asc">Үнэ: бага → их</option>
               <option value="price_desc">Үнэ: их → бага</option>
               <option value="name">Нэрээр</option>
+              <option value="newest">Шинэ нь түрүүнд</option>
             </select>
           </div>
         </div>
 
-        {/* Category pills */}
         <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-5">
           {CATEGORIES.map(c => (
             <button key={c.id} onClick={() => setCat(c.id)}
@@ -63,22 +71,27 @@ function ShopInner() {
                   : "bg-white text-gray-600 border-gray-200 hover:border-violet-400 hover:text-violet-600"
               }`}>
               {c.name}
-              {cat === c.id && <span className="text-[11px] opacity-75">{filtered.length}</span>}
+              {cat === c.id && <span className="text-[11px] opacity-75">{items.length}</span>}
             </button>
           ))}
         </div>
 
-        {/* Results info */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-[13px] text-gray-500">
-            <span className="font-semibold text-gray-900">{filtered.length}</span> бараа олдлоо
+            <span className="font-semibold text-gray-900">{items.length}</span> бараа олдлоо
           </p>
           <div className="flex items-center gap-1 text-[12px] text-gray-400">
             <SlidersHorizontal size={12} /> Шүүлт
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white border border-gray-200 rounded-xl h-[220px] animate-pulse" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-4xl mb-3">🔍</div>
             <p className="text-[15px] font-medium text-gray-700 mb-1">Илэрц олдсонгүй</p>
@@ -86,7 +99,7 @@ function ShopInner() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filtered.map(p => <ProductCard key={p.id} p={p} />)}
+            {items.map(p => <ProductCard key={p._id ?? p.id} p={p} />)}
           </div>
         )}
       </div>

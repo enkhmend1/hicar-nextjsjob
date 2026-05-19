@@ -1,18 +1,25 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { Product } from "@/app/types";
-import { useCartStore } from "@/store";
-import { ShoppingCart, CheckCircle, Package } from "lucide-react";
+import { useCartStore, useAuthStore } from "@/store";
+import { useWishlistStore } from "@/store/wishlist";
+import { ShoppingCart, CheckCircle, Package, Heart, Star } from "lucide-react";
 import { useState } from "react";
 
-const SRC_BADGE: Record<string,{label:string,color:string}> = {
-  amayama:  { label:"Amayama JP",       color:"text-blue-600 bg-blue-50 border-blue-100" },
-  partsouq: { label:"Partsouq UAE",     color:"text-emerald-600 bg-emerald-50 border-emerald-100" },
-  local:    { label:"Монгол дэлгүүр",  color:"text-orange-600 bg-orange-50 border-orange-100" },
+const KNOWN_SRC: Record<string, { label: string; color: string }> = {
+  amayama:  { label: "Amayama JP",       color: "text-blue-600 bg-blue-50 border-blue-100" },
+  partsouq: { label: "Partsouq UAE",     color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
+  local:    { label: "Монгол дэлгүүр",  color: "text-orange-600 bg-orange-50 border-orange-100" },
 };
+const srcMeta = (s: string) =>
+  KNOWN_SRC[s?.toLowerCase?.()] ?? { label: s || "—", color: "text-gray-600 bg-gray-50 border-gray-200" };
 
 export default function ProductCard({ p }: { p: Product }) {
   const addItem = useCartStore(s => s.addItem);
+  const user = useAuthStore(s => s.user);
+  const isFav = useWishlistStore(s => s.ids.has((p._id ?? p.id ?? "")));
+  const toggleFav = useWishlistStore(s => s.toggle);
   const [added, setAdded] = useState(false);
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -21,28 +28,52 @@ export default function ProductCard({ p }: { p: Product }) {
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
-  const src = SRC_BADGE[p.source];
+  const handleFav = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) { window.location.href = "/auth/login"; return; }
+    toggleFav((p._id ?? p.id) as string);
+  };
+  const src = srcMeta(p.source);
 
   return (
-    <Link href={`/shop/${p.id}`} style={{textDecoration:"none"}}
+    <Link href={`/shop/${p._id ?? p.id}`} style={{textDecoration:"none"}}
       className="group block bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-violet-400 hover:shadow-lg hover:shadow-violet-100/50 transition-all duration-200">
       {/* Image area */}
-      <div className="relative h-[96px] bg-gradient-to-br from-violet-50 to-purple-50 flex items-center justify-center group-hover:from-violet-100 group-hover:to-purple-100 transition-colors">
+      <div className="relative h-[96px] bg-gradient-to-br from-violet-50 to-purple-50 flex items-center justify-center group-hover:from-violet-100 group-hover:to-purple-100 transition-colors overflow-hidden">
         {p.badge && (
-          <span className="absolute top-2 left-2 bg-violet-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md">{p.badge}</span>
+          <span className="absolute top-2 left-2 bg-violet-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md z-10">{p.badge}</span>
         )}
+        <button onClick={handleFav}
+          className={`absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 hover:bg-white shadow-sm border-none cursor-pointer z-10 transition-all ${isFav ? "text-red-500" : "text-gray-300 hover:text-red-400"}`}
+          aria-label="favorite">
+          <Heart size={14} fill={isFav ? "currentColor" : "none"} />
+        </button>
         {!p.inStock && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+          <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
             <span className="text-[11px] font-medium text-gray-400 border border-gray-300 bg-white px-2.5 py-1 rounded-full">Дууссан</span>
           </div>
         )}
-        <svg className="w-10 h-10 fill-violet-400 group-hover:fill-violet-500 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
+        {p.images && p.images.length > 0 ? (
+          <Image src={p.images[0]} alt={p.name} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />
+        ) : p.iconPath ? (
+          <svg className="w-10 h-10 fill-violet-400 group-hover:fill-violet-500 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
+        ) : (
+          <Package className="w-8 h-8 text-violet-300" />
+        )}
       </div>
       {/* Body */}
       <div className="p-3">
         <div className="text-[12px] font-semibold text-gray-900 mb-1 leading-snug line-clamp-2">{p.name}</div>
         <div className="text-[10px] text-gray-400 font-mono mb-2">{p.oem}</div>
-        <span className={`inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border mb-2 ${src.color}`}>{src.label}</span>
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className={`inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border ${src.color}`}>{src.label}</span>
+          {p.rating !== undefined && p.rating > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-amber-500 font-semibold">
+              <Star size={9} fill="currentColor" /> {p.rating.toFixed(1)}
+              <span className="text-gray-400 font-normal">({p.ratingCount})</span>
+            </span>
+          )}
+        </div>
         <div className="flex items-end justify-between mt-1">
           <div>
             <div className="text-[15px] font-bold text-violet-600">₮{p.price.toLocaleString()}</div>

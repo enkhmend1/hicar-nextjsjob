@@ -3,6 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
+import { api } from "@/lib/api";
+import { useT } from "@/lib/i18n";
+import { User } from "@/app/types";
 import { Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
 
 export default function LoginPage() {
@@ -11,32 +14,34 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuthStore();
+  const { setSession } = useAuthStore();
   const router = useRouter();
+  const t = useT();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(""); setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    if (email && pass.length >= 6) {
-      login({ id: "u1", name: "Болд Баатар", email, phone: "99001122", walletBalance: 150000 });
-      router.push("/");
-    } else {
-      setErr("Имэйл эсвэл нууц үг буруу байна.");
+    try {
+      const { user, token } = await api.post<{ user: User; token: string }>("/auth/login", { email, password: pass });
+      setSession(user, token);
+      router.push(user.role === "admin" ? "/admin" : "/");
+    } catch (e) {
+      setErr((e as Error).message || "Алдаа гарлаа");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 to-white flex items-center justify-center px-4">
       <div className="w-full max-w-[380px]">
         <Link href="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-violet-600 mb-6 transition-colors" style={{ textDecoration: "none" }}>
-          <ArrowLeft size={14} /> Нүүр хуудас
+          <ArrowLeft size={14} /> {t("auth.backHome")}
         </Link>
         <div className="text-center mb-7">
           <span className="text-[26px] font-semibold"><em className="text-violet-600 not-italic">Hi</em>car</span>
-          <h1 className="text-[20px] font-semibold text-gray-900 mt-4 mb-1">Нэвтрэх</h1>
-          <p className="text-[13px] text-gray-500">Тавтай морил!</p>
+          <h1 className="text-[20px] font-semibold text-gray-900 mt-4 mb-1">{t("auth.loginTitle")}</h1>
+          <p className="text-[13px] text-gray-500">{t("auth.loginSubtitle")}</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xl shadow-gray-100">
           {err && (
@@ -44,13 +49,13 @@ export default function LoginPage() {
           )}
           <form onSubmit={submit} className="space-y-4">
             <div>
-              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Имэйл</label>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">{t("auth.email")}</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white transition-colors"
                 placeholder="example@mail.com" />
             </div>
             <div>
-              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Нууц үг</label>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">{t("auth.password")}</label>
               <div className="relative">
                 <input type={show ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} required
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white transition-colors pr-11"
@@ -61,9 +66,16 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            <div className="flex justify-end">
+              <Link href="/auth/forgot"
+                className="text-[12px] text-violet-600 hover:text-violet-700 font-medium"
+                style={{ textDecoration: "none" }}>
+                Нууц үг мартсан уу?
+              </Link>
+            </div>
             <button type="submit" disabled={loading}
               className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3 text-[14px] font-semibold transition-colors cursor-pointer font-sans">
-              {loading ? "Нэвтэрч байна..." : "Нэвтрэх"}
+              {loading ? t("auth.loggingIn") : t("auth.loginTitle")}
             </button>
           </form>
           <div className="mt-4 pt-4 border-t border-gray-100">
@@ -74,11 +86,11 @@ export default function LoginPage() {
             ))}
           </div>
           <div className="mt-3 text-center text-[13px] text-gray-500">
-            Бүртгэл байхгүй юу?{" "}
-            <Link href="/auth/register" className="text-violet-600 font-semibold" style={{ textDecoration: "none" }}>Бүртгүүлэх</Link>
+            {t("auth.noAccount")}{" "}
+            <Link href="/auth/register" className="text-violet-600 font-semibold" style={{ textDecoration: "none" }}>{t("auth.registerTitle")}</Link>
           </div>
         </div>
-        <p className="text-center text-[11px] text-gray-400 mt-4">Туршилтын данс: any@email.com / 123456</p>
+        <p className="text-center text-[11px] text-gray-400 mt-4">Admin: admin@hicar.mn / admin123</p>
       </div>
     </div>
   );
