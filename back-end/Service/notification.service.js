@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
 import chalk from "chalk";
-import Notification from "../Model/notification.model.js";
-import User from "../Model/user.model.js";
+// Notification + User models are now used only by the outbox service.
+// They live on at top-level via that module's imports; we don't need
+// them here anymore.
 
 // ── Email transport (optional) ─────────────────────────────────────
 let transporter = null;
@@ -23,30 +24,43 @@ if (emailEnabled) {
 
 const FROM = process.env.SMTP_FROM || "no-reply@hicar.mn";
 
-// ── Create one notification, optionally email ──────────────────────
-export const notify = async ({ user, type, title, body, link = "", data = {}, email = false }) => {
+/**
+ * Public notify API — preserved verbatim from the original signature so
+ * every caller across the codebase keeps working without edits.
+ *
+ * INTERNALLY this now delegates to the notification outbox service, which
+ * provides durable retry + exactly-once delivery semantics. The synchronous
+ * Notification.create + transporter.sendMail path is GONE — those side
+ * effects now happen inside the outbox worker, which retries on failure
+ * instead of silently dropping the message.
+ *
+ * Callers should treat the returned value as opaque (most do — almost all
+ * call sites are `notify({...}).catch(...)`).
+ */
+export const notify = async (payload) => {
   try {
-    const n = await Notification.create({ user, type, title, body, link, data });
-    if (email && emailEnabled) {
-      const u = typeof user === "object" ? user : await User.findById(user);
-      if (u?.email) {
-        transporter.sendMail({
-          from: FROM, to: u.email, subject: title,
-          text: body, html: `<p>${body}</p>${link ? `<p><a href="${link}">${link}</a></p>` : ""}`,
-        }).catch(e => console.error(chalk.red("Email send failed:"), e.message));
-      }
-    }
-    return n;
+    // Lazy import — outbox service is registered after notification.service
+    // in index.js, so importing at module top would deadlock.
+    const { enqueue } = await import("./notificationOutbox.service.js");
+    return await enqueue(payload);
   } catch (e) {
-    console.error(chalk.red("Notify failed:"), e.message);
+    // Outbox should NEVER throw on a normal write — if it does, log loudly
+    // so we notice. Do not propagate: notify() must stay non-fatal because
+    // it sits on the critical path of refund / dispute flows.
+    console.error(chalk.red("Notify (outbox) failed:"), e.message);
     return null;
   }
 };
 
-// ── Broadcast to all admins ────────────────────────────────────────
+/** Broadcast to all admins — same outbox guarantees. */
 export const notifyAdmins = async (payload) => {
-  const admins = await User.find({ role: "admin" }).select("_id");
-  await Promise.all(admins.map(a => notify({ ...payload, user: a._id })));
+  try {
+    const { enqueueAdmins } = await import("./notificationOutbox.service.js");
+    return await enqueueAdmins(payload);
+  } catch (e) {
+    console.error(chalk.red("NotifyAdmins (outbox) failed:"), e.message);
+    return null;
+  }
 };
 
 /**

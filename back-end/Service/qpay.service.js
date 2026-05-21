@@ -16,6 +16,7 @@ const USERNAME = process.env.QPAY_USERNAME;
 const PASSWORD = process.env.QPAY_PASSWORD;
 const INVOICE_CODE = process.env.QPAY_INVOICE_CODE;
 const CALLBACK_URL = process.env.QPAY_CALLBACK_URL;
+const CALLBACK_SECRET = process.env.QPAY_CALLBACK_SECRET || "";
 
 export const qpayEnabled = Boolean(USERNAME && PASSWORD && INVOICE_CODE);
 
@@ -63,7 +64,13 @@ export const createInvoice = async ({ orderId, amount, description, senderInvoic
     invoice_receiver_code: "terminal",
     invoice_description: description || `HiCar order ${orderId}`,
     amount,
-    callback_url: CALLBACK_URL ? `${CALLBACK_URL}?orderId=${orderId}` : undefined,
+    // Stuff the shared secret into the callback URL itself so QPay sends it
+    // back to us on every invocation. Without it, our verifyQpayCallback
+    // middleware rejects the request — meaning a leaked URL alone is not
+    // enough to spoof a payment.
+    callback_url: CALLBACK_URL
+      ? `${CALLBACK_URL}?orderId=${orderId}${CALLBACK_SECRET ? `&secret=${encodeURIComponent(CALLBACK_SECRET)}` : ""}`
+      : undefined,
   };
   const res = await fetch(`${BASE}/invoice`, {
     method: "POST",

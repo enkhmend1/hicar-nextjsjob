@@ -132,11 +132,20 @@ export default function SellerProfilePage() {
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-mono" />
             </Field>
 
-            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
               <Stat label="Хураамж"  value={`${user.sellerProfile?.platformFeePercent ?? 5}%`} />
+              <Stat
+                label="Trust score"
+                value={`${Math.round(user.sellerProfile?.trustScore ?? 50)}/100`}
+              />
               <Stat label="Үнэлгээ"  value={user.sellerProfile?.rating ? `${user.sellerProfile.rating.toFixed(1)} (${user.sellerProfile.ratingCount ?? 0})` : "—"} />
               <Stat label="Нийт бор." value={`₮${(user.sellerProfile?.totalSales ?? 0).toLocaleString()}`} />
             </div>
+            <p className="text-[11px] text-gray-400 leading-snug">
+              Trust score нь escrow төлбөрийн хадгалалтын хугацааг тодорхойлно — өндөр оноо
+              шуурхай төлбөр (3 хоног), бага оноо удаан хадгалалт (14 хоног). Бүрэн буцаалт
+              −3, хэсэгчилсэн буцаалт −1.5, маргаан гарсан боловч таны талд шийдэгдвэл +0.5 / +1.5.
+            </p>
 
             <button type="submit" disabled={busy}
               className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-2 font-sans">

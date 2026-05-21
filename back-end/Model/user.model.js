@@ -58,6 +58,83 @@ userSchema.pre("save", async function () {
   this.password = await argon2.hash(this.password);
 });
 
+/**
+ * Trust-score range guard — DEFENCE IN DEPTH.
+ *
+ * The trustScore.service uses an aggregation-pipeline update with
+ * server-side `$max` / `$min` clamping, so writes from THAT path are
+ * already bounded. These middleware hooks catch every OTHER possible
+ * write path (admin manual override via the user controller, future
+ * scripts that set the field directly, .save() on a hydrated User
+ * document) and clamp them to [0, 100].
+ *
+ * Note: aggregation-pipeline updates BYPASS Mongoose query middleware —
+ * that's not a regression here, it's the whole point. The pipeline
+ * already clamps server-side; these hooks cover the non-pipeline paths.
+ */
+const TRUST_MIN = 0;
+const TRUST_MAX = 100;
+const clampTrust = (n) => {
+  if (typeof n !== "number" || !Number.isFinite(n)) return n;
+  return Math.max(TRUST_MIN, Math.min(TRUST_MAX, n));
+};
+
+userSchema.pre("save", function (next) {
+  // `this` is the document. Only clamp if the path is touched.
+  if (this.sellerProfile && typeof this.sellerProfile.trustScore === "number") {
+    this.sellerProfile.trustScore = clampTrust(this.sellerProfile.trustScore);
+  }
+  next();
+});
+
+// Query-level middleware fires for *.findOneAndUpdate / *.updateOne /
+// *.updateMany. `this` is the Query object → use getUpdate() / setUpdate().
+function clampTrustInQueryUpdate() {
+  const update = this.getUpdate();
+  if (!update) return;
+  // Aggregation pipeline updates are arrays → skip; the pipeline does its
+  // own clamping. Treat anything else as a classic update object.
+  if (Array.isArray(update)) return;
+
+  // Paths can be written as flat dotted ("sellerProfile.trustScore") or
+  // nested object form ({ sellerProfile: { trustScore: 50 } }). Patch both.
+  const ops = ["$set", "$setOnInsert"];
+  for (const op of ops) {
+    const block = update[op];
+    if (!block) continue;
+    if (typeof block["sellerProfile.trustScore"] === "number") {
+      block["sellerProfile.trustScore"] = clampTrust(block["sellerProfile.trustScore"]);
+    }
+    if (block.sellerProfile && typeof block.sellerProfile.trustScore === "number") {
+      block.sellerProfile.trustScore = clampTrust(block.sellerProfile.trustScore);
+    }
+  }
+  // Top-level (no $set) — Mongoose treats this as implicit $set.
+  if (typeof update["sellerProfile.trustScore"] === "number") {
+    update["sellerProfile.trustScore"] = clampTrust(update["sellerProfile.trustScore"]);
+  }
+  if (update.sellerProfile && typeof update.sellerProfile.trustScore === "number") {
+    update.sellerProfile.trustScore = clampTrust(update.sellerProfile.trustScore);
+  }
+
+  // `$inc` on a clamped field is dangerous (can push past the bound). We
+  // do NOT use $inc on trustScore from the service — but if some future
+  // code does, leave a loud warning rather than silently corrupting.
+  if (update.$inc && (
+    typeof update.$inc["sellerProfile.trustScore"] === "number" ||
+    typeof update.$inc.sellerProfile?.trustScore === "number"
+  )) {
+    console.warn(
+      "[user.model] WARNING: $inc on sellerProfile.trustScore bypasses range " +
+      "clamp. Use the aggregation pipeline in trustScore.service instead.",
+    );
+  }
+}
+
+userSchema.pre("findOneAndUpdate", clampTrustInQueryUpdate);
+userSchema.pre("updateOne",        clampTrustInQueryUpdate);
+userSchema.pre("updateMany",       clampTrustInQueryUpdate);
+
 userSchema.methods.verifyPassword = async function (plain) {
   return argon2.verify(this.password, plain);
 };

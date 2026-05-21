@@ -28,11 +28,22 @@ import {
   postMessage, adminResolve,
 } from "../Controller/dispute.controller.js";
 import { protect, adminOnly, approvedSeller } from "../Middleware/auth.middleware.js";
+import { userLimit } from "../Middleware/rateLimit.middleware.js";
 
 const router = express.Router();
 
+// Spam guard — a single buyer filing dozens of disputes is the canonical
+// griefing vector. 5 filings / day / user is generous for legitimate use
+// (most buyers open 0 disputes, problem buyers maybe 1-2 / week).
+const fileDisputeLimit = userLimit(5, 60 * 60 * 24);
+// Message thread: 30 messages per dispute window — covers any reasonable
+// back-and-forth but stops chat-spam floods.
+const messageLimit = userLimit(30, 60 * 60);
+// Resolution attempts: 20 / hour / admin — prevents accidental rapid-fire.
+const adminResolveLimit = userLimit(20, 60 * 60);
+
 // Buyer ────────────────────────────────────────────────────────
-router.post  ("/",                protect, create);
+router.post  ("/",                protect, fileDisputeLimit, create);
 router.get   ("/mine",            protect, myDisputes);
 router.post  ("/:id/accept",      protect, buyerAccept);
 router.post  ("/:id/reject",      protect, buyerReject);
@@ -44,10 +55,10 @@ router.post  ("/:id/respond",     protect, approvedSeller, sellerRespond);
 
 // Admin ────────────────────────────────────────────────────────
 router.get   ("/admin",           protect, adminOnly, allDisputes);
-router.post  ("/:id/resolve",     protect, adminOnly, adminResolve);
+router.post  ("/:id/resolve",     protect, adminOnly, adminResolveLimit, adminResolve);
 
 // Either side (controller does its own auth) ───────────────────
 router.get   ("/:id",             protect, getDispute);
-router.post  ("/:id/messages",    protect, postMessage);
+router.post  ("/:id/messages",    protect, messageLimit, postMessage);
 
 export default router;

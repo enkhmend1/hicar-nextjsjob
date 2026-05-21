@@ -27,6 +27,8 @@ import Order from "../Model/order.model.js";
 import { notify, notifyAdmins } from "./notification.service.js";
 import { analyseDispute } from "./fraud.service.js";
 import { refundPayment } from "./qpay.service.js";
+import { applyResolutionDelta } from "./trustScore.service.js";
+import { appendAudit } from "./financialAudit.service.js";
 // releaseEscrow is not called directly here — all release paths go through
 // scheduleRelease (BullMQ delayed job), which lets the escrow service stay
 // the single owner of the "is this releasable?" guard.
@@ -78,6 +80,29 @@ const applyRefund = async ({ order, amount, note }) => {
     },
     { new: true },
   );
+
+  // Audit the refund. Append-only — no further mutation of this row.
+  await appendAudit({
+    type: "refund_issued",
+    orderId: fresh._id,
+    buyerId: fresh.user,
+    actor:   "system",
+    amount,
+    before: {
+      paymentStatus: order.paymentStatus,
+      refundedAmount: currentlyRefunded,
+    },
+    after: {
+      paymentStatus: fresh.paymentStatus,
+      refundedAmount: fresh.refundedAmount,
+    },
+    metadata: {
+      qpayRefundId: qpay.refundId,
+      qpayMocked: Boolean(qpay.mocked),
+      note,
+    },
+  });
+
   return { qpayRefundId: qpay.refundId, fullyRefunded, order: fresh };
 };
 
@@ -640,7 +665,20 @@ const resolveWithRefund = async (dispute, amount, resolvedBy, extra = {}) => {
   await dispute.save();
   await recomputeOpenDisputeFlag(dispute.order);
 
-  // Notify both sides.
+  // Reputation update — atomic + idempotent via the trust-score service's
+  // per-dispute CAS lock. Pass dispute._id as the idempotency key so
+  // BullMQ retries / admin double-clicks cannot apply the delta twice.
+  // Fire-and-forget: a missed trust update is recoverable via the
+  // reconciliation watchdog, but a thrown error here would surface as a
+  // 500 from the controller, which would be wrong — the dispute itself
+  // resolved successfully.
+  applyResolutionDelta(dispute._id, dispute.seller, dispute.status).catch((e) =>
+    console.warn(chalk.yellow(`[trustScore] refund delta failed: ${e.message}`)));
+
+  // Notify both sides via the outbox. `idempotencyKey` collapses the
+  // notification if THIS function runs twice for the same dispute (which
+  // shouldn't happen — applyResolutionDelta's CAS lock prevents it — but
+  // belt + braces costs us nothing).
   notify({
     user: dispute.buyer,
     type: "dispute_resolved_refund",
@@ -649,6 +687,7 @@ const resolveWithRefund = async (dispute, amount, resolvedBy, extra = {}) => {
     link: "/orders",
     data: { disputeId: String(dispute._id) },
     email: true,
+    idempotencyKey: `dispute:${dispute._id}:refund:buyer`,
   });
   notify({
     user: dispute.seller,
@@ -658,6 +697,7 @@ const resolveWithRefund = async (dispute, amount, resolvedBy, extra = {}) => {
     link: "/seller/disputes",
     data: { disputeId: String(dispute._id) },
     email: true,
+    idempotencyKey: `dispute:${dispute._id}:refund:seller`,
   });
 
   // If we only partially refunded AND the order has been delivered, the
@@ -710,6 +750,15 @@ const resolveWithRelease = async (dispute, resolvedBy, extra = {}) => {
   // clear hasOpenDispute in a single atomic update. After this returns,
   // the order is in the correct post-dispute state.
   await recomputeOpenDisputeFlag(dispute.order);
+
+  // Reputation reward — releases lift the seller's trust score so future
+  // payouts come faster. reject_claim (admin actively ruled buyer wrong)
+  // is a STRONGER positive signal than buyer-withdrew or release; we map
+  // through dispute.resolution.action so trust deltas reflect the real
+  // adjudication outcome rather than the dispute's terminal status alone.
+  // Idempotency: dispute._id is the CAS key — retries are no-ops.
+  applyResolutionDelta(dispute._id, dispute.seller, dispute.resolution.action).catch((e) =>
+    console.warn(chalk.yellow(`[trustScore] release delta failed: ${e.message}`)));
 
   notify({
     user: dispute.buyer,

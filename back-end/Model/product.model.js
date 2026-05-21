@@ -81,6 +81,54 @@ const productSchema = new mongoose.Schema(
       /** Pre-computed denormalised OEM bag for fast `$in` matching across cross-refs. */
       oemBag:        { type: [String], default: [], index: true },
     },
+
+    /**
+     * SELLER-FACING fitments — the structured, human-editable list the
+     * multi-step product form populates. Each row says "this part fits
+     * <make> <model> <generation?> from <yearStart> to <yearEnd>".
+     *
+     * Coexists with the reference-based `compatibility` block above:
+     *   • `compatibility.*` is normalised (ObjectId refs), used by the AI
+     *     compatibility engine for cross-reference queries.
+     *   • `fitments[]` is denormalised free-text, owned by the seller and
+     *     surfaced verbatim on the product page.
+     * A future ingestion script can backfill `compatibility.*` from
+     * `fitments[]` for legacy products.
+     */
+    fitments: {
+      type: [{
+        make:       { type: String, required: true, trim: true, maxlength: 60 },
+        model:      { type: String, required: true, trim: true, maxlength: 60 },
+        generation: { type: String, default: "", trim: true, maxlength: 40 },
+        yearStart:  { type: Number, min: 1950, max: 2100 },
+        yearEnd:    { type: Number, min: 1950, max: 2100 },
+      }],
+      default: [],
+      validate: {
+        validator: (arr) => Array.isArray(arr) && arr.length <= 50,
+        message: "Хамгийн ихдээ 50 fitment row дэмжинэ",
+      },
+    },
+
+    /**
+     * Category-dependent dynamic attributes. The Mongoose layer stores
+     * them as Mixed (no schema lock-in) — the application-layer Zod
+     * validator (`Service/productSchema.service.js`) enforces the
+     * correct shape per category before this ever reaches Mongo:
+     *
+     *   category="body"   → { side, color, material }
+     *   category="oils"   → { viscosity, volume, oilType, api? }
+     *   category="brake"  → { padType?, frictionGrade?, ... }
+     *   ... (extensible — see productSchema.service.js)
+     *
+     * Storing as Mixed gives sellers freedom to introduce new attributes
+     * without a schema migration, but the Zod validator at the API
+     * boundary catches typos and missing requireds at request time.
+     */
+    attributes: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   { timestamps: true },
 );
@@ -91,6 +139,13 @@ productSchema.index({ name: "text", oem: "text", brand: "text", tags: "text" });
 // Common compound indexes for catalogue listing
 productSchema.index({ status: 1, category: 1, createdAt: -1 });
 productSchema.index({ status: 1, seller: 1, createdAt: -1 });
+
+// Fitment lookups — the catalogue's most important user query is
+// "what fits my Toyota Crown 2012?" → make + model + (yearStart ≤ year ≤ yearEnd).
+// Compound index sorts make first (lowest cardinality split) for
+// predicate-pushdown efficiency.
+productSchema.index({ "fitments.make": 1, "fitments.model": 1 });
+productSchema.index({ category: 1, "fitments.make": 1, status: 1 });
 
 // Normalise tag input
 productSchema.pre("save", function () {

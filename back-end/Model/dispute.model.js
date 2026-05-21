@@ -257,6 +257,22 @@ const disputeSchema = new mongoose.Schema(
     },
 
     escalatedAt: { type: Date },
+
+    /**
+     * Idempotency lock for the trust-score side-effect.
+     *
+     * Set to true by `trustScore.service.applyResolutionDelta` via an atomic
+     * CAS (`{ _id, isTrustScoreApplied: { $ne: true } }`). When a BullMQ
+     * deadline worker retries, an admin double-clicks "Resolve", or a
+     * concurrent code path tries to fire the same resolution twice, the
+     * second caller's CAS returns null and the delta is NOT re-applied —
+     * the seller's reputation can never be over- or under-counted.
+     *
+     * Indexed so the reconciliation watchdog can quickly find disputes
+     * stuck in a terminal status with the flag still false (i.e. trust
+     * update failed mid-flight).
+     */
+    isTrustScoreApplied: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
 );

@@ -21,6 +21,7 @@
 import Order from "../Model/order.model.js";
 import User from "../Model/user.model.js";
 import { notify } from "./notification.service.js";
+import { appendAudit } from "./financialAudit.service.js";
 
 const MIN_HOLD_DAYS = 3;
 const MAX_HOLD_DAYS = 14;
@@ -171,6 +172,26 @@ export const releaseEscrow = async (orderId) => {
       link: "/seller/orders",
       data: { orderId: String(updated._id), amount: payout },
       email: true,
+    });
+  }
+
+  // Append one audit row per seller that received a payout. Per-seller
+  // granularity makes the audit log queryable by seller (e.g. for tax
+  // reporting or seller payment reconciliation).
+  for (const [sellerId, payout] of perSeller) {
+    await appendAudit({
+      type: "escrow_released",
+      orderId: updated._id,
+      sellerId,
+      actor: "system",
+      amount: payout,
+      before: { paymentStatus: order.paymentStatus },
+      after:  { paymentStatus: "PAID_OUT" },
+      metadata: {
+        refundedAmount: updated.refundedAmount || 0,
+        returnShippingPenalty: updated.returnShippingPenalty || 0,
+        grossPayout: perSellerGross.get(sellerId),
+      },
     });
   }
 

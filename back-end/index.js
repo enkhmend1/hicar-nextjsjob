@@ -1,6 +1,7 @@
 import 'dotenv/config'; // load env BEFORE any other module that reads process.env
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import chalk from 'chalk';
 import path from 'path';
@@ -16,6 +17,8 @@ import './Service/jobQueue.service.js';
 import './Queue/vehicleLookup.queue.js';
 import './Queue/escrowRelease.queue.js';      // Phase-2 escrow worker
 import './Queue/disputeDeadline.queue.js';    // Phase-2 dispute SLA worker
+import { startReconciliationScheduler } from './Queue/reconciliation.queue.js';
+import { startOutboxWorker } from './Queue/notificationOutbox.queue.js';
 import './Service/notification.service.js';
 import './Service/qpay.service.js';
 
@@ -39,17 +42,32 @@ import proxyRoutes        from './Routes/proxy.route.js';
 import smartSearchRoutes  from './Routes/smartSearch.route.js';
 import sellerImportRoutes from './Routes/sellerImport.route.js';
 import disputeRoutes      from './Routes/dispute.route.js';
+import auditRoutes        from './Routes/audit.route.js';
 
 connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// ── Security headers ─────────────────────────────────────────────────
+// helmet sets a sensible default of: X-Content-Type-Options=nosniff,
+// X-Frame-Options=SAMEORIGIN, X-DNS-Prefetch-Control=off,
+// Strict-Transport-Security (when behind HTTPS), Referrer-Policy=no-referrer,
+// and removes X-Powered-By. We disable CSP here because the API never
+// serves HTML — CSP belongs on the Next.js front-end.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  // Cloudinary images served via /uploads need cross-origin embedding.
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000',
   credentials: true,
 }));
-app.use(express.json({ limit: '2mb' }));
+// Global body limit. Individual routes that need MORE (image uploads,
+// product imports) opt in with their own multer/express.json mount.
+app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.resolve('uploads'), {
   setHeaders: (res) => {
@@ -80,6 +98,7 @@ app.use('/api/admin/proxy',   proxyRoutes);
 app.use('/api/search',        smartSearchRoutes);
 app.use('/api/seller/import', sellerImportRoutes);
 app.use('/api/disputes',      disputeRoutes);   // Phase-2: refund / dispute system
+app.use('/api/admin/audit',   auditRoutes);     // hash-chained financial event log
 
 app.use((err, _req, res, _next) => {
   console.error(chalk.red(err.stack || err.message));
@@ -88,4 +107,8 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(chalk.blueBright.bold(`Server running on port ${PORT}`));
+  // Kick off background workers. Both schedulers have bootDelayMs so they
+  // wait for Mongo + Redis to settle before firing the first tick.
+  startReconciliationScheduler();
+  startOutboxWorker();
 });

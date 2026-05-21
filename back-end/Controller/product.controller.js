@@ -4,6 +4,11 @@ import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
 import { rememberInputs } from "./seller.controller.js";
+import {
+  productCreateSchema,
+  productUpdateSchema,
+  flattenZodErrors,
+} from "../Service/productSchema.service.js";
 
 const normalizeProductInput = (body) => {
   const out = { ...body };
@@ -139,7 +144,26 @@ export const getProduct = async (req, res) => {
 export const createProduct = async (req, res) => {
   try {
     const { seller: _s, status: _st, rejectedReason: _r, ...body } = req.body;
-    const payload = normalizeProductInput(body);
+    const normalised = normalizeProductInput(body);
+
+    // ── Dynamic, category-aware validation ──────────────────────────
+    // The Zod layer enforces:
+    //   • all required base fields are present (name/brand/category/price/...)
+    //   • fitments[] rows are coherent (yearStart ≤ yearEnd)
+    //   • category-specific attributes match their schema
+    //     (e.g. category="oils" demands viscosity + volume + oilType;
+    //      category="body" demands side; cross-category attributes
+    //      are rejected with a precise path)
+    const parsed = productCreateSchema.safeParse(normalised);
+    if (!parsed.success) {
+      return res.status(400).json({
+        code: "VALIDATION_FAILED",
+        message: "Барааны мэдээлэл шалгалт давсангүй",
+        errors: flattenZodErrors(parsed.error),
+      });
+    }
+    const payload = parsed.data;
+
     if (req.user.role === "admin") {
       payload.seller = null;
     } else {
@@ -186,7 +210,31 @@ export const updateProduct = async (req, res) => {
     }
 
     const { seller, status, rejectedReason, ...body } = req.body;
-    const update = normalizeProductInput(body);
+    const normalised = normalizeProductInput(body);
+
+    // ── Partial-update validation ──────────────────────────────────
+    // When the client sends only a few fields (e.g. just `price` or
+    // `stockQty`), every base field is optional — productUpdateSchema
+    // is `.partial()`. But if BOTH `category` and `attributes` are
+    // present, we cross-validate them: the client can't sneak invalid
+    // OILS attributes into a BODY product mid-edit.
+    //
+    // If the client touches `attributes` WITHOUT changing `category`,
+    // we merge in the existing product's category before validating so
+    // attribute rules still apply.
+    const updateInput = { ...normalised };
+    if (updateInput.attributes !== undefined && updateInput.category === undefined) {
+      updateInput.category = existing.category;
+    }
+    const parsed = productUpdateSchema.safeParse(updateInput);
+    if (!parsed.success) {
+      return res.status(400).json({
+        code: "VALIDATION_FAILED",
+        message: "Барааны мэдээлэл шалгалт давсангүй",
+        errors: flattenZodErrors(parsed.error),
+      });
+    }
+    const update = parsed.data;
     if (isAdmin) {
       if (status !== undefined) update.status = status;
       if (rejectedReason !== undefined) update.rejectedReason = rejectedReason;

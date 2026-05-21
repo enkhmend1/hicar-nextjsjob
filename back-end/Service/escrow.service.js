@@ -14,6 +14,7 @@
 import mongoose from "mongoose";
 import Order from "../Model/order.model.js";
 import User from "../Model/user.model.js";
+import { appendAudit } from "./financialAudit.service.js";
 
 /**
  * Round to integer MNT — Mongolian tögrög has no fractional unit in practice.
@@ -170,6 +171,27 @@ export const settleOrderPaid = async (orderId) => {
       await order.save({ session });
       didTransition = true;
     });
+    if (didTransition) {
+      // Append a payment_settled event AFTER the transaction commits, so
+      // the audit row reflects the canonical persisted state.
+      const fresh = await Order.findById(orderId).select(
+        "platformFeeTotal sellerPayoutTotal escrowAmount paidAt user items",
+      ).lean();
+      await appendAudit({
+        type: "payment_settled",
+        orderId,
+        buyerId: fresh?.user,
+        actor: "system",
+        amount: fresh?.escrowAmount || 0,
+        before: { paymentStatus: "PENDING" },
+        after:  {
+          paymentStatus: "PAID",
+          platformFeeTotal:  fresh?.platformFeeTotal,
+          sellerPayoutTotal: fresh?.sellerPayoutTotal,
+          escrowAmount:      fresh?.escrowAmount,
+        },
+      });
+    }
     return didTransition;
   } finally {
     await session.endSession();
@@ -220,5 +242,21 @@ const settleOrderPaidNoTxn = async (orderId) => {
     },
     { new: true },
   );
+  if (updated) {
+    await appendAudit({
+      type: "payment_settled",
+      orderId: updated._id,
+      buyerId: updated.user,
+      actor: "system",
+      amount: updated.escrowAmount,
+      before: { paymentStatus: "PENDING" },
+      after: {
+        paymentStatus: "PAID",
+        platformFeeTotal:  updated.platformFeeTotal,
+        sellerPayoutTotal: updated.sellerPayoutTotal,
+        escrowAmount:      updated.escrowAmount,
+      },
+    });
+  }
   return Boolean(updated);
 };
