@@ -22,7 +22,10 @@ import * as XLSX from "xlsx";
 import Product from "../Model/product.model.js";
 import { upload } from "../Middleware/upload.middleware.js";
 import { enrichProduct, enrichBulk } from "../Service/productEnricher.service.js";
-import { openai, openaiEnabled, openaiModel } from "../Config/openai.js";
+// ocrHandler does image OCR — it MUST go through the vision client.
+// aiConfig.vision points at Gemini by default (OpenAI-compat endpoint)
+// and falls back gracefully when GEMINI_API_KEY is unset.
+import { aiConfig } from "../Config/openai.js";
 import { rememberInputs } from "./seller.controller.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -220,8 +223,14 @@ export const commitHandler = async (req, res) => {
 // ── 5. OCR enrich — image URL → GPT-4V extracts code/name → enrich ────
 export const ocrHandler = async (req, res) => {
   try {
-    if (!openaiEnabled) {
-      return res.status(503).json({ message: "OCR backend OpenAI key шаардана" });
+    // OCR requires the vision provider specifically — Groq (text-only)
+    // cannot service this even when it is configured for chat. We surface
+    // a clear operator-facing message so the env fix is obvious.
+    if (!aiConfig.vision.enabled) {
+      return res.status(503).json({
+        code: "VISION_PROVIDER_UNAVAILABLE",
+        message: "OCR backend нь vision AI provider шаардана. GEMINI_API_KEY тохируулна уу.",
+      });
     }
     const { imageUrl } = req.body || {};
     if (!imageUrl) return res.status(400).json({ message: "imageUrl шаардлагатай" });
@@ -244,8 +253,8 @@ export const ocrHandler = async (req, res) => {
         },
       },
     };
-    const visionResp = await openai.chat.completions.create({
-      model: openaiModel,
+    const visionResp = await aiConfig.vision.client.chat.completions.create({
+      model: aiConfig.vision.model,
       temperature: 0.0,
       tool_choice: { type: "function", function: { name: tool.function.name } },
       tools: [tool],
