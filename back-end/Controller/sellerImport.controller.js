@@ -22,6 +22,7 @@ import * as XLSX from "xlsx";
 import Product from "../Model/product.model.js";
 import { upload } from "../Middleware/upload.middleware.js";
 import { enrichProduct, enrichBulk } from "../Service/productEnricher.service.js";
+import { buildPreview } from "../Service/importPreview.service.js";
 // ocrHandler does image OCR — it MUST go through the vision client.
 // aiConfig.vision points at Gemini by default (OpenAI-compat endpoint)
 // and falls back gracefully when GEMINI_API_KEY is unset.
@@ -282,6 +283,123 @@ export const ocrHandler = async (req, res) => {
     });
 
     return res.json({ ocr, enriched });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// ── 6. Predictive Preview (Phase D) ───────────────────────────────────
+// Runs the row pipeline that powers the wizard's Step-2 review screen:
+// OCR fuzzy correction → LLM enrichment → conflict detection.
+//
+// Output rows carry: confidence score, ocrFix block, conflict block (or
+// null), and a suggested per-row action ("create" | "merge_stock" |
+// "overwrite_all" | "skip" | "review"). The frontend renders the
+// confidence + conflict as colour-coded UI; the action is editable
+// per-row and used by commit-v2 below.
+export const previewHandler = async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!rows)               return res.status(400).json({ message: "rows массив шаардлагатай" });
+    if (rows.length > 500)   return res.status(413).json({ message: "Нэг удаа 500-аас цөөн мөр" });
+
+    const concurrency = Math.max(1, Math.min(8, Number(req.body?.concurrency) || 5));
+    const result = await buildPreview(req.user._id, rows, { concurrency });
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+// ── 7. Conflict-aware Commit (Phase D — commit-v2) ────────────────────
+// Replaces the binary skip|update flag of the legacy commit endpoint
+// with PER-ROW action verbs that mirror the spec's bulk-action UI:
+//
+//   "create"        → new Product (raises validation error on dup OEM)
+//   "merge_stock"   → keep old price, add incoming qty to existing.stockQty
+//   "overwrite_all" → replace price + qty + warehouseLocation + costPrice
+//   "skip"          → do nothing for this row
+//   "review"        → also do nothing, but flag it as needing seller attention
+//                     (rows shouldn't reach commit with this verb — frontend
+//                      forces a decision — but we accept it as no-op for safety)
+//
+// Returns per-row outcomes so the seller sees exactly what landed.
+export const commitV2Handler = async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!rows?.length) return res.status(400).json({ message: "rows шаардлагатай" });
+
+    const outcomes = [];
+    let created = 0, merged = 0, overwritten = 0, skipped = 0, failed = 0;
+
+    for (const r of rows) {
+      const action = String(r.action || "skip").toLowerCase();
+      try {
+        const doc = enrichedToProductDoc(r, req.user._id);
+        if (!doc.name?.trim() || doc.price < 0) throw new Error("Нэр / үнэ буруу");
+
+        // Look up the existing product the seller might be conflicting with.
+        const existing = doc.oem
+          ? await Product.findOne({ seller: req.user._id, oem: doc.oem })
+          : null;
+
+        if (action === "skip" || action === "review") {
+          skipped++;
+          outcomes.push({ oem: doc.oem, name: doc.name, action, result: "skipped" });
+          continue;
+        }
+
+        if (action === "create") {
+          if (existing) throw new Error("OEM аль хэдийн бүртгэлтэй — merge_stock эсвэл overwrite_all сонгоно уу");
+          const item = await Product.create(doc);
+          created++;
+          outcomes.push({ oem: doc.oem, name: doc.name, action, result: "created", productId: String(item._id) });
+          continue;
+        }
+
+        if (action === "merge_stock") {
+          if (!existing) throw new Error("Нэгтгэх бараа DB-д алга — create-ыг сонгоно уу");
+          existing.stockQty = (existing.stockQty || 0) + (doc.stockQty || 0);
+          existing.inStock  = existing.stockQty > 0;
+          // Re-record warehouse if newer row knows it.
+          if (doc.warehouseLocation) existing.warehouseLocation = doc.warehouseLocation;
+          await existing.save();
+          merged++;
+          outcomes.push({ oem: doc.oem, name: doc.name, action, result: "merged",
+            newStockQty: existing.stockQty, keptPrice: existing.price });
+          continue;
+        }
+
+        if (action === "overwrite_all") {
+          if (!existing) throw new Error("Дарж бичих бараа DB-д алга");
+          const prevPrice = existing.price;
+          existing.price       = doc.price;
+          existing.stockQty    = doc.stockQty;
+          existing.inStock     = doc.inStock;
+          existing.description = doc.description;
+          existing.tags        = doc.tags;
+          existing.compatible  = doc.compatible;
+          if (doc.warehouseLocation) existing.warehouseLocation = doc.warehouseLocation;
+          if (doc.costPrice !== undefined && doc.costPrice >= 0) existing.costPrice = doc.costPrice;
+          await existing.save();
+          overwritten++;
+          outcomes.push({ oem: doc.oem, name: doc.name, action, result: "overwritten",
+            prevPrice, newPrice: existing.price, newStockQty: existing.stockQty });
+          continue;
+        }
+
+        throw new Error(`Үл мэдэгдэх action: ${action}`);
+      } catch (e) {
+        failed++;
+        outcomes.push({ oem: r.cleaned_oem_code, name: r.display_name_mn || r.raw_name, action, result: "failed", error: e.message });
+      }
+    }
+
+    return res.json({
+      total: rows.length,
+      created, merged, overwritten, skipped, failed,
+      outcomes,
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

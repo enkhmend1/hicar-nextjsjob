@@ -7,7 +7,6 @@ import BrandsBar from "./components/BrandsBar";
 import CategoryCard from "./components/CategoryCard";
 import ProductCard from "./components/ProductCard";
 import AIBanner from "./components/AIBanner";
-import { CATEGORIES } from "@/lib/data";
 import { api } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { useAuthStore } from "@/store";
@@ -18,17 +17,34 @@ function CatIcon({ d }: { d: string }) {
   return <svg className="w-4 h-4 fill-violet-600" viewBox="0 0 24 24"><path d={d} /></svg>;
 }
 
+/**
+ * Homepage category strip. Was previously driven by a hardcoded list in
+ * lib/data.ts (5200, 860, 1240, ...) — those were placeholder numbers
+ * that never matched the real catalogue.
+ *
+ * Now sourced from `/api/site-content/categories` which joins admin-
+ * editable display metadata (name, icon SVG path, order, visible) with
+ * a live MongoDB aggregate count of approved products. Admins can edit
+ * the labels/icons/visibility at /admin/site-content; the counts are
+ * always real.
+ */
+type HomepageCategory = { id: string; name: string; iconPath: string; count: number };
+
 export default function Home() {
   const t = useT();
   const user = useAuthStore((s) => s.user);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<HomepageCategory[]>([]);
 
   useEffect(() => {
     api.get<{ items: Product[] }>("/products?limit=8")
       .then(d => setProducts(d.items))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
+    api.get<{ categories: HomepageCategory[] }>("/site-content/categories")
+      .then(d => setCategories(d.categories || []))
+      .catch(() => setCategories([]));
   }, []);
 
   return (
@@ -81,11 +97,19 @@ export default function Home() {
             <Link href="/shop" className="text-[13px] text-violet-600 hover:underline font-medium" style={{ textDecoration: "none" }}>{t("home.viewAll")} →</Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {CATEGORIES.filter(c => c.id !== "all").map(c => (
-              <Link key={c.id} href={`/shop?cat=${c.id}`} style={{ textDecoration: "none" }}>
-                <CategoryCard name={c.name} count={`${c.count.toLocaleString()} зүйл`} icon={<CatIcon d={c.icon} />} />
-              </Link>
-            ))}
+            {categories.length === 0
+              ? Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-xl h-[90px] animate-pulse" />
+                ))
+              : categories.map((c) => (
+                  <Link key={c.id} href={`/shop?cat=${c.id}`} style={{ textDecoration: "none" }}>
+                    <CategoryCard
+                      name={c.name}
+                      count={`${c.count.toLocaleString()} зүйл`}
+                      icon={<CatIcon d={c.iconPath} />}
+                    />
+                  </Link>
+                ))}
           </div>
         </div>
 

@@ -49,6 +49,25 @@ const productSchema = new mongoose.Schema(
     /** Per-product low-stock threshold override. -1 means "use seller default". */
     lowStockThreshold: { type: Number, default: -1, min: -1 },
 
+    /**
+     * SELLER-PRIVATE inventory fields. Surfaced only to the merchant who
+     * owns the SKU (and to admins) — the AI sanitizer strips these from
+     * any payload that flows to a public USER scope. Adding fields here
+     * requires NO frontend change; the redactor's allowlist
+     * (aiRole.service.js → SELLER_EXTRA_FIELDS) already picks them up.
+     *
+     *   costPrice          — what the merchant paid. Powers
+     *                        Trapped Capital = costPrice × stockQty in
+     *                        the Deadstock Alert tool.
+     *   warehouseLocation  — physical shelf/row coordinate (e.g. "B-3").
+     *                        Indexed so the Shelf Locator tool answers
+     *                        "where is OEM 04465-02220" in O(log n).
+     */
+    costPrice:         { type: Number, default: 0, min: 0 },
+    warehouseLocation: { type: String, default: "", trim: true, maxlength: 60, index: true },
+    /** Cached for deadstock heuristic — updated by order create hook. */
+    lastSoldAt:        { type: Date, default: null, index: true },
+
     badge: { type: String, default: "" },
     description: { type: String, default: "", maxlength: 4000 },
     compatible: { type: [String], default: [] },

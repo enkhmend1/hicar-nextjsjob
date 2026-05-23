@@ -172,10 +172,16 @@ export default function SellerProductsPage() {
             style={{ textDecoration: "none" }}>
             <Sparkles size={14} /> AI Bulk Import
           </Link>
-          <button onClick={() => setEditing({ ...emptyForm })}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans shadow-md shadow-violet-200">
+          {/*
+            "Шинэ бараа" товчийг новын 3-алхамт форм руу route хийсэн.
+            Хуучин setEditing-аар нээгддэг inline modal нь EXISTING product-ыг
+            ЗАСАХАД л үлдсэн (хүснэгтийн мөр доторх Pencil товч).
+          */}
+          <Link href="/seller/products/new"
+            className="flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans shadow-md shadow-violet-200"
+            style={{ textDecoration: "none" }}>
             <Plus size={14} /> Шинэ бараа
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -205,7 +211,13 @@ export default function SellerProductsPage() {
               {loading ? (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Уншиж байна...</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Бараа байхгүй. &quot;Шинэ бараа&quot; товчоор нэмнэ үү.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                  Бараа байхгүй.{" "}
+                  <Link href="/seller/products/new" className="text-violet-600 hover:text-violet-700 font-semibold underline" style={{ textDecoration: "underline" }}>
+                    Шинэ бараа нэмэх
+                  </Link>
+                  .
+                </td></tr>
               ) : items.map((p) => {
                 const st = STATUS_STYLE[p.status ?? "approved"];
                 const StIcon = st.icon;

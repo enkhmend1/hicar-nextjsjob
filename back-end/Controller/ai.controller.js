@@ -1,29 +1,32 @@
 /**
- * Smart Hybrid AI Router — Controller Layer (HARDENED)
+ * HiCar AI Gateway — Role-Based Controller (Phase A)
  *
- *   POST /api/ai/chat
- *     ├─ multipart/form-data + `file` upload  → routed to visionClient (Gemini)
- *     └─ JSON only                            → routed to fastTextClient (Groq)
+ * Single endpoint  POST /api/ai/chat  routed by req.user.role into one of
+ * three personas (User / Seller / Admin), each with strict data
+ * boundaries and a tightly-scoped tool list.
  *
- * Defensive layers (in order of execution):
+ * Trust boundary:
  *
- *   ① Cleanup contract — every non-2xx response path goes through
- *      respondWithError(), which deletes any already-uploaded Cloudinary
- *      asset before sending. Closes the orphan-asset DoS where a bad
- *      request triggers a successful upload that nobody reads.
+ *   ① deriveAiRole(req.user)              → role
+ *   ② buildRoleScope(role, req.user)      → { allowedTools, productFilter, … }
+ *   ③ Filter TOOLS[] by scope.allowedTools BEFORE sending to LLM
+ *   ④ Every tool handler accepts (args, runtime) where runtime carries
+ *      the scope, so handlers can't widen access through args.
+ *   ⑤ All product output flows through sanitizeProduct(scope) before
+ *      reaching the wire.
  *
- *   ② Input validation — empty / whitespace-only text requests are
- *      rejected at the door (no expensive LLM call for "x" or "??"). Image
- *      requests are exempt: the image alone justifies invocation.
+ * Defensive layers (unchanged from the original hardened controller):
  *
- *   ③ Tool-loop hardening — concurrent guards on rounds, total tool calls,
- *      cumulative tokens, duplicate signatures, wall-clock time, and
- *      per-call output cap. Any guard fires → break gracefully and return
- *      the best message we have so far.
+ *   • respondWithError() — cleanup contract for orphan Cloudinary uploads
+ *   • validateUserIntent() — reject empty / trivially-short prompts
+ *   • Tool-loop guards — maxRounds / maxToolCalls / token budget /
+ *     wall-clock / duplicate-signature detection
+ *   • mapUpstreamError() — SDK status → stable HTTP contracts
  *
- *   ④ Upstream error mapping — SDK status → stable HTTP contracts (401→503
- *      operator-fixable, 429→429+Retry-After, 5xx→502, timeout→502).
- *      Only genuinely-unhandled exceptions reach 500.
+ * Response shape — single discriminated envelope so the frontend renderer
+ * is a clean switch (see Service/aiResponse.service.js):
+ *
+ *   { reply, layout, payload, suggestions?, diagnostics }
  */
 
 import fs from "fs/promises";
@@ -31,16 +34,31 @@ import { aiConfig, isAiEnabled } from "../Config/openai.js";
 import { cloudinary, cloudinaryEnabled } from "../Config/cloudinary.js";
 import Product from "../Model/product.model.js";
 import Order from "../Model/order.model.js";
+import OemCross from "../Model/oemCross.model.js";
+import Vehicle from "../Model/vehicle.model.js";
+
 import { logSearch, expandQueryWithMappings } from "../Service/oem.service.js";
 import {
-  transliterate,
-  formatHint,
-  TRANSLIT_INSTRUCTION_EN,
-  TRANSLIT_INSTRUCTION_MN,
+  transliterate, formatHint,
+  TRANSLIT_INSTRUCTION_EN, TRANSLIT_INSTRUCTION_MN,
 } from "../Service/latinMongolian.service.js";
+import { smartSearch } from "../Service/smartSearch.service.js";
+import {
+  findDeadstock, findShelfLocations, generateQuotation,
+} from "../Service/sellerInsights.service.js";
+import {
+  getFinancialMetrics, getDemandForecast, getMarketGaps,
+} from "../Service/adminInsights.service.js";
+
+import {
+  deriveAiRole, buildRoleScope, sanitizeProducts,
+  scopeFilter, isToolAllowed, detectWrongPersonaCommand,
+} from "../Service/aiRole.service.js";
+import { buildSystemPrompt } from "../Service/aiPrompts.service.js";
+import { buildEnvelope, vagueQueryFormFor } from "../Service/aiResponse.service.js";
 
 // ────────────────────────────────────────────────────────────────────
-// Tool definitions exposed to the LLM
+// TOOL CATALOGUE — registered once, filtered per-request by role scope
 // ────────────────────────────────────────────────────────────────────
 const TOOLS = [
   {
@@ -48,18 +66,15 @@ const TOOLS = [
     function: {
       name: "search_products",
       description:
-        "Search the auto-parts catalogue. Use this whenever the user mentions car parts, OEM codes, brands, or vehicle models. " +
-        "Understands Mongolian automotive slang (тоормос=brake, фар/гэрэл=lighting, амортизатор=suspension, мотор/хөдөлгүүр=engine, наклад=brake pad, бампер=bumper).",
+        "Search the marketplace catalogue by name / OEM / brand / category. " +
+        "Auto-scoped: User sees approved listings only; Seller sees own inventory; Admin sees everything. " +
+        "Understands Mongolian slang (тоормос=brake, фар=lighting, амортизатор=suspension).",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Free-form search keywords or OEM code" },
-          category: {
-            type: "string",
-            enum: ["brake", "engine", "lighting", "suspension", "electric", "body", "transmission", "other"],
-            description: "Optional category filter",
-          },
-          limit: { type: "integer", description: "Max number of results (1-20)", default: 5 },
+          query: { type: "string", description: "Free-form keywords or OEM code" },
+          category: { type: "string", description: "Optional category id (e.g. brake, engine)" },
+          limit: { type: "integer", description: "Max results (1-20)", default: 5 },
         },
         required: ["query"],
       },
@@ -68,21 +83,50 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "identify_part_from_image",
+      name: "search_vehicle_parts",
       description:
-        "Use this when the user uploaded an image and is asking what part it is. " +
-        "Analyze the image, return your best guess of (a) category, (b) likely Japanese/Korean OEM keywords, and (c) part name in English. " +
-        "After identifying, call search_products with the keywords.",
+        "Vehicle-aware search powered by external parts API + AI translator + OEM matcher. " +
+        "Call this WHENEVER vehicleContext is set — it returns parts known to fit the user's " +
+        "exact car. Returns OEMs validated against the manufacturer database.",
       parameters: {
         type: "object",
         properties: {
-          guessName: { type: "string", description: "Best-guess part name in English" },
-          category: {
-            type: "string",
-            enum: ["brake", "engine", "lighting", "suspension", "electric", "body", "transmission", "other"],
-          },
-          keywords: { type: "string", description: "Search keywords (3-6 words)" },
-          confidence: { type: "string", enum: ["low", "medium", "high"] },
+          query: { type: "string", description: "Mongolian or English part name" },
+          limit: { type: "integer", description: "Max results (default 8)", default: 8 },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cross_reference_oem",
+      description:
+        "Look up aftermarket equivalents (CTR, 555, Febi, Aisin, Sankei, Bosch, NSK, Denso, …) " +
+        "for an OEM code. Use this when the OEM part is expensive or out of stock — present " +
+        "the cheaper alternative alongside the OEM.",
+      parameters: {
+        type: "object",
+        properties: { oem: { type: "string", description: "OEM part number" } },
+        required: ["oem"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "identify_part_from_image",
+      description:
+        "Use this when the user uploaded an image and is asking what the part is. " +
+        "Returns best-guess (category, English keywords, part name) — then call search_products.",
+      parameters: {
+        type: "object",
+        properties: {
+          guessName: { type: "string" },
+          category:  { type: "string" },
+          keywords:  { type: "string" },
+          confidence:{ type: "string", enum: ["low", "medium", "high"] },
         },
         required: ["guessName", "category", "keywords"],
       },
@@ -91,12 +135,34 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "get_low_stock",
-      description: "ADMIN ONLY. Returns products running low on stock (qty <= threshold) or marked out-of-stock.",
+      name: "disambiguate_vague_query",
+      description:
+        "Call this when the user typed a BARE category word with no specifics " +
+        "(e.g. just \"фар\" / \"тоормос\" / \"амортизатор\" / \"масло\"). " +
+        "Returns a structured form (year/model/side/position) for the UI to render.",
+      parameters: {
+        type: "object",
+        properties: { keyword: { type: "string", description: "The vague keyword the user typed" } },
+        required: ["keyword"],
+      },
+    },
+  },
+  // ── SELLER-scoped inventory tools (Phase B) ───────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_deadstock",
+      description:
+        "SELLER. Returns the merchant's slow-moving inventory — products with " +
+        "zero sales in the past N months AND stock on hand. Each row carries " +
+        "trapped capital (costPrice × stockQty) and a suggested liquidation " +
+        "discount. Use this when the seller asks about deadstock, slow movers, " +
+        "ажилгүй бараа, or capital tied up in inventory.",
       parameters: {
         type: "object",
         properties: {
-          threshold: { type: "integer", description: "Stock threshold (default 5)", default: 5 },
+          monthsSilent: { type: "integer", description: "Sales-silent window in months (default 6)", default: 6 },
+          limit:        { type: "integer", description: "Max rows (default 20)", default: 20 },
         },
       },
     },
@@ -104,12 +170,141 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "get_sales_summary",
-      description: "ADMIN ONLY. Returns aggregate sales for a time range.",
+      name: "find_shelf_location",
+      description:
+        "SELLER. Look up the warehouse coordinate of a SKU. Call this when " +
+        "the seller asks 'where is X' / 'X хаана байна' — accepts OEM, name, " +
+        "or partial keyword. Returns shelf code + remaining stock per match.",
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "week", "month", "all"] },
+          query: { type: "string", description: "OEM, part name, or keyword" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "generate_quotation",
+      description:
+        "SELLER. Compose a plain-text B2B quotation for a buyer. Use when the " +
+        "seller asks for a quote, үнийн санал, прайс, or pricing letter. Each " +
+        "line item can be referenced by productId, OEM, or part name.",
+      parameters: {
+        type: "object",
+        properties: {
+          buyer: {
+            type: "object",
+            description: "Buyer info — at least name or company",
+            properties: {
+              name:    { type: "string" },
+              company: { type: "string" },
+              phone:   { type: "string" },
+              email:   { type: "string" },
+            },
+          },
+          items: {
+            type: "array",
+            description: "Line items — supply OEM or name plus qty",
+            items: {
+              type: "object",
+              properties: {
+                oem:       { type: "string" },
+                name:      { type: "string" },
+                productId: { type: "string" },
+                qty:       { type: "integer", default: 1 },
+              },
+            },
+          },
+          validDays:       { type: "integer", description: "Validity window (default 14)", default: 14 },
+          vatPercent:      { type: "number",  description: "VAT %, e.g. 10 for Mongolia (default 0)", default: 0 },
+          discountPercent: { type: "number",  description: "Bulk discount %, 0–100", default: 0 },
+          notes:           { type: "string",  description: "Optional footer note" },
+        },
+        required: ["items"],
+      },
+    },
+  },
+
+  // ── ADMIN/SELLER shared tools ─────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_low_stock",
+      description: "ADMIN/SELLER. Returns SKUs at or below stock threshold.",
+      parameters: {
+        type: "object",
+        properties: { threshold: { type: "integer", default: 5 } },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_sales_summary",
+      description: "ADMIN. Aggregate revenue/orders/AOV for today|week|month|all.",
+      parameters: {
+        type: "object",
+        properties: { period: { type: "string", enum: ["today", "week", "month", "all"] } },
+      },
+    },
+  },
+
+  // ── ADMIN-only BI tools (Phase C) ─────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_financial_metrics",
+      description:
+        "ADMIN. Compute revenue, cost of goods, gross margin, margin %, " +
+        "top brands by revenue, status breakdown, and week-over-week (or " +
+        "month-over-month) growth rate for a time window. Use this whenever " +
+        "the admin asks about margins, profitability, top brands, growth, " +
+        "санхүүгийн үзүүлэлт, ашиг.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "week", "month", "quarter", "all"], default: "week" },
+          topN:   { type: "integer", description: "Top brands to surface", default: 5 },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_demand_forecast",
+      description:
+        "ADMIN. Predict next month's per-SKU demand using rolling N-month " +
+        "sales velocity multiplied by a seasonal factor derived from the same " +
+        "calendar month last year. Use when the admin asks about forecasting, " +
+        "stocking up, эрэлт хэрэгцээ, нөөцийн төлөвлөгөө.",
+      parameters: {
+        type: "object",
+        properties: {
+          monthsLookback: { type: "integer", description: "Lookback window for velocity (default 3)", default: 3 },
+          limit:          { type: "integer", description: "Top SKUs returned (default 10)", default: 10 },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_market_gaps",
+      description:
+        "ADMIN. Cluster the past N days of search queries that returned ZERO " +
+        "results, sorted by occurrence. Each cluster is a missing-inventory " +
+        "opportunity. Use when admin asks about market gaps, missing products, " +
+        "цоорхой, олдоогүй бараа, ямар ангилал хайдаг.",
+      parameters: {
+        type: "object",
+        properties: {
+          daysLookback:   { type: "integer", description: "Window in days (default 30)", default: 30 },
+          minOccurrences: { type: "integer", description: "Cluster size threshold (default 2)", default: 2 },
+          limit:          { type: "integer", description: "Max clusters returned (default 15)", default: 15 },
         },
       },
     },
@@ -117,37 +312,29 @@ const TOOLS = [
 ];
 
 // ────────────────────────────────────────────────────────────────────
-// Internal: raw search + tool handlers + keyword fallback
+// Tool handlers — all receive (args, runtime) where runtime carries:
+//   { user, role, scope, vehicleContext, locale }
+// Handlers MUST honour `scope.productFilter` on every DB query.
 // ────────────────────────────────────────────────────────────────────
-const runProductSearch = async ({ query, category, limit = 5 }) => {
-  const filter = { status: "approved" };
+
+/** Lightweight inline product search — scope-aware. */
+const runScopedProductSearch = async ({ query, category, limit = 5 }, scope) => {
+  const base = scopeFilter(scope);
+  const filter = { ...base };
   if (category) filter.category = category;
   if (query) {
     const rx = new RegExp(String(query).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    filter.$or = [{ name: rx }, { oem: rx }, { brand: rx }];
+    filter.$or = [{ name: rx }, { oem: rx }, { brand: rx }, { tags: rx }];
   }
-  const items = await Product.find(filter).limit(Math.max(1, Math.min(20, limit)));
-  return items.map((p) => ({
-    id: String(p._id),
-    name: p.name,
-    oem: p.oem,
-    brand: p.brand,
-    price: p.price,
-    stockQty: p.stockQty,
-    inStock: p.inStock,
-  }));
+  return Product.find(filter).limit(Math.max(1, Math.min(20, limit))).lean();
 };
 
 const TOOL_HANDLERS = {
-  async search_products(args, user) {
+  async search_products(args, runtime) {
     const { query, category, limit = 5 } = args;
+    const { scope, user } = runtime;
 
-    // Belt-and-suspenders: even though the system prompt instructs the
-    // LLM to transliterate Latin-Mongolian before calling this tool, a
-    // weaker model may still pass the raw Latin form through. Run the
-    // deterministic dictionary FIRST and merge its expansion into the
-    // query so the catalogue search has both the Cyrillic + English
-    // form available. Costs ~0ms; pure in-memory lookup.
+    // Belt-and-suspenders Latin→Mongolian deterministic dictionary pass.
     const translit = transliterate(query);
     const seedQuery = translit.hasHits ? translit.expandedQuery : query;
     const seedCategory = category || translit.bestCategory;
@@ -155,22 +342,105 @@ const TOOL_HANDLERS = {
     const expanded = await expandQueryWithMappings(seedQuery);
     const finalCategory = seedCategory || expanded.category;
     const finalQuery = expanded.query;
-    const items = await runProductSearch({ query: finalQuery, category: finalCategory, limit });
+
+    const raw = await runScopedProductSearch({
+      query: finalQuery, category: finalCategory, limit,
+    }, scope);
+
+    const items = sanitizeProducts(raw, scope);
     logSearch({
       query, expandedQuery: finalQuery, category: finalCategory,
       resultCount: items.length, source: "ai", user: user?._id,
     }).catch(() => {});
+
     return {
-      query: finalQuery, category: finalCategory, count: items.length, items,
-      // Surface the transliteration step so the LLM (and any downstream
-      // logging) can see what we mapped. Empty when no Latin hits.
-      transliterated: translit.hasHits ? translit.hits.map((h) => ({ surface: h.surface, mn: h.mn, en: h.en })) : [],
+      query: finalQuery,
+      category: finalCategory,
+      count: items.length,
+      items,
+      transliterated: translit.hasHits
+        ? translit.hits.map((h) => ({ surface: h.surface, mn: h.mn, en: h.en }))
+        : [],
     };
   },
 
-  async identify_part_from_image(args, user) {
+  async search_vehicle_parts(args, runtime) {
+    const { query, limit = 8 } = args;
+    const { scope, vehicleContext, user } = runtime;
+
+    // No vehicle? Tell the model so it falls back to plain search.
+    if (!vehicleContext) {
+      return { error: "vehicleContext not set — use search_products instead", items: [] };
+    }
+
+    // Resolve the canonical Vehicle doc. We accept either a hydrated
+    // vehicle from the frontend or a Vehicle._id to look up.
+    let vehicle = vehicleContext;
+    if (vehicleContext.id) {
+      const v = await Vehicle.findById(vehicleContext.id).lean();
+      if (v) vehicle = { ...v, ...vehicleContext, _id: v._id };
+    }
+
+    const result = await smartSearch({
+      vehicle, query, limit,
+    });
+
+    const items = sanitizeProducts(result.items || [], scope);
+    logSearch({
+      query,
+      expandedQuery: result.ai?.plan?.api_english_name || query,
+      category:      result.ai?.plan?.standard_category || "",
+      resultCount:   items.length,
+      source: "ai-vehicle",
+      user: user?._id,
+    }).catch(() => {});
+
+    return {
+      query,
+      count: items.length,
+      items,
+      plan: {
+        englishName: result.ai?.plan?.api_english_name,
+        category:    result.ai?.plan?.standard_category,
+      },
+      oemBag: result.oemBag,
+      fallbackUsed: Boolean(result.fallbackSearch?.used),
+    };
+  },
+
+  async cross_reference_oem(args /*, runtime */) {
+    const { oem } = args;
+    if (!oem) return { error: "oem required" };
+    const clean = String(oem).trim().toUpperCase();
+
+    // Match either primary OR any equivalent so the AI doesn't need to
+    // know whether the input is a "main" OEM or a cross-ref already.
+    const row = await OemCross.findOne({
+      $or: [{ primaryOem: clean }, { "equivalents.oem": clean }],
+    }).lean();
+
+    if (!row) return { primaryOem: clean, equivalents: [], found: false };
+
+    // Reformat for the wire — collapse primary + equivalents into one list
+    // and tag which one is the OEM.
+    const all = [
+      { oem: row.primaryOem, brand: row.primaryBrand, role: "oem" },
+      ...row.equivalents.map((e) => ({ oem: e.oem, brand: e.brand, role: "aftermarket", note: e.note })),
+    ];
+    return {
+      primaryOem: row.primaryOem,
+      partName: row.partName,
+      category: row.category,
+      equivalents: all,
+      found: true,
+    };
+  },
+
+  async identify_part_from_image(args, runtime) {
     const { keywords, category, guessName, confidence } = args;
-    const items = await runProductSearch({ query: keywords, category, limit: 6 });
+    const { scope, user } = runtime;
+    const raw = await runScopedProductSearch({ query: keywords, category, limit: 6 }, scope);
+    const items = sanitizeProducts(raw, scope);
     logSearch({
       query: keywords, expandedQuery: keywords, category,
       resultCount: items.length, source: "image", user: user?._id,
@@ -178,23 +448,136 @@ const TOOL_HANDLERS = {
     return { guessName, category, keywords, confidence, count: items.length, items };
   },
 
-  async get_low_stock({ threshold = 5 }, user) {
-    if (user?.role !== "admin") return { error: "Admin only" };
-    const items = await Product.find({
+  async disambiguate_vague_query(args, runtime) {
+    const { keyword } = args;
+    const form = vagueQueryFormFor(keyword);
+    if (!form) return { partType: keyword, fields: [], note: "" };
+
+    // If we already know the car, drop the car-basics rows from the form
+    // so the user only fills in part-specific details.
+    const note = runtime.vehicleContext
+      ? `${runtime.vehicleContext.manufacturer || ""} ${runtime.vehicleContext.model || ""}`.trim()
+      : "";
+    return { partType: form.partType, fields: form.fields, note };
+  },
+
+  async get_low_stock({ threshold = 5 }, runtime) {
+    const { scope } = runtime;
+    if (scope.role === "user") return { error: "Not allowed for this role" };
+
+    const filter = {
+      ...scopeFilter(scope),
       $or: [{ stockQty: { $lte: threshold } }, { inStock: false }],
-    }).limit(20);
+    };
+    const raw = await Product.find(filter).limit(20).lean();
+    const rows = raw.map((p) => ([
+      p.oem || p.name,
+      p.stockQty ?? 0,
+      p.warehouseLocation || "—",
+      { kind: "link", label: "Засах", href: `/seller/products/${p._id}` },
+    ]));
     return {
-      threshold,
-      count: items.length,
-      items: items.map((p) => ({
-        id: String(p._id), name: p.name, oem: p.oem,
-        stockQty: p.stockQty, inStock: p.inStock,
-      })),
+      columns: ["OEM / Нэр", "Үлдэгдэл", "Байршил", "Үйлдэл"],
+      rows,
+      summary: { skuCount: rows.length, threshold },
     };
   },
 
-  async get_sales_summary({ period = "today" }, user) {
-    if (user?.role !== "admin") return { error: "Admin only" };
+  // ── SELLER tools (Phase B) ──────────────────────────────────────
+  // Each enforces seller scope via scope.sellerId — anonymous users and
+  // regular customers never reach here because the tools aren't in their
+  // allowedTools list, but we double-check anyway as defense in depth.
+  async get_deadstock({ monthsSilent = 6, limit = 20 } = {}, runtime) {
+    const { scope } = runtime;
+    if (scope.role !== "seller" && scope.role !== "admin") return { error: "Not allowed for this role" };
+    const sellerId = scope.sellerId || runtime.user?._id;
+    if (!sellerId) return { error: "Seller context missing" };
+
+    const r = await findDeadstock(sellerId, { monthsSilent, limit });
+    if (r.items.length === 0) {
+      return {
+        columns: ["OEM / Нэр", "Үлдэгдэл", "Сүүлд зарагдсан", "Бэхэлсэн капитал", "Хямдрах"],
+        rows: [],
+        summary: { ...r.summary, message: `Хамгийн сүүлийн ${monthsSilent} сард deadstock алга — сайн байна! 🎉` },
+      };
+    }
+    const rows = r.items.map((it) => ([
+      `${it.oem || it.name}${it.warehouseLocation ? ` (${it.warehouseLocation})` : ""}`,
+      it.stockQty,
+      `${it.monthsSilent}+ сар`,
+      `₮${it.trappedCapital.toLocaleString("mn-MN")}`,
+      {
+        kind: "button",
+        label: `${Math.round(it.suggestedDiscount * 100)}% хямдрал → ₮${it.liquidationPrice.toLocaleString("mn-MN")}`,
+        action: `discount:${it.productId}:${Math.round(it.suggestedDiscount * 100)}`,
+      },
+    ]));
+    return {
+      columns: ["OEM / Нэр", "Үлдэгдэл", "Сүүлд зарагдсан", "Бэхэлсэн капитал", "Хямдрах"],
+      rows,
+      summary: {
+        totalSku:        r.summary.totalSku,
+        trappedCapital:  `₮${r.summary.trappedCapital.toLocaleString("mn-MN")}`,
+        monthsSilent:    r.summary.monthsSilent,
+      },
+    };
+  },
+
+  async find_shelf_location({ query }, runtime) {
+    const { scope } = runtime;
+    if (scope.role !== "seller" && scope.role !== "admin") return { error: "Not allowed for this role" };
+    const sellerId = scope.sellerId || runtime.user?._id;
+    if (!sellerId) return { error: "Seller context missing" };
+
+    const r = await findShelfLocations(sellerId, query);
+    if (r.items.length === 0) {
+      return {
+        columns: ["OEM / Нэр", "Үлдэгдэл", "Байршил", "Үнэ"],
+        rows: [],
+        summary: { matchCount: 0, message: `"${query}" гэх SKU олдсонгүй — OEM код эсвэл бараагийн нэрээ нягтлаарай.` },
+      };
+    }
+    const rows = r.items.map((it) => ([
+      `${it.name}${it.oem ? ` (${it.oem})` : ""}`,
+      it.stockQty,
+      it.warehouseLocation,
+      `₮${it.price.toLocaleString("mn-MN")}`,
+    ]));
+    return {
+      columns: ["OEM / Нэр", "Үлдэгдэл", "Байршил", "Үнэ"],
+      rows,
+      summary: r.summary,
+    };
+  },
+
+  async generate_quotation(args, runtime) {
+    const { scope } = runtime;
+    if (scope.role !== "seller" && scope.role !== "admin") return { error: "Not allowed for this role" };
+    const sellerId = scope.sellerId || runtime.user?._id;
+    if (!sellerId) return { error: "Seller context missing" };
+
+    try {
+      const q = await generateQuotation({
+        sellerId,
+        items:           args.items || [],
+        buyer:           args.buyer || {},
+        validDays:       args.validDays,
+        vatPercent:      args.vatPercent,
+        discountPercent: args.discountPercent,
+        notes:           args.notes,
+      });
+      return {
+        quoteId:  q.quoteId,
+        bodyText: q.bodyText,
+        summary:  q.summary,
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  async get_sales_summary({ period = "today" }, runtime) {
+    if (runtime.scope.role !== "admin") return { error: "Admin only" };
     const now = new Date();
     let since = null;
     if      (period === "today") { since = new Date(now); since.setHours(0, 0, 0, 0); }
@@ -203,55 +586,63 @@ const TOOL_HANDLERS = {
 
     const filter = { status: { $in: ["paid", "processing", "shipped", "delivered"] } };
     if (since) filter.createdAt = { $gte: since };
-    const orders = await Order.find(filter);
-    const total = orders.reduce((s, o) => s + o.total, 0);
+    const orders = await Order.find(filter).lean();
+    const total = orders.reduce((s, o) => s + (o.total || 0), 0);
     return {
-      period,
-      orderCount: orders.length,
-      revenue: total,
-      avgOrder: orders.length ? Math.round(total / orders.length) : 0,
+      kind: "kpi_grid",
+      title: `Sales — ${period}`,
+      data: {
+        period,
+        orderCount: orders.length,
+        revenue: total,
+        avgOrder: orders.length ? Math.round(total / orders.length) : 0,
+      },
     };
+  },
+
+  // ── ADMIN BI tools (Phase C) ───────────────────────────────────
+  // All three are read-only aggregations; they delegate to
+  // adminInsights.service which owns the math. The handlers do nothing
+  // more than gate by role and forward args.
+  async get_financial_metrics({ period = "week", topN = 5 } = {}, runtime) {
+    if (runtime.scope.role !== "admin") return { error: "Admin only" };
+    try {
+      return await getFinancialMetrics({ period, topN });
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  async get_demand_forecast({ monthsLookback = 3, limit = 10 } = {}, runtime) {
+    if (runtime.scope.role !== "admin") return { error: "Admin only" };
+    try {
+      return await getDemandForecast({ monthsLookback, limit });
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  async get_market_gaps({ daysLookback = 30, minOccurrences = 2, limit = 15 } = {}, runtime) {
+    if (runtime.scope.role !== "admin") return { error: "Admin only" };
+    try {
+      return await getMarketGaps({ daysLookback, minOccurrences, limit });
+    } catch (e) {
+      return { error: e.message };
+    }
   },
 };
 
-/** No-AI fallback — runs a keyword search expanded with OEM mappings. */
-const fallbackSearch = async (text, user) => {
-  const expanded = await expandQueryWithMappings(text);
-  const finalQuery = expanded.query || text;
-  const items = await runProductSearch({ query: finalQuery, category: expanded.category, limit: 5 });
-  logSearch({
-    query: text, expandedQuery: finalQuery, category: expanded.category,
-    resultCount: items.length, source: "ai", user: user?._id,
-  }).catch(() => {});
-  return { query: finalQuery, category: expanded.category, count: items.length, items };
-};
-
 // ────────────────────────────────────────────────────────────────────
-// ① Asset cleanup — close the orphan-upload DoS
+// Asset cleanup — orphan-upload defence (unchanged from prior hardened)
 // ────────────────────────────────────────────────────────────────────
-
-/**
- * Delete the asset that multer uploaded, if any. Idempotent (sets
- * req.file = null after the first call so retries are no-ops). Never
- * throws — failure is logged and swallowed because cleanup happens on
- * the response path and shouldn't mask the real status code.
- *
- * Branches:
- *   - cloudinaryEnabled + req.file.filename (public_id provided by
- *     multer-storage-cloudinary) → cloudinary.uploader.destroy
- *   - local storage + req.file.path on disk → fs.unlink
- */
 const cleanupUploadedAsset = async (req) => {
   const file = req?.file;
   if (!file) return;
-  req.file = null; // idempotency guard
-
+  req.file = null;
   try {
     if (cloudinaryEnabled && file.filename) {
-      // multer-storage-cloudinary populates `filename` with the public_id.
       await cloudinary.uploader.destroy(file.filename, { invalidate: true });
     } else if (file.path && !/^https?:/i.test(file.path)) {
-      // Local disk fallback.
       await fs.unlink(file.path);
     }
   } catch (err) {
@@ -259,13 +650,6 @@ const cleanupUploadedAsset = async (req) => {
   }
 };
 
-/**
- * Centralised non-2xx exit. Every 4xx/5xx response goes through here so
- * the orphan-asset cleanup is guaranteed — no rogue early `return
- * res.status(...).json(...)` can skip it.
- *
- * Optional `headers` are set BEFORE sending (e.g. Retry-After for 429).
- */
 const respondWithError = async (req, res, status, body, headers = {}) => {
   await cleanupUploadedAsset(req);
   for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
@@ -273,46 +657,19 @@ const respondWithError = async (req, res, status, body, headers = {}) => {
 };
 
 // ────────────────────────────────────────────────────────────────────
-// ② Input validation + normalisation
+// Request normalisation — accepts JSON (multi-turn) or multipart (image)
 // ────────────────────────────────────────────────────────────────────
-
-/**
- * Validate that the latest user content carries enough signal to justify
- * an expensive LLM call. Image presence overrides the text-length minimum
- * — a photo alone is meaningful.
- *
- * Returns { ok: true } or { ok: false, code, message }.
- */
-const MIN_TEXT_CHARS = 3;
-
-const validateUserIntent = ({ messages, imageUrl, locale }) => {
-  if (imageUrl) return { ok: true }; // image carries intent on its own
-
-  const last = [...messages].reverse().find((m) => m && m.role === "user");
-  const text = String(last?.content || "").trim();
-
-  // Strip non-letters/digits to catch "??" or "..." or single punctuation.
-  // We keep Cyrillic + Latin + digits — the marketplace operates in mn/en.
-  const signal = text.replace(/[^\p{L}\p{N}]/gu, "");
-  if (signal.length < MIN_TEXT_CHARS) {
-    return {
-      ok: false,
-      code: "EMPTY_PROMPT",
-      message: locale === "en"
-        ? `Please describe what you're looking for (at least ${MIN_TEXT_CHARS} letters or digits).`
-        : `Юу хайж байгаагаа бичнэ үү (доод тал нь ${MIN_TEXT_CHARS} үсэг эсвэл тоо).`,
-    };
-  }
-  return { ok: true };
-};
-
-/**
- * Convert request body (multipart or JSON) into the internal shape:
- *   { messages: [{ role, content, imageUrl? }], imageUrl, locale }
- */
 const normaliseRequest = (req) => {
   const locale = String(req.body?.locale || "mn") === "en" ? "en" : "mn";
 
+  // vehicleContext can be sent as object (JSON) or JSON-stringified (multipart).
+  let vehicleContext = req.body?.vehicleContext || null;
+  if (typeof vehicleContext === "string") {
+    try { vehicleContext = JSON.parse(vehicleContext); }
+    catch { vehicleContext = null; }
+  }
+
+  // Multipart image-upload path.
   if (req.file && req.file.path) {
     const message = String(req.body?.message || req.body?.text || "").trim();
     let history = [];
@@ -326,7 +683,7 @@ const normaliseRequest = (req) => {
     }
     return {
       data: {
-        locale,
+        locale, vehicleContext,
         imageUrl: req.file.path,
         messages: [
           ...history,
@@ -342,13 +699,27 @@ const normaliseRequest = (req) => {
   }
   const lastUser = [...messages].reverse().find((m) => m && m.role === "user");
   const imageUrl = lastUser?.imageUrl || null;
-  return { data: { locale, imageUrl, messages } };
+  return { data: { locale, vehicleContext, imageUrl, messages } };
 };
 
-/**
- * Vanilla OpenAI-compatible message shape — same on OpenAI, Gemini-compat,
- * Ollama-llava. No provider-specific branching.
- */
+const MIN_TEXT_CHARS = 3;
+const validateUserIntent = ({ messages, imageUrl, locale }) => {
+  if (imageUrl) return { ok: true };
+  const last = [...messages].reverse().find((m) => m && m.role === "user");
+  const text = String(last?.content || "").trim();
+  const signal = text.replace(/[^\p{L}\p{N}]/gu, "");
+  if (signal.length < MIN_TEXT_CHARS) {
+    return {
+      ok: false,
+      code: "EMPTY_PROMPT",
+      message: locale === "en"
+        ? `Please describe what you're looking for (at least ${MIN_TEXT_CHARS} letters or digits).`
+        : `Юу хайж байгаагаа бичнэ үү (доод тал нь ${MIN_TEXT_CHARS} үсэг эсвэл тоо).`,
+    };
+  }
+  return { ok: true };
+};
+
 const toCompletionMessage = (m) => {
   if (m.role === "user" && m.imageUrl) {
     return {
@@ -363,89 +734,41 @@ const toCompletionMessage = (m) => {
 };
 
 // ────────────────────────────────────────────────────────────────────
-// ③ Tool-loop hard limits
+// Tool-loop limits (unchanged)
 // ────────────────────────────────────────────────────────────────────
-
-/**
- * Tunable safety envelope for ONE chat invocation. Defaults are sized so
- * a single legitimate "find me brake pads for X" conversation fits
- * comfortably, but a runaway / adversarial conversation is bounded.
- *
- * Override via env to react to incidents without a deploy:
- *   AI_MAX_TOOL_ROUNDS, AI_MAX_TOOL_CALLS, AI_MAX_TOTAL_TOKENS,
- *   AI_WALLTIME_MS,     AI_MAX_OUTPUT_TOKENS
- */
 const num = (v, d) => {
   const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d;
 };
 const LIMITS = Object.freeze({
-  maxRounds:        num(process.env.AI_MAX_TOOL_ROUNDS,   3),
-  maxToolCalls:     num(process.env.AI_MAX_TOOL_CALLS,    6),
-  maxTotalTokens:   num(process.env.AI_MAX_TOTAL_TOKENS,  8000),
-  walltimeMs:       num(process.env.AI_WALLTIME_MS,       25_000),
-  maxOutputTokens:  num(process.env.AI_MAX_OUTPUT_TOKENS, 1024),
+  maxRounds:       num(process.env.AI_MAX_TOOL_ROUNDS,   3),
+  maxToolCalls:    num(process.env.AI_MAX_TOOL_CALLS,    6),
+  maxTotalTokens:  num(process.env.AI_MAX_TOTAL_TOKENS,  8000),
+  walltimeMs:      num(process.env.AI_WALLTIME_MS,       25_000),
+  maxOutputTokens: num(process.env.AI_MAX_OUTPUT_TOKENS, 1024),
 });
 
 const callSignature = (tc) =>
   `${tc.function?.name || "?"}:${tc.function?.arguments || ""}`;
 
-/**
- * System-prompt builder.
- *
- *   ① The core persona (HiCar AI, admin-aware, locale-aware).
- *   ② TRANSLIT_INSTRUCTION_* — the GENERAL rule the model learns so it
- *      can handle Latin-Mongolian variants we haven't catalogued.
- *   ③ transliterationHint — the per-request, deterministic dictionary
- *      match (rendered by latinMongolian.formatHint). When the user's
- *      input touches a known term, this gives the LLM the EXACT mapping
- *      so it doesn't have to guess.
- *
- * The execution architecture (tool loop, AbortController, max_tokens,
- * etc.) is unchanged — this just shapes what the model SEES at round 0.
- */
-const buildSystemPrompt = ({ locale, isAdmin, transliterationHint = "" }) => {
-  const core = locale === "en"
-    ? `You are HiCar AI — a friendly assistant for an auto-parts marketplace.
-${isAdmin ? "You are speaking to an ADMIN — admin tools are available." : "You are speaking to a regular customer."}
-Reply concisely in English. When the user asks about parts, call search_products. When they upload an image, call identify_part_from_image first.`
-    : `Та HiCar AI туслах — автомашины сэлбэгийн платформын туслах.
-${isAdmin ? "Та ADMIN-тай ярьж байна — admin tool ашиглаж болно." : "Та энгийн хэрэглэгчтэй ярьж байна."}
-Богино, ойлгомжтой Монголоор хариул. Сэлбэгийн талаар асуувал search_products дуудна. Зураг илгээсэн бол эхлээд identify_part_from_image дууд.
-Монгол slang: тоормос=brake, фар/гэрэл=lighting, амортизатор=suspension, хөдөлгүүр/мотор=engine, наклад=brake pad, бампер=bumper.`;
+// ────────────────────────────────────────────────────────────────────
+// Conversation engine — passes the runtime context (incl. scope) to
+// every tool handler.
+// ────────────────────────────────────────────────────────────────────
+const runConversation = async ({ profile, messages, runtime, transliterationHint }) => {
+  const { scope, locale, vehicleContext } = runtime;
 
-  const translit = locale === "en" ? TRANSLIT_INSTRUCTION_EN : TRANSLIT_INSTRUCTION_MN;
-
-  // Per-request hint is appended LAST so it's the freshest context the
-  // model sees before the user's actual turn.
-  return [core, translit, transliterationHint].filter(Boolean).join("\n");
-};
-
-/**
- * Conversation engine. Returns the final assistant reply plus every tool
- * call observed and the resource counters at exit.
- *
- * Guards (any one trips the loop exit):
- *   • maxRounds            — at most N back-and-forth turns
- *   • maxToolCalls         — at most N tool invocations TOTAL
- *   • maxTotalTokens       — sum of usage.total_tokens across rounds
- *   • walltimeMs           — wall-clock budget covering ALL SDK calls
- *   • duplicate signature  — same tool name + same args twice → exit
- *
- * `terminate.reason` exposes which guard fired (useful for ops dashboards).
- */
-const runConversation = async ({ profile, messages, user, locale, transliterationHint }) => {
-  const isAdmin = user?.role === "admin";
+  // Filter the TOOLS catalogue by what this role is allowed to call.
   const availableTools = !profile.supportsTools ? undefined
-    : isAdmin ? TOOLS
-    : TOOLS.filter((t) => !["get_low_stock", "get_sales_summary"].includes(t.function.name));
+    : TOOLS.filter((t) => isToolAllowed(scope, t.function.name));
 
   const conversation = [
-    { role: "system", content: buildSystemPrompt({ locale, isAdmin, transliterationHint }) },
+    { role: "system",
+      content: buildSystemPrompt({
+        role: scope.role, locale, vehicleContext, transliterationHint,
+      }) },
     ...messages.map(toCompletionMessage),
   ];
 
-  // Shared abort signal — caps wall-clock for the WHOLE conversation,
-  // including all SDK calls and tool executions inside it.
   const ac = new AbortController();
   const walltimeTimer = setTimeout(
     () => ac.abort(new Error("walltime_exceeded")),
@@ -461,48 +784,28 @@ const runConversation = async ({ profile, messages, user, locale, transliteratio
 
   try {
     for (let round = 0; round < LIMITS.maxRounds; round++) {
-      // Budget checks BEFORE the call so we never spend past the cap.
-      if (totalTokens >= LIMITS.maxTotalTokens) {
-        terminate = { reason: "token_budget", totalTokens };
-        break;
-      }
-      if (toolCalls.length >= LIMITS.maxToolCalls) {
-        terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length };
-        break;
-      }
-      if (ac.signal.aborted) {
-        terminate = { reason: "walltime" };
-        break;
-      }
+      if (totalTokens >= LIMITS.maxTotalTokens)  { terminate = { reason: "token_budget", totalTokens }; break; }
+      if (toolCalls.length >= LIMITS.maxToolCalls){ terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length }; break; }
+      if (ac.signal.aborted)                      { terminate = { reason: "walltime" }; break; }
 
-      const requestBody = {
+      const body = {
         model: profile.model,
         messages: conversation,
         temperature: 0.3,
         max_tokens: LIMITS.maxOutputTokens,
       };
       if (availableTools && availableTools.length > 0) {
-        requestBody.tools = availableTools;
-        requestBody.tool_choice = "auto";
+        body.tools = availableTools;
+        body.tool_choice = "auto";
       }
 
-      const resp = await profile.client.chat.completions.create(
-        requestBody,
-        { signal: ac.signal },
-      );
+      const resp = await profile.client.chat.completions.create(body, { signal: ac.signal });
       lastMessage = resp.choices?.[0]?.message;
-      lastUsage = resp.usage;
+      lastUsage   = resp.usage;
       totalTokens += Number(resp.usage?.total_tokens || 0);
 
-      // No tools requested → model is done.
-      if (!lastMessage?.tool_calls || lastMessage.tool_calls.length === 0) {
-        break;
-      }
+      if (!lastMessage?.tool_calls || lastMessage.tool_calls.length === 0) break;
 
-      // Duplicate-call detector — the canonical infinite-loop / prompt-
-      // injection vector is the model asking for the same tool with the
-      // same arguments forever. We allow it ONCE; second time → exit
-      // with whatever assistant text we already have.
       const newCalls = lastMessage.tool_calls;
       const dupIndex = newCalls.findIndex((tc) => seenSignatures.has(callSignature(tc)));
       if (dupIndex !== -1) {
@@ -518,22 +821,34 @@ const runConversation = async ({ profile, messages, user, locale, transliteratio
           break;
         }
         seenSignatures.add(callSignature(tc));
-        const handler = TOOL_HANDLERS[tc.function?.name];
+
+        // Hard gate: even if the LLM somehow asked for a tool we filtered
+        // out, refuse to execute it. Defence in depth.
+        const name = tc.function?.name;
+        if (!isToolAllowed(scope, name)) {
+          toolCalls.push({ name, result: { error: `Tool not allowed for role ${scope.role}` } });
+          conversation.push({
+            role: "tool", tool_call_id: tc.id,
+            content: JSON.stringify({ error: "tool_not_allowed" }),
+          });
+          continue;
+        }
+
+        const handler = TOOL_HANDLERS[name];
         let result;
         if (!handler) {
-          result = { error: `Unknown tool: ${tc.function?.name}` };
+          result = { error: `Unknown tool: ${name}` };
         } else {
           try {
             const args = JSON.parse(tc.function.arguments || "{}");
-            result = await handler(args, user);
+            result = await handler(args, runtime);
           } catch (e) {
             result = { error: e.message };
           }
         }
-        toolCalls.push({ name: tc.function?.name, result });
+        toolCalls.push({ name, result });
         conversation.push({
-          role: "tool",
-          tool_call_id: tc.id,
+          role: "tool", tool_call_id: tc.id,
           content: JSON.stringify(result),
         });
       }
@@ -553,82 +868,76 @@ const runConversation = async ({ profile, messages, user, locale, transliteratio
 };
 
 // ────────────────────────────────────────────────────────────────────
-// Error mapping — turn SDK / network errors into stable HTTP statuses
+// Upstream error mapper (unchanged from prior hardened controller)
 // ────────────────────────────────────────────────────────────────────
 const mapUpstreamError = (err) => {
   const upstream = Number(err?.status || err?.response?.status || 0);
-
-  if (upstream === 401 || upstream === 403) {
-    return { status: 503, body: { code: "AI_AUTH_FAILED",
-      message: "AI provider rejected credentials. Operator must verify API keys." } };
-  }
-  if (upstream === 429) {
-    return { status: 429, body: { code: "AI_RATE_LIMITED",
-      message: "AI provider is rate-limiting. Please retry shortly.",
-      retryAfter: Number(err?.headers?.["retry-after"]) || 30 } };
-  }
-  if (upstream === 400 || upstream === 422) {
-    return { status: 400, body: { code: "AI_BAD_REQUEST",
-      message: err?.message || "AI provider rejected the request shape." } };
-  }
-  if (upstream >= 500 && upstream < 600) {
-    return { status: 502, body: { code: "AI_UPSTREAM_ERROR",
-      message: "AI provider had an internal error. Please retry." } };
-  }
+  if (upstream === 401 || upstream === 403) return { status: 503, body: { code: "AI_AUTH_FAILED", message: "AI provider rejected credentials." } };
+  if (upstream === 429) return { status: 429, body: { code: "AI_RATE_LIMITED", message: "AI provider is rate-limiting.", retryAfter: Number(err?.headers?.["retry-after"]) || 30 } };
+  if (upstream === 400 || upstream === 422) return { status: 400, body: { code: "AI_BAD_REQUEST", message: err?.message || "AI rejected request shape." } };
+  if (upstream >= 500 && upstream < 600) return { status: 502, body: { code: "AI_UPSTREAM_ERROR", message: "AI provider had internal error." } };
   if (err?.code === "ETIMEDOUT" || err?.code === "ECONNREFUSED"
       || err?.name === "AbortError" || err?.message === "walltime_exceeded") {
-    return { status: 502, body: { code: "AI_UPSTREAM_UNREACHABLE",
-      message: "AI provider unreachable or response exceeded time budget." } };
+    return { status: 502, body: { code: "AI_UPSTREAM_UNREACHABLE", message: "AI provider unreachable or timeout." } };
   }
   return null;
 };
 
 // ────────────────────────────────────────────────────────────────────
-// ④ Public entry point
+// Public entry point — POST /api/ai/chat
 // ────────────────────────────────────────────────────────────────────
 export const handleAIRequest = async (req, res) => {
   try {
-    // ── Parse & shape the body ────────────────────────────────────
+    // ── Shape the request ─────────────────────────────────────────
     const parsed = normaliseRequest(req);
-    if (parsed.error) {
-      return respondWithError(req, res, 400, parsed.error);
-    }
-    const { messages, imageUrl, locale } = parsed.data;
+    if (parsed.error) return respondWithError(req, res, 400, parsed.error);
+    const { messages, imageUrl, locale, vehicleContext } = parsed.data;
     const hasImage = Boolean(imageUrl);
 
-    // ── Reject trivially empty text prompts (image grounded is OK) ─
+    // ── Reject trivially empty prompts (image is its own signal) ──
     const intent = validateUserIntent({ messages, imageUrl, locale });
-    if (!intent.ok) {
-      return respondWithError(req, res, 400, { code: intent.code, message: intent.message });
+    if (!intent.ok) return respondWithError(req, res, 400, { code: intent.code, message: intent.message });
+
+    // ── Derive role + scope before any work happens ───────────────
+    const role  = deriveAiRole(req.user);
+    const scope = buildRoleScope(role, req.user);
+
+    // ── Wrong-persona command short-circuit ───────────────────────
+    // (e.g. anonymous user typing "today's sales" — answer locally and
+    // never invoke the LLM.)
+    const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+    const wrongPersona = detectWrongPersonaCommand(lastUserText, role);
+    if (wrongPersona) {
+      await cleanupUploadedAsset(req);
+      return res.json({
+        reply: wrongPersona.message,
+        layout: "plain", payload: {},
+        suggestions: [{ label: "Нэвтрэх", cmd: wrongPersona.suggestedRoute }],
+        diagnostics: { reason: wrongPersona.type, role },
+      });
     }
 
-    // ── No AI configured at all ───────────────────────────────────
+    // ── No AI provider — fall back to keyword search (USER role) ──
     if (!isAiEnabled()) {
       if (hasImage) {
         return respondWithError(req, res, 400, {
           code: "AI_DISABLED_FOR_IMAGE",
           message: locale === "en"
             ? "Image analysis requires an AI provider. Please type the part name instead."
-            : "Зургийн шинжилгээ ажиллахын тулд AI provider шаардлагатай. Сэлбэгийн нэрийг бичээд хайна уу.",
+            : "Зургийн шинжилгээ AI provider шаардлагатай. Сэлбэгийн нэрийг бичээд хайна уу.",
         });
       }
-      const lastUserText =
-        [...messages].reverse().find((m) => m.role === "user")?.content || "";
-      const result = await fallbackSearch(lastUserText, req.user);
-      const reply = result.count === 0
-        ? (locale === "en"
-            ? "No results. Try a different keyword."
-            : "Олдсонгүй. Өөр түлхүүр үг туршаад үзнэ үү.")
-        : (locale === "en"
-            ? `${result.count} parts found.`
-            : `${result.count} сэлбэг олдлоо.`);
-      // Cleanup is unnecessary here — text-only path. But the helper is
-      // idempotent so this stays safe even if a future hybrid path lands.
+      const raw = await runScopedProductSearch({ query: lastUserText, limit: 5 }, scope);
+      const items = sanitizeProducts(raw, scope);
       await cleanupUploadedAsset(req);
-      return res.json({
-        reply, toolCalls: [{ name: "search_products", result }],
-        route: "fallback", model: "keyword-search",
-      });
+      return res.json(buildEnvelope({
+        replyText: items.length === 0
+          ? (locale === "en" ? "No results — try a different keyword." : "Олдсонгүй. Өөр түлхүүр үг туршаад үзнэ үү.")
+          : (locale === "en" ? `${items.length} parts found.` : `${items.length} сэлбэг олдлоо.`),
+        toolCalls: [{ name: "search_products", result: { items, count: items.length } }],
+        role,
+        diagnostics: { route: "fallback", model: "keyword-search" },
+      }));
     }
 
     // ── Provider routing ──────────────────────────────────────────
@@ -639,9 +948,8 @@ export const handleAIRequest = async (req, res) => {
         return respondWithError(req, res, 400, {
           code: "VISION_PROVIDER_UNAVAILABLE",
           message: locale === "en"
-            ? "Vision provider is not configured on this server. Please type the part name instead."
-            : "Серверт зургийн AI provider тохируулагдаагүй байна. Сэлбэгийн нэрийг бичээд хайна уу.",
-          hint: "Set GEMINI_API_KEY (or any OpenAI-compatible vision provider) — see Config/openai.js header.",
+            ? "Vision provider not configured. Please type the part name."
+            : "Зургийн AI provider тохируулагдаагүй. Сэлбэгийн нэрийг бичээд хайна уу.",
         });
       }
     } else {
@@ -650,58 +958,45 @@ export const handleAIRequest = async (req, res) => {
       if (!profile.enabled) {
         return respondWithError(req, res, 503, {
           code: "AI_PROVIDER_UNAVAILABLE",
-          message: "AI provider not initialised. Operator must check env.",
+          message: "AI provider not initialised.",
         });
       }
     }
 
-    // ── Pre-process Latin-Mongolian transliteration ───────────────
-    // Runs on the LATEST user message. Deterministic dictionary lookup;
-    // zero LLM cost. The hint is injected into the system prompt so the
-    // model sees exact mappings BEFORE deciding which tool to call.
-    const latestUserContent =
-      [...messages].reverse().find((m) => m.role === "user")?.content || "";
-    const translitResult = transliterate(latestUserContent);
+    // ── Latin-Mongolian transliteration hint (pre-LLM) ────────────
+    const translitResult = transliterate(lastUserText);
     const transliterationHint = formatHint(translitResult, locale);
 
     // ── Run the bounded conversation ──────────────────────────────
-    const { reply, toolCalls, usage, totalTokens, terminate } = await runConversation({
-      profile, messages, user: req.user, locale, transliterationHint,
-    });
+    const runtime = { user: req.user, role, scope, vehicleContext, locale };
+    const { reply, toolCalls, usage, totalTokens, terminate } =
+      await runConversation({ profile, messages, runtime, transliterationHint });
 
-    // Successful path → asset is no longer needed for this request.
-    // We DO NOT delete the Cloudinary asset on success: it may be needed
-    // for the user's next message (visible in the chat thread). Asset
-    // lifecycle for retained images is owned by a separate housekeeping
-    // cron (out of scope for this controller).
-
-    return res.json({
-      reply,
+    // ── Assemble the structured envelope ──────────────────────────
+    return res.json(buildEnvelope({
+      replyText: reply,
       toolCalls,
-      usage,
-      route: profile === aiConfig.vision ? "vision" : "text",
-      model: profile.model,
-      provider: profile.label,
-      // Diagnostics — clients can use these to back off / show warnings.
+      role,
       diagnostics: {
+        route: profile === aiConfig.vision ? "vision" : "text",
+        model: profile.model,
+        provider: profile.label,
         totalTokens,
+        usage,
         terminateReason: terminate.reason,
         toolCallCount: toolCalls.length,
-        // Surface translit signal so the frontend can show "we mapped X → Y"
-        // when the user typed Latin-Mongolian.
         translit: translitResult.hasHits ? {
           hits: translitResult.hits.map((h) => ({ surface: h.surface, mn: h.mn, en: h.en })),
           expandedQuery: translitResult.expandedQuery,
           bestCategory: translitResult.bestCategory,
         } : null,
       },
-    });
+    }));
   } catch (err) {
     const mapped = mapUpstreamError(err);
     if (mapped) {
       const headers = mapped.status === 429 && mapped.body.retryAfter
-        ? { "Retry-After": String(mapped.body.retryAfter) }
-        : {};
+        ? { "Retry-After": String(mapped.body.retryAfter) } : {};
       return respondWithError(req, res, mapped.status, mapped.body, headers);
     }
     console.error("[ai.controller] unhandled:", err.stack || err.message);
@@ -715,11 +1010,9 @@ export const handleAIRequest = async (req, res) => {
 /** @deprecated use handleAIRequest */
 export const chat = handleAIRequest;
 
-// Test/diagnostic exports — not part of the public route surface.
+// Test/diagnostic exports — not on the public route surface.
 export const __internal = Object.freeze({
-  LIMITS,
-  cleanupUploadedAsset,
-  validateUserIntent,
-  callSignature,
-  mapUpstreamError,
+  TOOLS, TOOL_HANDLERS, LIMITS,
+  cleanupUploadedAsset, validateUserIntent,
+  callSignature, mapUpstreamError, runScopedProductSearch,
 });

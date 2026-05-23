@@ -37,6 +37,33 @@ interface RawRow {
 
 interface CompatVehicle { make: string; model: string; chassis?: string; engine?: string; years?: string }
 
+/** Per-row action verb sent to /commit-v2 (Phase D). */
+type RowAction = "create" | "merge_stock" | "overwrite_all" | "skip" | "review";
+
+interface OcrFix {
+  original:       string;
+  corrected:      string;
+  confidence:     number;
+  brand:          string | null;
+  edits:          number;
+  requiresReview: boolean;
+  rule:           "exact" | "substituted" | "unmatched";
+}
+
+interface RowConflict {
+  existingId:       string;
+  existingName:     string;
+  existingPrice:    number;
+  existingStock:    number;
+  existingStatus:   string;
+  incomingPrice:    number;
+  incomingStock:    number;
+  priceDelta:       number;
+  priceDeltaPct:    number | null;
+  stockDelta:       number;
+  suggestedAction:  RowAction;
+}
+
 interface EnrichedRow {
   cleaned_oem_code:    string;
   cleaned_part_number: string;
@@ -53,6 +80,23 @@ interface EnrichedRow {
   compatible_vehicles: CompatVehicle[];
   confidence?:         number;
   _meta?: { enriched_by: string; warnings: string[] };
+
+  // Phase D — preview decorations from /seller/import/preview.
+  // Present when the row came through the new pipeline; legacy
+  // /enrich-bulk responses leave these undefined and the wizard
+  // degrades gracefully.
+  ocrFix?:         OcrFix;
+  conflict?:       RowConflict | null;
+  requiresReview?: boolean;
+  action?:         RowAction;
+}
+
+interface PreviewSummary {
+  total:               number;
+  newCount:            number;
+  conflictCount:       number;
+  reviewCount:         number;
+  lowConfidenceCount:  number;
 }
 
 const GRADE_COLOR: Record<string, string> = {
@@ -87,6 +131,8 @@ export default function ImportWizardPage() {
   const [enrichedRows, setEnrichedRows] = useState<EnrichedRow[]>([]);
   const [enrichProgress, setEnrichProgress] = useState<{ done: number; total: number } | null>(null);
   const [onDuplicate, setOnDuplicate] = useState<"skip" | "update">("skip");
+  /** Phase D — summary of new vs conflict vs low-confidence rows. */
+  const [previewSummary, setPreviewSummary] = useState<PreviewSummary | null>(null);
 
   // ── Result state ──
   const [result, setResult] = useState<null | {
@@ -164,14 +210,23 @@ export default function ImportWizardPage() {
     setRawRows((p) => p.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const removeRaw = (i: number) => setRawRows((p) => p.filter((_, idx) => idx !== i));
 
-  // ── Enrich (Source → Preview) ─────────────────────────────────────
+  // ── Preview (Source → Preview) — Phase D conflict-aware pipeline ──
+  // Calls /seller/import/preview which: (1) fuzzy-corrects each OEM
+  // via ocrFuzzy.service, (2) runs the LLM enricher, (3) detects
+  // OEM conflicts with this seller's existing catalogue. Each row
+  // arrives back with .ocrFix, .conflict, .confidence and a
+  // suggested .action verb that the user can override in Step 2.
   const runEnrich = async () => {
     const valid = rawRows.filter((r) => r.raw_name?.trim() || r.input_code?.trim());
     if (valid.length === 0) { setErr("Дор хаяж нэг мөр оруулна уу"); return; }
     setBusy(true); setErr(""); setEnrichProgress({ done: 0, total: valid.length });
     try {
-      const r = await api.post<{ enriched: EnrichedRow[] }>("/seller/import/enrich-bulk", { rows: valid });
-      setEnrichedRows(r.enriched || []);
+      const r = await api.post<{ rows: EnrichedRow[]; summary: PreviewSummary }>(
+        "/seller/import/preview",
+        { rows: valid },
+      );
+      setEnrichedRows(r.rows || []);
+      setPreviewSummary(r.summary || null);
       setStep("preview");
     } catch (e) {
       setErr((e as Error).message);
@@ -187,14 +242,37 @@ export default function ImportWizardPage() {
   const removeEnriched = (i: number) =>
     setEnrichedRows((p) => p.filter((_, idx) => idx !== i));
 
-  // ── Commit (Preview → Result) ─────────────────────────────────────
+  // ── Bulk-action helpers (Phase D) ─────────────────────────────────
+  // Apply the same `action` verb to every row that currently has a
+  // conflict — saves the seller from clicking each dropdown when they
+  // already know "I want to merge everything" or "overwrite all".
+  const bulkApplyToConflicts = (action: RowAction) => {
+    setEnrichedRows((rows) =>
+      rows.map((r) => (r.conflict ? { ...r, action } : r)),
+    );
+  };
+
+  // ── Commit (Preview → Result) — Phase D commit-v2 with per-row verbs ──
+  // Each row carries its own .action ("create" | "merge_stock" |
+  // "overwrite_all" | "skip"). The backend dispatches per row and
+  // returns a structured outcomes[] array we surface below.
   const runCommit = async () => {
     if (enrichedRows.length === 0) return;
+    // Guard: forbid commit while any row is still flagged "review".
+    const reviewing = enrichedRows.filter((r) => r.action === "review").length;
+    if (reviewing > 0) {
+      setErr(`${reviewing} мөр шийдвэр хүлээж байна — action талбарыг өөрчилнө үү.`);
+      return;
+    }
     setBusy(true); setErr("");
     try {
-      const r = await api.post<typeof result>("/seller/import/commit", {
-        rows: enrichedRows,
-        onDuplicate,
+      const r = await api.post<typeof result>("/seller/import/commit-v2", {
+        rows: enrichedRows.map((row) => ({
+          ...row,
+          // Default to "create" for rows without an explicit action
+          // (e.g. legacy enriched rows that bypassed /preview).
+          action: row.action || (row.conflict ? "skip" : "create"),
+        })),
       });
       setResult(r);
       setStep("result");
@@ -344,6 +422,48 @@ export default function ImportWizardPage() {
             )}
           </div>
 
+          {/* Phase D — conflict / confidence summary + bulk-action toolbar.
+              Shows when /preview returned its conflict-aware shape. */}
+          {previewSummary && previewSummary.conflictCount + previewSummary.lowConfidenceCount > 0 && (
+            <div className="bg-amber-50/60 border border-amber-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-[12px]">
+              <span className="font-semibold text-amber-900 flex items-center gap-1.5">
+                <AlertTriangle size={12} /> Анхаарал хандуулах хэрэгтэй
+              </span>
+              {previewSummary.newCount > 0 && (
+                <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  ✓ {previewSummary.newCount} шинэ
+                </span>
+              )}
+              {previewSummary.conflictCount > 0 && (
+                <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">
+                  ⚠ {previewSummary.conflictCount} мөнхийн OEM
+                </span>
+              )}
+              {previewSummary.lowConfidenceCount > 0 && (
+                <span className="bg-yellow-100 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full">
+                  ◎ {previewSummary.lowConfidenceCount} итгэл бага
+                </span>
+              )}
+              {previewSummary.conflictCount > 0 && (
+                <div className="ml-auto flex items-center gap-1.5">
+                  <span className="text-amber-800 mr-1">Бүгдэд хийх:</span>
+                  <button onClick={() => bulkApplyToConflicts("merge_stock")}
+                    className="text-[11px] px-2 py-1 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer transition-colors">
+                    Нөөц нэгтгэх
+                  </button>
+                  <button onClick={() => bulkApplyToConflicts("overwrite_all")}
+                    className="text-[11px] px-2 py-1 rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer transition-colors">
+                    Дарж бичих
+                  </button>
+                  <button onClick={() => bulkApplyToConflicts("skip")}
+                    className="text-[11px] px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 cursor-pointer transition-colors">
+                    Алгасах
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
@@ -358,15 +478,36 @@ export default function ImportWizardPage() {
                     <th className="text-right px-3 py-2 font-medium">Үнэ</th>
                     <th className="text-right px-3 py-2 font-medium">Тоо</th>
                     <th className="text-center px-3 py-2 font-medium">AI</th>
+                    {/* Phase D — action / conflict column. Hidden when no
+                        row has /preview decorations (legacy path). */}
+                    <th className="text-center px-3 py-2 font-medium">Үйлдэл</th>
                     <th className="px-3 py-2 w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {enrichedRows.map((r, i) => {
                     const hasWarn = (r._meta?.warnings || []).length > 0;
+                    // Phase D — pick the dominant row state for highlighting.
+                    // Priority: conflict (orange) > low confidence (yellow) >
+                    // legacy warning (amber) > clean (default).
+                    const rowClass = r.conflict
+                      ? "bg-orange-50/60"
+                      : (r.confidence !== undefined && r.confidence < 0.70)
+                        ? "bg-yellow-50/60"
+                        : hasWarn
+                          ? "bg-amber-50/40"
+                          : "";
                     return (
-                      <tr key={i} className={`border-b border-gray-100 last:border-0 ${hasWarn ? "bg-amber-50/40" : ""}`}>
-                        <td className="px-2 py-1 font-mono text-[11px] text-gray-700">{r.cleaned_oem_code || "—"}</td>
+                      <tr key={i} className={`border-b border-gray-100 last:border-0 ${rowClass}`}>
+                        <td className="px-2 py-1 font-mono text-[11px] text-gray-700">
+                          {r.cleaned_oem_code || "—"}
+                          {/* OCR self-correction hint when a substitution was applied. */}
+                          {r.ocrFix && r.ocrFix.rule === "substituted" && r.ocrFix.original !== r.ocrFix.corrected && (
+                            <div className="text-[9px] text-amber-600 font-normal mt-0.5" title={`OCR засвар: ${r.ocrFix.original} → ${r.ocrFix.corrected}`}>
+                              OCR: {r.ocrFix.original} → ✓
+                            </div>
+                          )}
+                        </td>
                         <td className="px-2 py-1">
                           <InputCell value={r.display_name_mn} onChange={(v) => updateEnriched(i, { display_name_mn: v })} />
                           <div className="text-[10px] text-gray-400 mt-0.5 italic">{r.display_name_en}</div>
@@ -395,6 +536,39 @@ export default function ImportWizardPage() {
                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${SOURCE_COLOR[r._meta?.enriched_by || ""] ?? "bg-gray-100 text-gray-600"}`} title={(r._meta?.warnings || []).join(", ")}>
                             {r._meta?.enriched_by ?? "?"}
                           </span>
+                        </td>
+                        {/* Phase D — per-row action selector.
+                            Conflict rows get the dropdown; new rows just
+                            show a green "Үүсгэх" badge. Confidence < 70%
+                            puts a tiny yellow ring around the badge. */}
+                        <td className="px-2 py-1 text-center">
+                          {r.conflict ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <select value={r.action || "merge_stock"}
+                                onChange={(e) => updateEnriched(i, { action: e.target.value as RowAction })}
+                                className={`text-[10px] px-1.5 py-0.5 rounded border outline-none cursor-pointer font-sans ${
+                                  r.action === "overwrite_all" ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : r.action === "merge_stock" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : r.action === "skip"        ? "bg-gray-50 text-gray-600 border-gray-200"
+                                  : r.action === "review"      ? "bg-amber-50 text-amber-700 border-amber-300 animate-pulse"
+                                  : "bg-violet-50 text-violet-700 border-violet-200"
+                                }`}>
+                                <option value="merge_stock">Нэгтгэх (+нөөц)</option>
+                                <option value="overwrite_all">Дарж бичих</option>
+                                <option value="skip">Алгасах</option>
+                                <option value="review">Шийдвэр хүлээ</option>
+                              </select>
+                              <span className="text-[9px] text-gray-500 font-mono" title={`Хуучин: ₮${r.conflict.existingPrice.toLocaleString()} → Шинэ: ₮${r.conflict.incomingPrice.toLocaleString()}`}>
+                                Δ {r.conflict.priceDeltaPct !== null ? `${r.conflict.priceDeltaPct > 0 ? "+" : ""}${r.conflict.priceDeltaPct}%` : "—"}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 border ${
+                              r.confidence !== undefined && r.confidence < 0.70 ? "border-yellow-400 ring-1 ring-yellow-200" : "border-emerald-200"
+                            }`}>
+                              ✓ Үүсгэх
+                            </span>
+                          )}
                         </td>
                         <td className="px-1 py-1 text-center">
                           <button onClick={() => removeEnriched(i)} className="text-gray-300 hover:text-red-500 cursor-pointer bg-transparent border-none">

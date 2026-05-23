@@ -21,13 +21,51 @@ interface Message {
   text?: string;
   imageUrl?: string;
   products?: ProductCard[];
+  crossRefs?: CrossRef[];
   lowStock?: ProductCard[];
   excelHint?: { filename: string };
+  /** Seller-table renderer payload from layout="seller_table". */
+  table?: { columns: string[]; rows: NonNullable<AIResponse["payload"]["rows"]>; summary?: Record<string, unknown> | null };
+  /** Admin chart-ready payload from layout="admin_widget". */
+  widget?: { kind: NonNullable<AIResponse["payload"]["kind"]>; title: string; data: Record<string, unknown> };
+  /** Disambiguation form from layout="diag_form". */
+  diagForm?: { partType: string; fields: DiagField[]; note?: string };
+  /** Phase B — generated B2B quotation block. */
+  quotation?: { quoteId: string; bodyText: string; summary: Record<string, unknown> };
   error?: boolean;
 }
 
+/**
+ * Phase A response envelope from /api/ai/chat (back-end/Service/aiResponse.service.js).
+ * The chat widget renders different UI per `layout` instead of sniffing
+ * tool-call names, which keeps the renderer a clean switch statement.
+ */
+type DiagField = { key: string; label: string; type: "select" | "year" | "text"; options?: string[]; required?: boolean };
+type CrossRef = { oem: string; brand: string; role: "oem" | "aftermarket"; note?: string };
+
 interface AIResponse {
   reply: string;
+  layout: "user_cards" | "seller_table" | "admin_widget" | "diag_form" | "quotation" | "plain";
+  payload: {
+    items?: ProductCard[];
+    crossRefs?: CrossRef[];
+    meta?: { query?: string; category?: string; count?: number; plan?: unknown; oemBag?: string[]; primaryOem?: string };
+    columns?: string[];
+    rows?: Array<Array<string | number | { kind: "link" | "button"; label: string; href?: string; action?: string }>>;
+    summary?: Record<string, unknown> | null;
+    kind?: "bar_chart" | "pie_chart" | "kpi_grid" | "line_chart";
+    title?: string;
+    data?: Record<string, unknown>;
+    partType?: string;
+    fields?: DiagField[];
+    note?: string;
+    // Phase B — quotation layout
+    quoteId?: string;
+    bodyText?: string;
+  };
+  suggestions?: Suggestion[];
+  diagnostics?: Record<string, unknown>;
+  // Legacy fields for backward-compat during rollout (can be dropped later).
   toolCalls?: Array<{ name: string; result: unknown }>;
   fallback?: boolean;
 }
@@ -99,11 +137,22 @@ export default function HiCarAIChat() {
   const voiceSupported = isVoiceSupported();
 
   useEffect(() => {
-    const greet = isAdminPath
-      ? (locale === "en" ? ADMIN_GREETING_EN : ADMIN_GREETING_MN)
-      : (locale === "en" ? USER_GREETING_EN : USER_GREETING_MN);
+    // Vehicle-aware opening — when the user already picked a car on the
+    // /lookup page we open the chat with a car-specific greeting and
+    // swap the quick-action chips for that car's most-common parts.
+    let greet: string;
+    if (isAdminPath) {
+      greet = locale === "en" ? ADMIN_GREETING_EN : ADMIN_GREETING_MN;
+    } else if (activeVehicle?.manufacturer && activeVehicle?.model) {
+      const car = `${activeVehicle.manufacturer} ${activeVehicle.model}${activeVehicle.generation ? ` [${activeVehicle.generation}]` : ""}`;
+      greet = locale === "en"
+        ? `Hi 👋 Your car is ${car}. What part are you looking for?`
+        : `Сайн уу 👋 Таны ${car}-ын ямар сэлбэг хайя?`;
+    } else {
+      greet = locale === "en" ? USER_GREETING_EN : USER_GREETING_MN;
+    }
     setMessages([{ id: 1, role: "ai", text: greet }]);
-  }, [isAdminPath, locale]);
+  }, [isAdminPath, locale, activeVehicle?.manufacturer, activeVehicle?.model, activeVehicle?.generation]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -194,37 +243,12 @@ export default function HiCarAIChat() {
 
     try {
       // ─────────────────────────────────────────────────────────────
-      // Vehicle-aware path: when a Vehicle is active (user came from
-      // /lookup) and the user sent a text-only query, route through
-      // /api/search/smart so the AI translator + external parts API +
-      // OEM matcher all kick in. This is *materially* better than the
-      // generic chat for parts queries.
+      // Phase A: SINGLE entrypoint — everything goes through /api/ai/chat.
+      // The role-based gateway decides which tool fires; smart-search is
+      // exposed as the `search_vehicle_parts` tool when vehicleContext is
+      // present. This lets the AI greet by car, ask clarifying questions,
+      // and present results conversationally instead of dumping a count.
       // ─────────────────────────────────────────────────────────────
-      if (!isAdminPath && activeVehicle && text && !imageUrl) {
-        type SmartResp = {
-          ai: { plan: { api_english_name: string; standard_category: string }; source: string };
-          external: { provider: string; oems: string[] };
-          oemBag: string[];
-          items: ProductCard[];
-          fallbackSearch: { used: boolean };
-        };
-        const r = await api.post<SmartResp>("/search/smart", {
-          vehicleId: activeVehicle.id,
-          query: text,
-          limit: 8,
-        });
-        const headline = r.items.length > 0
-          ? (locale === "en"
-              ? `${r.items.length} parts matched for "${r.ai.plan.api_english_name}" on ${activeVehicle.manufacturer} ${activeVehicle.model}.`
-              : `${r.items.length} тохирох сэлбэг олдлоо — "${r.ai.plan.api_english_name}" / ${activeVehicle.manufacturer} ${activeVehicle.model}`)
-          : (locale === "en"
-              ? `No products found for "${r.ai.plan.api_english_name}". OEM bag size: ${r.oemBag.length}.`
-              : `"${r.ai.plan.api_english_name}" гэсэн утгаар бараа алга. OEM bag: ${r.oemBag.length}`);
-        pushAi({ text: headline, products: r.items });
-        return;
-      }
-
-      // ── Generic path: free-form chat / image search ─────────────
       const history = [...messages, userMsg]
         .filter(m => m.text || m.imageUrl)
         .map(m => {
@@ -234,23 +258,63 @@ export default function HiCarAIChat() {
           return { role: m.role === "ai" ? "assistant" : "user", content: m.text! };
         });
 
+      // Send vehicleContext so the backend can:
+      //   • greet by car ("Таны Toyota Blade…")
+      //   • call search_vehicle_parts (OEM-verified matches)
+      //   • skip the disambiguation form when car is already pinned down
+      const vehicleContext = activeVehicle ? {
+        id:           activeVehicle.id,
+        plate:        activeVehicle.plate,
+        manufacturer: activeVehicle.manufacturer,
+        model:        activeVehicle.model,
+        generation:   activeVehicle.generation,
+        engineCode:   activeVehicle.engineCode,
+        engineType:   activeVehicle.engineType,
+      } : null;
+
       const resp = await api.post<AIResponse>("/ai/chat", {
         messages: history,
         locale,
-        mode: isAdminPath ? "admin" : "user",
+        vehicleContext,
       });
 
-      // Surface tool results
-      const searchTool = resp.toolCalls?.find(c => c.name === "search_products");
-      const lowStockTool = resp.toolCalls?.find(c => c.name === "get_low_stock");
-      const products = searchTool?.result && typeof searchTool.result === "object" && "items" in (searchTool.result as Record<string, unknown>)
-        ? (searchTool.result as { items: ProductCard[] }).items
-        : undefined;
-      const lowStock = lowStockTool?.result && typeof lowStockTool.result === "object" && "items" in (lowStockTool.result as Record<string, unknown>)
-        ? (lowStockTool.result as { items: ProductCard[] }).items
-        : undefined;
-
-      pushAi({ text: resp.reply, products, lowStock });
+      // Dispatch on layout — single switch handles every renderer path.
+      const p = resp.payload || {};
+      const msg: Omit<Message, "id" | "role"> = { text: resp.reply };
+      switch (resp.layout) {
+        case "user_cards":
+          if (p.items?.length)     msg.products = p.items;
+          if (p.crossRefs?.length) msg.crossRefs = p.crossRefs;
+          break;
+        case "seller_table":
+          if (p.columns && p.rows) {
+            msg.table = { columns: p.columns, rows: p.rows, summary: p.summary ?? null };
+            // Backward-compat: also surface as lowStock if the rows look that way.
+            // (Phase B's dedicated tools will replace this.)
+          }
+          break;
+        case "admin_widget":
+          if (p.kind && p.data) {
+            msg.widget = { kind: p.kind, title: p.title || "", data: p.data };
+          }
+          break;
+        case "diag_form":
+          if (p.fields?.length) {
+            msg.diagForm = { partType: p.partType || "", fields: p.fields, note: p.note };
+          }
+          break;
+        case "quotation":
+          if (p.bodyText) {
+            msg.quotation = {
+              quoteId:  p.quoteId  || "",
+              bodyText: p.bodyText,
+              summary:  (p.summary as Record<string, unknown>) || {},
+            };
+          }
+          break;
+        // "plain" → reply text only, nothing extra.
+      }
+      pushAi(msg);
     } catch (e) {
       pushAi({ text: (e as Error).message, error: true });
     } finally {
@@ -406,6 +470,82 @@ export default function HiCarAIChat() {
                   <span className="font-mono truncate">{m.excelHint.filename}</span>
                 </div>
               )}
+
+              {/* Cross-reference table — aftermarket equivalents for the user's OEM. */}
+              {m.crossRefs && m.crossRefs.length > 0 && (
+                <div className="mt-2 border border-violet-200 rounded-lg overflow-hidden text-[11px]">
+                  <div className="bg-violet-50 px-2 py-1 font-semibold text-violet-700">
+                    {locale === "en" ? "Cross-references" : "Сонголтууд"}
+                  </div>
+                  <div className="divide-y divide-violet-100">
+                    {m.crossRefs.map((cr, i) => (
+                      <div key={`${cr.oem}-${i}`} className="px-2 py-1.5 flex items-center justify-between gap-2">
+                        <span className="font-mono text-gray-700 truncate">{cr.oem}</span>
+                        <span className="text-gray-500 truncate">{cr.brand}</span>
+                        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${cr.role === "oem" ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"}`}>
+                          {cr.role === "oem" ? "OEM" : "ALT"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Seller-table layout — generic inventory grid. */}
+              {m.table && m.table.rows.length > 0 && (
+                <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden text-[11px]">
+                  <table className="w-full">
+                    <thead className="bg-gray-100 text-gray-600">
+                      <tr>{m.table.columns.map((c, i) => (<th key={i} className="text-left px-2 py-1 font-semibold">{c}</th>))}</tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {m.table.rows.map((row, ri) => (
+                        <tr key={ri}>
+                          {row.map((cell, ci) => (
+                            <td key={ci} className="px-2 py-1.5 align-top text-gray-700">
+                              {typeof cell === "object" && cell !== null && "kind" in cell ? (
+                                cell.kind === "link" && cell.href
+                                  ? <Link href={cell.href} className="text-violet-600 underline">{cell.label}</Link>
+                                  : <button className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded border border-violet-200 text-[10px]">{cell.label}</button>
+                              ) : String(cell)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {m.table.summary && (
+                    <div className="bg-gray-50 px-2 py-1 text-[10px] text-gray-500 font-mono">
+                      {Object.entries(m.table.summary).map(([k, v]) => `${k}: ${v}`).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Admin-widget layout — Phase C renders 4 kinds. */}
+              {m.widget && <AdminWidget data={m.widget} />}
+
+              {/* Disambiguation form — fires when the user typed a bare
+                  category word ("фар", "тоормос"). Submitting re-enters
+                  the chat with the answers stitched into the query. */}
+              {m.diagForm && (
+                <DiagFormCard
+                  data={m.diagForm}
+                  locale={locale}
+                  onSubmit={(answers) => {
+                    const summary = Object.entries(answers)
+                      .filter(([, v]) => v)
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join(", ");
+                    send(`${m.diagForm!.partType} (${summary})`);
+                  }}
+                />
+              )}
+
+              {/* Phase B — generated B2B quotation. Monospace block + one-click copy. */}
+              {m.quotation && (
+                <QuotationCard data={m.quotation} locale={locale} />
+              )}
             </div>
           </div>
         ))}
@@ -463,6 +603,305 @@ export default function HiCarAIChat() {
           <Send size={14} />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// DiagFormCard — inline disambiguation widget rendered by layout="diag_form".
+//
+// Tiny self-contained form that captures the answers the AI asked for
+// (year / model / side / position) and submits them back as a single
+// chat turn. We deliberately keep it minimal — the source of truth for
+// available fields is the backend's vagueQueryFormFor() registry.
+// ────────────────────────────────────────────────────────────────────
+function DiagFormCard({
+  data, locale, onSubmit,
+}: {
+  data: { partType: string; fields: DiagField[]; note?: string };
+  locale: "mn" | "en";
+  onSubmit: (answers: Record<string, string>) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const ready = data.fields
+    .filter((f) => f.required)
+    .every((f) => answers[f.key] && answers[f.key].length > 0);
+
+  return (
+    <div className="mt-2 border border-amber-200 bg-amber-50 rounded-lg p-2 space-y-1.5 text-[12px]">
+      <div className="font-semibold text-amber-800">
+        {locale === "en" ? `Narrow down: ${data.partType}` : `Тодруулъя — ${data.partType}`}
+      </div>
+      {data.note && <div className="text-[10px] text-amber-700 italic">{data.note}</div>}
+      {data.fields.map((f) => (
+        <div key={f.key} className="flex items-center gap-2">
+          <label className="w-24 text-amber-900 shrink-0">{f.label}{f.required ? " *" : ""}</label>
+          {f.type === "select" && f.options ? (
+            <select
+              value={answers[f.key] || ""}
+              onChange={(e) => setAnswers((a) => ({ ...a, [f.key]: e.target.value }))}
+              className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[12px] outline-none">
+              <option value="">—</option>
+              {f.options.map((o) => (<option key={o} value={o}>{o}</option>))}
+            </select>
+          ) : f.type === "year" ? (
+            <input
+              type="number" min={1980} max={2030}
+              value={answers[f.key] || ""}
+              onChange={(e) => setAnswers((a) => ({ ...a, [f.key]: e.target.value }))}
+              className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[12px] outline-none" />
+          ) : (
+            <input
+              type="text"
+              value={answers[f.key] || ""}
+              onChange={(e) => setAnswers((a) => ({ ...a, [f.key]: e.target.value }))}
+              className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[12px] outline-none" />
+          )}
+        </div>
+      ))}
+      <button
+        onClick={() => onSubmit(answers)}
+        disabled={!ready}
+        className="w-full mt-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded px-2 py-1.5 text-[12px] font-semibold cursor-pointer border-none transition-colors">
+        {locale === "en" ? "Search →" : "Хайх →"}
+      </button>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// QuotationCard — renders layout="quotation". The bodyText is already
+// preformatted plain-text (template lives in sellerInsights.service.js),
+// so this component is intentionally dumb: monospace block + a copy-to-
+// clipboard button so the seller can paste it straight into an email.
+// ────────────────────────────────────────────────────────────────────
+function QuotationCard({
+  data, locale,
+}: {
+  data: { quoteId: string; bodyText: string; summary: Record<string, unknown> };
+  locale: "mn" | "en";
+}) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(data.bodyText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail in non-HTTPS contexts; fall back to select.
+      const ta = document.createElement("textarea");
+      ta.value = data.bodyText;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+      catch { /* user can still select manually */ }
+      document.body.removeChild(ta);
+    }
+  };
+
+  return (
+    <div className="mt-2 border border-emerald-200 bg-emerald-50 rounded-lg overflow-hidden text-[11px]">
+      <div className="flex items-center justify-between px-2 py-1 bg-emerald-100 text-emerald-800">
+        <span className="font-mono font-semibold">{data.quoteId}</span>
+        <button
+          onClick={handleCopy}
+          className="text-[10px] px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded cursor-pointer border-none transition-colors">
+          {copied
+            ? (locale === "en" ? "✓ Copied" : "✓ Хууллаа")
+            : (locale === "en" ? "Copy" : "Хуулах")}
+        </button>
+      </div>
+      <pre className="px-2 py-1.5 m-0 whitespace-pre overflow-x-auto font-mono text-[10px] leading-tight text-emerald-900 bg-white">
+{data.bodyText}
+      </pre>
+      {data.summary && Object.keys(data.summary).length > 0 && (
+        <div className="px-2 py-1 bg-emerald-50 text-[10px] text-emerald-700 font-mono">
+          {Object.entries(data.summary)
+            .filter(([k]) => !["validUntil"].includes(k))
+            .map(([k, v]) => `${k}: ${typeof v === "number" ? v.toLocaleString() : String(v)}`)
+            .join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// AdminWidget — Phase C BI renderer.
+//
+// Renders layout="admin_widget" payloads in one of four chart styles
+// based on payload.kind. Pure CSS / inline SVG — no chart library
+// dependency, no runtime download.
+//
+//   kpi_grid    : compact key-value grid (existing behavior)
+//   bar_chart   : horizontal bars from data.x[] + data.y[]
+//   line_chart  : inline SVG polyline from data.x[] + data.y[]
+//   pie_chart   : legend table from data.slices = [{label, value}]
+//
+// Falls back to kpi_grid for any unknown kind so the chat never crashes.
+// ────────────────────────────────────────────────────────────────────
+function AdminWidget({
+  data,
+}: {
+  data: { kind: NonNullable<AIResponse["payload"]["kind"]>; title: string; data: Record<string, unknown> };
+}) {
+  const d = data.data || {};
+  return (
+    <div className="mt-2 border border-indigo-200 rounded-lg p-2 text-[11px] bg-indigo-50">
+      {data.title && <div className="font-semibold text-indigo-700 mb-1">{data.title}</div>}
+      {data.kind === "bar_chart"   && <BarChartView d={d} />}
+      {data.kind === "line_chart"  && <LineChartView d={d} />}
+      {data.kind === "pie_chart"   && <PieLegendView d={d} />}
+      {(data.kind === "kpi_grid" || !["bar_chart","line_chart","pie_chart"].includes(data.kind)) && (
+        <KpiGridView d={d} />
+      )}
+    </div>
+  );
+}
+
+// Helpers — extract typed arrays from a loose data bag without throwing.
+function asNumberArray(v: unknown): number[] {
+  return Array.isArray(v) ? v.map((x) => Number(x) || 0) : [];
+}
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.map((x) => String(x ?? "")) : [];
+}
+
+// Horizontal-bar chart, CSS-only.
+function BarChartView({ d }: { d: Record<string, unknown> }) {
+  const labels = asStringArray(d.x);
+  const values = asNumberArray(d.y);
+  const max = Math.max(1, ...values);
+  if (labels.length === 0) {
+    return (
+      <div className="text-[11px] text-indigo-700 italic">
+        {String(d.note || "Өгөгдөл алга.")}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      {labels.map((label, i) => {
+        const v = values[i] || 0;
+        const pct = Math.max(2, Math.round((v / max) * 100));
+        return (
+          <div key={`${label}-${i}`} className="flex items-center gap-2">
+            <div className="w-24 text-[10px] text-gray-700 truncate font-mono shrink-0" title={label}>{label}</div>
+            <div className="flex-1 h-3 bg-white rounded overflow-hidden border border-indigo-100">
+              <div className="h-full bg-gradient-to-r from-indigo-400 to-fuchsia-500" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="w-12 text-right text-[10px] font-mono text-indigo-700 shrink-0">{v.toLocaleString()}</div>
+          </div>
+        );
+      })}
+      {d.seasonalNote ? <div className="mt-1 text-[10px] text-indigo-600 italic">{String(d.seasonalNote)}</div> : null}
+      {d.note ? <div className="mt-1 text-[10px] text-indigo-600 italic">{String(d.note)}</div> : null}
+    </div>
+  );
+}
+
+// Inline SVG polyline (trend lines).
+function LineChartView({ d }: { d: Record<string, unknown> }) {
+  const labels = asStringArray(d.x);
+  const values = asNumberArray(d.y);
+  if (values.length < 2) {
+    return <div className="text-[11px] text-indigo-700 italic">Хангалттай цэг алга.</div>;
+  }
+  const W = 300, H = 80, P = 4;
+  const max = Math.max(...values), min = Math.min(...values, 0);
+  const span = Math.max(1, max - min);
+  const xStep = (W - 2 * P) / (values.length - 1);
+  const points = values
+    .map((v, i) => {
+      const x = P + i * xStep;
+      const y = P + (H - 2 * P) * (1 - (v - min) / span);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <div>
+      <svg width={W} height={H} className="w-full h-auto">
+        <polyline fill="none" stroke="rgb(99, 102, 241)" strokeWidth="2" points={points} />
+        {values.map((v, i) => (
+          <circle key={i} cx={P + i * xStep} cy={P + (H - 2 * P) * (1 - (v - min) / span)} r="2.5" fill="rgb(217, 70, 239)" />
+        ))}
+      </svg>
+      <div className="flex justify-between text-[9px] text-indigo-500 font-mono mt-0.5">
+        {labels.map((l, i) => <span key={`${l}-${i}`}>{l}</span>)}
+      </div>
+    </div>
+  );
+}
+
+// Pie chart → legend table (cheap, readable, accessible).
+function PieLegendView({ d }: { d: Record<string, unknown> }) {
+  const slices = (Array.isArray(d.slices) ? d.slices : []) as Array<{ label: string; value: number }>;
+  if (slices.length === 0) {
+    return <div className="text-[11px] text-indigo-700 italic">Хуваарилалт алга.</div>;
+  }
+  const total = slices.reduce((s, sl) => s + (Number(sl.value) || 0), 0) || 1;
+  const palette = ["bg-indigo-500", "bg-fuchsia-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500", "bg-violet-500"];
+  return (
+    <div className="space-y-1">
+      {slices.map((sl, i) => {
+        const pct = Math.round(((Number(sl.value) || 0) / total) * 100);
+        return (
+          <div key={`${sl.label}-${i}`} className="flex items-center gap-2 text-[10px]">
+            <span className={`w-3 h-3 rounded-sm shrink-0 ${palette[i % palette.length]}`} />
+            <span className="flex-1 truncate text-gray-700">{sl.label}</span>
+            <span className="font-mono text-indigo-700">{pct}%</span>
+            <span className="font-mono text-gray-500 w-16 text-right">{Number(sl.value).toLocaleString()}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// KPI grid — scalars + nested topBrands list when present.
+function KpiGridView({ d }: { d: Record<string, unknown> }) {
+  const topBrands = Array.isArray(d.topBrands) ? d.topBrands : null;
+  const statusBreakdown = (d.statusBreakdown && typeof d.statusBreakdown === "object")
+    ? d.statusBreakdown as Record<string, number>
+    : null;
+
+  // Scalars only — strip nested objects / arrays for the grid.
+  const scalars = Object.entries(d).filter(([, v]) => {
+    return v !== null && (typeof v !== "object" || v instanceof Date);
+  });
+
+  return (
+    <div>
+      {scalars.length > 0 && (
+        <div className="grid grid-cols-2 gap-1">
+          {scalars.map(([k, v]) => (
+            <div key={k} className="bg-white rounded px-2 py-1">
+              <div className="text-gray-500 text-[10px]">{k}</div>
+              <div className="font-mono text-gray-900 truncate">
+                {typeof v === "number" ? v.toLocaleString() : String(v)}
+                {k.endsWith("Percent") || k.startsWith("growthRate") ? "%" : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {topBrands && topBrands.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-indigo-200">
+          <div className="text-[10px] text-indigo-600 font-semibold mb-1">Топ брэндүүд</div>
+          <BarChartView d={{
+            x: topBrands.map((b: { brand?: string }) => b.brand || "?"),
+            y: topBrands.map((b: { revenue?: number }) => b.revenue || 0),
+          }} />
+        </div>
+      )}
+      {statusBreakdown && (
+        <div className="mt-2 pt-2 border-t border-indigo-200">
+          <div className="text-[10px] text-indigo-600 font-semibold mb-1">Захиалгын төлөв</div>
+          <PieLegendView d={{
+            slices: Object.entries(statusBreakdown).map(([label, value]) => ({ label, value })),
+          }} />
+        </div>
+      )}
     </div>
   );
 }

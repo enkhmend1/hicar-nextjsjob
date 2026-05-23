@@ -5,8 +5,8 @@ import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
 import { rememberInputs } from "./seller.controller.js";
 import {
-  productCreateSchema,
-  productUpdateSchema,
+  validateProductCreate,
+  validateProductUpdate,
   flattenZodErrors,
 } from "../Service/productSchema.service.js";
 
@@ -147,14 +147,16 @@ export const createProduct = async (req, res) => {
     const normalised = normalizeProductInput(body);
 
     // ── Dynamic, category-aware validation ──────────────────────────
+    // validateProductCreate is async because it reads the category's
+    // attribute-schema definitions from SiteContent at request time:
+    //   ① Admin-edited dynamic schemas in SiteContent.categories[].attributesSchema
+    //   ② Legacy hardcoded STATIC_CATEGORY_SCHEMAS (body/oils/brake/engine/electric)
+    //   ③ Free record (no rules registered)
     // The Zod layer enforces:
     //   • all required base fields are present (name/brand/category/price/...)
     //   • fitments[] rows are coherent (yearStart ≤ yearEnd)
-    //   • category-specific attributes match their schema
-    //     (e.g. category="oils" demands viscosity + volume + oilType;
-    //      category="body" demands side; cross-category attributes
-    //      are rejected with a precise path)
-    const parsed = productCreateSchema.safeParse(normalised);
+    //   • category-specific attributes match the resolved schema
+    const parsed = await validateProductCreate(normalised);
     if (!parsed.success) {
       return res.status(400).json({
         code: "VALIDATION_FAILED",
@@ -214,19 +216,11 @@ export const updateProduct = async (req, res) => {
 
     // ── Partial-update validation ──────────────────────────────────
     // When the client sends only a few fields (e.g. just `price` or
-    // `stockQty`), every base field is optional — productUpdateSchema
-    // is `.partial()`. But if BOTH `category` and `attributes` are
-    // present, we cross-validate them: the client can't sneak invalid
-    // OILS attributes into a BODY product mid-edit.
-    //
-    // If the client touches `attributes` WITHOUT changing `category`,
-    // we merge in the existing product's category before validating so
-    // attribute rules still apply.
-    const updateInput = { ...normalised };
-    if (updateInput.attributes !== undefined && updateInput.category === undefined) {
-      updateInput.category = existing.category;
-    }
-    const parsed = productUpdateSchema.safeParse(updateInput);
+    // `stockQty`), every base field is optional. But if `attributes`
+    // is touched, we cross-validate against the category (either the
+    // body's explicit `category` or the existing product's — passed as
+    // fallbackCategory so the resolver can look up the right schema).
+    const parsed = await validateProductUpdate(normalised, existing.category);
     if (!parsed.success) {
       return res.status(400).json({
         code: "VALIDATION_FAILED",
