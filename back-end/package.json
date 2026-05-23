@@ -30,6 +30,7 @@
     "opossum": "^9.0.0",
     "pdfkit": "^0.18.0",
     "undici": "^8.3.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

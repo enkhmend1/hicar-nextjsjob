@@ -28,13 +28,14 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { api, ApiError } from "@/lib/api";
+import { useCategories, type AttributeDefinition } from "@/app/lib/useCategories";
+import { tOption } from "@/app/lib/optionLabels";
 import {
   productCreateSchema,
   step1BasicsSchema,
   step2FitmentSchema,
   step3PricingSchema,
   CATEGORY_LABELS,
-  KNOWN_CATEGORIES,
   type ProductCreateInput,
   type KnownCategory,
 } from "@/app/lib/productSchema";
@@ -225,6 +226,13 @@ export default function NewProductPage() {
 // ─────────────────────────────────────────────────────────────────────
 function Step1Basics({ form }: { form: ProductForm }) {
   const { register, formState: { errors } } = form;
+  // Live category list from /api/site-content/categories — same source the
+  // homepage + admin editor read from. A category the admin adds (and
+  // marks visible) is IMMEDIATELY available here without a code change.
+  // The dynamic-attributes panel in Step 2 still uses
+  // CATEGORY_ATTRIBUTE_SCHEMAS for known categories; admin-added cats
+  // without a schema get the "no extra fields" fallback.
+  const { categories, loading: catsLoading } = useCategories();
   return (
     <div className="space-y-4">
       <Field label="Нэр" hint="Каталоги дээр харагдах гарчиг" error={errors.name?.message}>
@@ -246,14 +254,23 @@ function Step1Basics({ form }: { form: ProductForm }) {
         </Field>
       </div>
 
-      <Field label="Категори" hint="Зэрэгцээ талбарууд категорийн дагуу хувирна" error={errors.category?.message}>
-        <select {...register("category")}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans">
+      <Field
+        label="Категори"
+        hint={catsLoading
+          ? "Категори жагсаалт ачаалж байна..."
+          : "Зэрэгцээ талбарууд категорийн дагуу хувирна. Жагсаалт admin → Сайтын контент-аас удирдагдана."}
+        error={errors.category?.message}>
+        <select {...register("category")} disabled={catsLoading}
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans disabled:opacity-60">
           <option value="">— Сонгох —</option>
-          {KNOWN_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-          <option value="other">{CATEGORY_LABELS.other}</option>
+          {/* "other" категори нь зориудаар үлдсэн — schema-гүй ангиллын
+              нөөц утга. Жагсаалтад давхардахгүй бол үргэлж сонголтонд гарна. */}
+          {!categories.some((c) => c.id === "other") && (
+            <option value="other">{CATEGORY_LABELS.other}</option>
+          )}
         </select>
       </Field>
     </div>
@@ -271,6 +288,14 @@ function Step2Fitment({
 }) {
   const { control, register, formState: { errors } } = form;
   const { fields, append, remove } = useFieldArray({ control, name: "fitments" });
+  const { categories } = useCategories();
+  // Pretty label: prefer the admin-edited display name from site-content,
+  // fall back to built-in CATEGORY_LABELS for the static schema keys,
+  // then "Бусад" for anything totally unknown.
+  const liveLabel =
+    categories.find((c) => c.id === category)?.name
+    ?? CATEGORY_LABELS[category as KnownCategory]
+    ?? (category ? "Бусад" : "Категори сонгоогүй");
 
   return (
     <div className="space-y-6">
@@ -335,9 +360,7 @@ function Step2Fitment({
       <section>
         <h2 className="text-[14px] font-semibold text-gray-900 mb-2">
           Категори тусгай үзүүлэлт
-          <span className="ml-2 text-[11px] font-normal text-gray-400">
-            ({category ? CATEGORY_LABELS[category as KnownCategory] ?? "Бусад" : "Категори сонгоогүй"})
-          </span>
+          <span className="ml-2 text-[11px] font-normal text-gray-400">({liveLabel})</span>
         </h2>
         <AttributesFor category={category} form={form} />
       </section>
@@ -515,18 +538,54 @@ const ATTRIBUTE_FIELDS: Record<KnownCategory, AttrField[]> = {
   ],
 };
 
+/**
+ * Convert an admin-edited AttributeDefinition into the AttrField shape
+ * the legacy renderer uses. Lets the same widget code render both
+ * static and dynamic schemas without branching the JSX.
+ */
+const dynamicToAttrField = (def: AttributeDefinition): AttrField => {
+  if (def.type === "number") {
+    return { kind: "number", key: def.key, label: def.label, required: def.required };
+  }
+  if (def.type === "select") {
+    return {
+      kind: "enum",
+      key: def.key,
+      label: def.label,
+      required: def.required,
+      // Stored value stays as the admin-set English key; display goes
+      // through tOption() so the seller sees a Mongolian label without
+      // changing what we persist or send to the API.
+      options: (def.options || []).map((o) => ({ value: o, label: tOption(o, def.key) })),
+    };
+  }
+  return { kind: "text", key: def.key, label: def.label, required: def.required };
+};
+
 function AttributesFor({
   category, form,
 }: {
   category: string;
   form: ProductForm;
 }) {
-  const fields = (ATTRIBUTE_FIELDS as Record<string, AttrField[]>)[category];
+  const { categories } = useCategories();
   const { register, formState: { errors } } = form;
   // Pull the attributes sub-error map.
   const attrErrors = (errors.attributes as Record<string, { message?: string } | undefined>) || {};
 
-  if (!fields) {
+  // Priority:
+  //   ① Admin-edited attributesSchema from SiteContent (no-code dynamic)
+  //   ② Legacy hardcoded ATTRIBUTE_FIELDS for the built-in categories
+  //   ③ Empty → "no extra fields" notice
+  // Whichever source wins, we convert to the SAME AttrField shape and
+  // hand it to the existing renderer below.
+  const dynamicDefs = categories.find((c) => c.id === category)?.attributesSchema;
+  const fields: AttrField[] | undefined =
+    dynamicDefs && dynamicDefs.length > 0
+      ? dynamicDefs.map(dynamicToAttrField)
+      : (ATTRIBUTE_FIELDS as Record<string, AttrField[]>)[category];
+
+  if (!fields || fields.length === 0) {
     return (
       <div className="text-[12px] text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl p-3">
         Энэ категорид нэмэлт талбар алга. 3-р алхам руу үргэлжлүүлнэ үү.
