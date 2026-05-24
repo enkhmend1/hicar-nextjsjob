@@ -1367,6 +1367,94 @@ assert(userPromptSample.includes("When in doubt → ANSWER, don't refuse"),
        "USER system prompt has the answer-by-default bias");
 
 // ────────────────────────────────────────────────────────────────────
+// ㉑ Phase O — Re-approval scoped to risky-field changes
+// Was: ANY seller edit to an approved product → status="pending".
+// Now: only name/oem/category/price/fitments/attributes/compatible
+// changes reset. Image uploads, stock bumps, description tweaks stay
+// approved so sellers can polish without waiting for the admin queue.
+// ────────────────────────────────────────────────────────────────────
+const { requiresReapproval, RISKY_FIELDS } =
+  await import("../Service/productPolicy.service.js");
+
+// Frozen registry — protect the policy from accidental widening.
+assert(Object.isFrozen(RISKY_FIELDS),
+       "RISKY_FIELDS list is frozen (no runtime widening)");
+assert(RISKY_FIELDS.length === 7,
+       "RISKY_FIELDS has exactly 7 entries");
+for (const f of ["name", "oem", "category", "price", "fitments", "attributes", "compatible"]) {
+  assert(RISKY_FIELDS.includes(f),
+         `RISKY_FIELDS includes "${f}"`);
+}
+
+const existing = {
+  name: "Brake pad", oem: "04465-02220", category: "brake",
+  price: 50000, fitments: [{ make: "Toyota", model: "Camry" }],
+  attributes: { position: "front" }, compatible: ["Camry", "Avalon"],
+  // Safe fields:
+  images: ["a.jpg"], stockQty: 10, inStock: true, description: "Good",
+};
+
+// ─── Safe-only update → NO re-approval ─────────────────────────
+assert(requiresReapproval(existing, { images: ["a.jpg", "b.jpg"] }) === false,
+       "adding a product image alone does NOT require re-approval (Phase O headline fix)");
+assert(requiresReapproval(existing, { stockQty: 25 }) === false,
+       "stock bump alone does NOT require re-approval");
+assert(requiresReapproval(existing, { description: "Better description" }) === false,
+       "description tweak does NOT require re-approval");
+assert(requiresReapproval(existing, {
+         images: ["a.jpg", "b.jpg", "c.jpg"], stockQty: 25, description: "..."
+       }) === false,
+       "combined safe updates (images + stock + desc) do NOT require re-approval");
+
+// ─── Risky-field update → YES re-approval ──────────────────────
+assert(requiresReapproval(existing, { name: "Different brake pad" }) === true,
+       "name change requires re-approval");
+assert(requiresReapproval(existing, { oem: "04465-99999" }) === true,
+       "OEM change requires re-approval");
+assert(requiresReapproval(existing, { category: "engine" }) === true,
+       "category change requires re-approval");
+assert(requiresReapproval(existing, { price: 75000 }) === true,
+       "price change requires re-approval");
+assert(requiresReapproval(existing, {
+         fitments: [{ make: "Toyota", model: "Corolla" }],
+       }) === true,
+       "fitments change requires re-approval");
+assert(requiresReapproval(existing, {
+         attributes: { position: "rear" },
+       }) === true,
+       "attributes change requires re-approval");
+assert(requiresReapproval(existing, {
+         compatible: ["Camry", "Avalon", "Lexus ES"],
+       }) === true,
+       "compatible array change requires re-approval");
+
+// ─── Same-value re-submission → NO re-approval ─────────────────
+// (Seller forms typically PUT the whole object; same values shouldn't
+// trip the policy.)
+assert(requiresReapproval(existing, {
+         name: existing.name, oem: existing.oem, price: existing.price,
+       }) === false,
+       "re-PUTting risky fields with SAME values does NOT require re-approval");
+assert(requiresReapproval(existing, {
+         attributes: { position: "front" },   // structurally identical
+       }) === false,
+       "re-PUTting an identical attributes object does NOT require re-approval");
+
+// ─── Risky + safe combined → YES (risky wins) ──────────────────
+assert(requiresReapproval(existing, {
+         images: ["a.jpg", "b.jpg"], price: 75000,
+       }) === true,
+       "any risky change requires re-approval even alongside safe ones");
+
+// ─── Defensive: bad input → false (no crash) ───────────────────
+assert(requiresReapproval(null, { name: "x" }) === false,
+       "null existing → false (defensive)");
+assert(requiresReapproval(existing, null) === false,
+       "null update → false (defensive)");
+assert(requiresReapproval(existing, {}) === false,
+       "empty update → false");
+
+// ────────────────────────────────────────────────────────────────────
 // Summary
 // ────────────────────────────────────────────────────────────────────
 console.log("");

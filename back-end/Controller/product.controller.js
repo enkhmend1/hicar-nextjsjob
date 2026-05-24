@@ -3,6 +3,7 @@ import { cacheGet, cacheSet, cacheInvalidate } from "../Config/redis.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
+import { requiresReapproval } from "../Service/productPolicy.service.js";
 import { rememberInputs } from "./seller.controller.js";
 import {
   validateProductCreate,
@@ -233,7 +234,12 @@ export const updateProduct = async (req, res) => {
       if (status !== undefined) update.status = status;
       if (rejectedReason !== undefined) update.rejectedReason = rejectedReason;
       if (seller !== undefined) update.seller = seller;
-    } else if (existing.status === "approved") {
+    } else if (existing.status === "approved" && requiresReapproval(existing, update)) {
+      // Phase O: re-approval scoped to RISKY field changes only.
+      // See Service/productPolicy.service.js for the risky/safe split.
+      // Image uploads, stock bumps, description tweaks all keep
+      // status="approved" so the listing doesn't yo-yo through
+      // the admin queue every time the seller polishes their page.
       update.status = "pending";
     }
 
