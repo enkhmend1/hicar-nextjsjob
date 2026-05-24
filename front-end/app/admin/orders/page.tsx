@@ -32,7 +32,9 @@ export default function AdminOrdersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [filter]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [filter]);
 
   const updateStatus = async (id: string, status: string) => {
     await api.patch(`/orders/${id}/status`, { status });

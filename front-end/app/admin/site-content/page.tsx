@@ -121,7 +121,9 @@ export default function AdminSiteContentPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { reload(); }, []);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); }, []);
 
   // ── Mutators ──────────────────────────────────────────────────────
   const updateCategory = (idx: number, patch: Partial<SiteCategory>) => {

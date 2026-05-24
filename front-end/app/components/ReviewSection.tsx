@@ -35,7 +35,9 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
     }
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [productId, user]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [productId, user]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

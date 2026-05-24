@@ -31,7 +31,11 @@ export default function GaragePage() {
   useEffect(() => {
     if (!_hasHydrated) return;
     if (!user) { router.push("/auth/login"); return; }
-    reload();
+    // Defer to a microtask so the setLoading(true) inside reload()
+    // doesn't fire synchronously inside the effect body — React 19
+    // warns about that pattern because it cascades renders. The
+    // microtask runs after the effect commits, eliminating the cascade.
+    queueMicrotask(reload);
   }, [user, _hasHydrated, router]);
 
   if (!_hasHydrated || !user) return null;

@@ -50,7 +50,9 @@ export default function AdminProductsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [statusFilter]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [statusFilter]);
 
   const moderate = async (p: Product, action: "approve" | "reject") => {
     const id = p._id ?? p.id;

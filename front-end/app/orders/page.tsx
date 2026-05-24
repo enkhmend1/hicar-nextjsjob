@@ -65,7 +65,9 @@ export default function OrdersPage() {
   useEffect(() => {
     if (!_hasHydrated) return;
     if (!user) { router.push("/auth/login"); return; }
-    reload();
+    // queueMicrotask — defer reload()'s setLoading(true) past the effect
+    // commit so React 19 doesn't warn about cascading renders.
+    queueMicrotask(reload);
   }, [user, router, _hasHydrated]);
 
   if (!_hasHydrated || !user) return null;

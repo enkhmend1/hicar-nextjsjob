@@ -28,7 +28,10 @@ export default function AdminUsersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); }, []);
+  // queueMicrotask — defer reload() past the effect commit so the
+  // setLoading(true) inside it doesn't fire synchronously and trigger
+  // React 19's cascading-render warning.
+  useEffect(() => { queueMicrotask(reload); }, []);
 
   const toggleRole = async (u: User) => {
     const nextRole = u.role === "admin" ? "user" : "admin";

@@ -116,7 +116,9 @@ function LogsTab({ onChange }: { onChange: () => void }) {
     }
   }, [zeroOnly, source]);
 
-  useEffect(() => { load(); }, [load]);
+  // queueMicrotask defers load()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const seedMapping = async (q: ZeroQuery) => {
     const cat = prompt(`"${q.query}" — ангилал? (${CATEGORIES.filter(c => c.id).map(c => c.id).join(" | ")})`, "other");
@@ -238,7 +240,9 @@ function MappingsTab() {
     }
   }, [q, category]);
 
-  useEffect(() => { load(); }, [load]);
+  // queueMicrotask defers load()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const totalUsage = useMemo(() => items.reduce((s, i) => s + (i.usageCount || 0), 0), [items]);
 

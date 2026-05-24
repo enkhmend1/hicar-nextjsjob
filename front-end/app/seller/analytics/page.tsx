@@ -65,7 +65,9 @@ export default function SellerAnalyticsPage() {
     }
   }, [range]);
 
-  useEffect(() => { load(); }, [load]);
+  // queueMicrotask defers load()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const download = async (format: "xlsx" | "csv" | "pdf") => {
     if (!range.from || !range.to) return;

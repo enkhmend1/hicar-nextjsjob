@@ -155,7 +155,9 @@ export default function AdminSellersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [filter]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [filter]);
 
   // Approval flow now just toggles seller status — commission + bank info are
   // edited from the modal AFTER approval. Keeping the approve action simple

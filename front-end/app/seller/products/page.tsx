@@ -78,7 +78,9 @@ export default function SellerProductsPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); }, [reload]);
 
   useEffect(() => {
     api.get<Facets>("/seller/facets").then(setFacets).catch(() => {});
