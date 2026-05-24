@@ -82,15 +82,67 @@ export function useAgent(): UseAgentReturn {
   const [plateError, setPlateError] = useState("");
 
   // ── Chat ─────────────────────────────────────────────────────────
+  // Phase J.2: error mapping table — distinguish rate-limit, upstream
+  // outage, validation-failure, and generic so the user sees a useful
+  // message instead of a flat "Алдаа гарлаа".
   const sendChat = useCallback(async (messages: ChatMessage[]): Promise<AIResponse | null> => {
     setBusy(true); setChatError("");
     try {
       const resp = await chatService.send(messages, { locale, vehicle: activeVehicle });
       return resp;
     } catch (e) {
-      const msg = (e as Error).message || (locale === "en"
-        ? "Chat failed — please try again."
-        : "Чат алдаа гарлаа — дахин оролдоно уу.");
+      const ae = e as ApiError;
+      const code = (ae.data?.code as string | undefined);
+      let msg: string;
+      switch (code) {
+        case "AI_RATE_LIMITED": {
+          const wait = Number(ae.data?.retryAfter) || 30;
+          msg = locale === "en"
+            ? `Rate limited — please retry in ~${wait}s.`
+            : `Хүсэлт хэт олон — ойролцоогоор ${wait} секундын дараа дахин оролдоно уу.`;
+          break;
+        }
+        case "AI_AUTH_FAILED":
+          msg = locale === "en"
+            ? "AI provider auth failed. Operator must check API keys."
+            : "AI үйлчилгээ нэвтрэх алдаатай. Оператортой холбогдоно уу.";
+          break;
+        case "AI_PROVIDER_UNAVAILABLE":
+        case "AI_UPSTREAM_UNREACHABLE":
+        case "AI_UPSTREAM_ERROR":
+          msg = locale === "en"
+            ? "AI service is temporarily unavailable. Please retry shortly."
+            : "AI үйлчилгээ түр ажиллахгүй байна. Дахин оролдоно уу.";
+          break;
+        case "EMPTY_PROMPT":
+          msg = locale === "en"
+            ? "Please describe what you're looking for in more detail."
+            : "Юу хайж байгаагаа илүү дэлгэрэнгүй бичээрэй.";
+          break;
+        case "VISION_PROVIDER_UNAVAILABLE":
+          msg = locale === "en"
+            ? "Image analysis isn't configured. Type the part name instead."
+            : "Зургийн AI тохируулагдаагүй. Сэлбэгийн нэрийг бичээрэй.";
+          break;
+        case "AI_DISABLED_FOR_IMAGE":
+          msg = locale === "en"
+            ? "Image search needs an AI provider. Try text search instead."
+            : "Зургийн хайлт AI шаардана. Текстээр хайна уу.";
+          break;
+        case "AI_INTERNAL_ERROR":
+          msg = locale === "en"
+            ? "Something broke internally. We've logged it — please retry."
+            : "Дотоод алдаа гарлаа. Бид бүртгэсэн — дахин оролдоно уу.";
+          break;
+        default:
+          // Use the server's message if it looks human-readable, otherwise
+          // fall back to the generic.
+          msg = ae.message && ae.message.length < 200 && !ae.message.includes("\n")
+            ? ae.message
+            : (locale === "en"
+              ? "Chat failed — please try again."
+              : "Чат алдаа гарлаа — дахин оролдоно уу.");
+      }
       setChatError(msg);
       return null;
     } finally {
