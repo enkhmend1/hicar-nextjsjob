@@ -117,8 +117,11 @@ const aiMemorySchema = new mongoose.Schema(
     /** Unresolved diagnostic flow state (single slot for now). */
     diagnosticState: { type: diagnosticStateSchema, default: null },
 
-    /** Rolling timestamp used by the TTL index. Every save bumps it. */
-    lastUpdatedAt: { type: Date, default: Date.now, index: true },
+    /** Rolling timestamp used by the TTL index. Every save bumps it.
+        No `index: true` here — the TTL index defined below already
+        creates an ascending index on this field, so the shortcut would
+        be a duplicate (Mongoose warns about it). */
+    lastUpdatedAt: { type: Date, default: Date.now },
   },
   { timestamps: true },
 );
