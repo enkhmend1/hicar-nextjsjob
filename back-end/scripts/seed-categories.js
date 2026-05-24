@@ -516,7 +516,7 @@ const run = async () => {
         $setOnInsert: { _id: "main" },
       },
       {
-        new: true,
+        returnDocument: "after",
         upsert: true,
         runValidators: true,
         setDefaultsOnInsert: true,

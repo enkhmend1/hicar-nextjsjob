@@ -127,12 +127,13 @@ export const applyResolutionDelta = async (disputeId, sellerId, actionOrStatus) 
   //  - All other callers: filter no longer matches, `findOneAndUpdate`
   //    returns null, we exit with "already_applied". No double-apply.
   //
-  // `new: true` is irrelevant here (we don't use the returned doc); we
-  // request the minimum projection to keep wire traffic small.
+  // `returnDocument: "after"` is irrelevant here (we don't use the
+  // returned doc); we request the minimum projection to keep wire
+  // traffic small.
   const lock = await Dispute.findOneAndUpdate(
     { _id: disputeId, isTrustScoreApplied: { $ne: true } },
     { $set: { isTrustScoreApplied: true } },
-    { new: true, projection: { _id: 1 } },
+    { returnDocument: "after", projection: { _id: 1 } },
   );
   if (!lock) {
     return { applied: false, reason: "already_applied", key, delta };
@@ -157,10 +158,10 @@ export const applyResolutionDelta = async (disputeId, sellerId, actionOrStatus) 
   // simultaneously) cannot lose this delta — they serialize at the
   // document level and both deltas apply.
   //
-  // We request `new: false` so the PRE-image is returned; the audit
-  // `next` value is then computed by the same clamp formula in JS.
-  // Because the DB pipeline uses the identical formula, the JS-computed
-  // `next` is bit-exact with what the database now stores.
+  // We request `returnDocument: "before"` so the PRE-image is returned;
+  // the audit `next` value is then computed by the same clamp formula
+  // in JS. Because the DB pipeline uses the identical formula, the
+  // JS-computed `next` is bit-exact with what the database now stores.
   let preImage;
   try {
     preImage = await User.findOneAndUpdate(
@@ -182,7 +183,7 @@ export const applyResolutionDelta = async (disputeId, sellerId, actionOrStatus) 
         },
       ],
       {
-        new: false,
+        returnDocument: "before",
         projection: { [TRUST_PATH]: 1 },
       },
     );

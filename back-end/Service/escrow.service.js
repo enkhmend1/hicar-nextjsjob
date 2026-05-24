@@ -240,7 +240,7 @@ const settleOrderPaidNoTxn = async (orderId) => {
         "qpayInvoice.paid_at": now,
       },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
   if (updated) {
     await appendAudit({

@@ -105,14 +105,61 @@ export interface ActiveVehicle {
 interface CarStore {
   selectedCar: import("@/app/types").Car | null;   // legacy display obj
   activeVehicle: ActiveVehicle | null;             // canonical id-based context
+  /**
+   * Phase G — last-N vehicles the user has interacted with (LRU,
+   * move-to-front). Powers the chat header switcher dropdown so the
+   * user can flip between "own car / family / work" in one click
+   * instead of re-looking-up plates. Capped at 5 client-side; the
+   * server-side aiMemory has the same cap.
+   */
+  recentVehicles: ActiveVehicle[];
   setCar: (car: import("@/app/types").Car | null) => void;
   setActiveVehicle: (v: ActiveVehicle | null) => void;
+  /** Move-to-front + cap at 5. Called when a plate lookup succeeds. */
+  pushRecentVehicle: (v: ActiveVehicle) => void;
+  /** Used when /api/ai/memory hydrate returns the server's truth. */
+  hydrateRecentVehicles: (list: ActiveVehicle[]) => void;
+  clearActiveVehicle: () => void;
 }
+
+const VEHICLE_RECENT_CAP = 5;
+
 export const useCarStore = create<CarStore>()(
-  persist((set) => ({
+  persist((set, get) => ({
     selectedCar: null,
     activeVehicle: null,
+    recentVehicles: [],
     setCar: (car) => set({ selectedCar: car }),
-    setActiveVehicle: (v) => set({ activeVehicle: v }),
+    setActiveVehicle: (v) => {
+      if (v) {
+        // Setting an active vehicle is the same UX moment as "I just
+        // used this car" — push it to the recents LRU automatically.
+        const prev = get().recentVehicles.filter((x) => x.id !== v.id);
+        set({
+          activeVehicle: v,
+          recentVehicles: [v, ...prev].slice(0, VEHICLE_RECENT_CAP),
+        });
+      } else {
+        set({ activeVehicle: null });
+      }
+    },
+    pushRecentVehicle: (v) => {
+      const prev = get().recentVehicles.filter((x) => x.id !== v.id);
+      set({ recentVehicles: [v, ...prev].slice(0, VEHICLE_RECENT_CAP) });
+    },
+    hydrateRecentVehicles: (list) => {
+      // Trust the server snapshot but merge to preserve any locally-
+      // added vehicle the user just picked but hasn't synced yet.
+      const seen = new Set<string>();
+      const merged: ActiveVehicle[] = [];
+      for (const v of [...get().recentVehicles, ...list]) {
+        if (!v?.id || seen.has(v.id)) continue;
+        seen.add(v.id);
+        merged.push(v);
+        if (merged.length >= VEHICLE_RECENT_CAP) break;
+      }
+      set({ recentVehicles: merged });
+    },
+    clearActiveVehicle: () => set({ activeVehicle: null }),
   }), { name: "hicar-car" })
 );

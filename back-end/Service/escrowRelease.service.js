@@ -133,7 +133,7 @@ export const releaseEscrow = async (orderId) => {
         escrowReleaseScheduledAt: null,
       },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
   if (!updated) return { released: false, reason: "race_lost" };
 

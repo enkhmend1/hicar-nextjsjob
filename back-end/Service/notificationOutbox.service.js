@@ -132,7 +132,7 @@ const claimOne = async () => {
       },
       $inc: { attempts: 1 },
     },
-    { new: true, sort: { nextAttemptAt: 1 } },
+    { returnDocument: "after", sort: { nextAttemptAt: 1 } },
   );
 };
 
@@ -248,6 +248,6 @@ export const requeueDeadLetter = async (id) => {
         lastError: "",
       },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 };

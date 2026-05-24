@@ -79,12 +79,15 @@ const clampTrust = (n) => {
   return Math.max(TRUST_MIN, Math.min(TRUST_MAX, n));
 };
 
-userSchema.pre("save", function (next) {
-  // `this` is the document. Only clamp if the path is touched.
+// Modern Mongoose hook signature: async function with NO `next` arg.
+// (Mongoose 9 removed support for the legacy `function(next)` callback
+// style — calling next() raises `TypeError: next is not a function` and
+// User.create() returns a 500 to the auth controller. Bug found by the
+// /api/auth/register smoke test.)
+userSchema.pre("save", function () {
   if (this.sellerProfile && typeof this.sellerProfile.trustScore === "number") {
     this.sellerProfile.trustScore = clampTrust(this.sellerProfile.trustScore);
   }
-  next();
 });
 
 // Query-level middleware fires for *.findOneAndUpdate / *.updateOne /

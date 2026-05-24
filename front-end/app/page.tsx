@@ -140,7 +140,7 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { icon: <Shield size={20} />, title: "OEM Баталгаа", desc: "Бүх бараа оригинал OEM чанарын гэрчилгээтэй" },
-            { icon: <Truck size={20} />, title: "Хурдан хүргэлт", desc: "Японоос 7–14 хоногт Улаанбаатар хүргэнэ" },
+            { icon: <Truck size={20} />, title: "Хурдан хүргэлт", desc: " Хурдан хүргэлт" },
             { icon: <Clock size={20} />, title: "7/24 Дэмжлэг", desc: "Техникийн асуудлаар манай багт хандана уу" },
           ].map(({ icon, title, desc }) => (
             <div key={title} className="bg-white border border-gray-200 rounded-xl p-4 flex gap-3 items-start">
@@ -159,7 +159,7 @@ export default function Home() {
               <a key={l} href="#" className="text-[13px] text-gray-400 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>{l}</a>
             ))}
           </div>
-          <div className="text-[12px] text-gray-400">© 2025 HiCar MN</div>
+          <div className="text-[12px] text-gray-400">© 2026 HiCar MN</div>
         </div>
       </footer>
     </>

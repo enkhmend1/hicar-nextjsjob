@@ -1,6 +1,8 @@
 import express from "express";
 import multer from "multer";
-import { handleAIRequest } from "../Controller/ai.controller.js";
+import {
+  handleAIRequest, handleMemoryGet, handleSetActiveVehicle, handleClearActiveVehicle,
+} from "../Controller/ai.controller.js";
 import { protect } from "../Middleware/auth.middleware.js";
 import { upload } from "../Middleware/upload.middleware.js";
 
@@ -45,5 +47,14 @@ const conditionalUpload = (req, res, next) => {
 };
 
 router.post("/chat", optionalProtect, conditionalUpload, handleAIRequest);
+
+// ── Phase G: cross-session AI memory ────────────────────────────
+// Frontend uses these to hydrate the vehicle switcher widget without
+// going through the LLM. All require auth — anonymous users have no
+// persistent memory (their state lives in localStorage via Zustand
+// persist middleware).
+router.get   ("/memory",                  protect, handleMemoryGet);
+router.post  ("/memory/active-vehicle",   protect, handleSetActiveVehicle);
+router.delete("/memory/active-vehicle",   protect, handleClearActiveVehicle);
 
 export default router;
