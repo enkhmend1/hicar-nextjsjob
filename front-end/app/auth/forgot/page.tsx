@@ -43,17 +43,17 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 to-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center px-4">
       <div className="w-full max-w-[380px]">
         <Link href="/auth/login"
-          className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-violet-600 mb-6 transition-colors"
-          style={{ textDecoration: "none" }}>
+          className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-6 transition-colors"
+         >
           <ArrowLeft size={14} /> {t("auth.loginTitle") || "Нэвтрэх"}
         </Link>
 
         <div className="text-center mb-6">
           <span className="text-[26px] font-semibold">
-            <em className="text-violet-600 not-italic">Hi</em>car
+            <em className="text-blue-600 not-italic">Hi</em>car
           </span>
         </div>
 
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
             <SuccessPanel email={email} />
           ) : (
             <>
-              <div className="w-11 h-11 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mb-3">
+              <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-3">
                 <Mail size={20} />
               </div>
               <h1 className="text-[20px] font-semibold text-gray-900 mb-1">Нууц үг мартсан уу?</h1>
@@ -86,12 +86,12 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="example@mail.com"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white outline-none transition-colors"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white outline-none transition-colors"
                   />
                 </div>
 
                 <button type="submit" disabled={busy || !email.trim()}
-                  className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans flex items-center justify-center gap-2">
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans flex items-center justify-center gap-2">
                   {busy && <Loader2 size={14} className="animate-spin" />}
                   {busy ? "Илгээж байна..." : "Сэргээх линк илгээх"}
                 </button>
@@ -99,8 +99,8 @@ export default function ForgotPasswordPage() {
 
               <div className="mt-4 pt-4 border-t border-gray-100 text-center text-[13px] text-gray-500">
                 Нууц үгээ санасан уу?{" "}
-                <Link href="/auth/login" className="text-violet-600 font-semibold"
-                  style={{ textDecoration: "none" }}>
+                <Link href="/auth/login" className="text-blue-600 font-semibold"
+                 >
                   Нэвтрэх
                 </Link>
               </div>
@@ -128,8 +128,8 @@ function SuccessPanel({ email }: { email: string }) {
         • Хүсэлт хүлээж аваагүй бол дахин оролдоно уу
       </p>
       <Link href="/auth/login"
-        className="inline-block mt-5 text-[13px] text-violet-600 font-semibold"
-        style={{ textDecoration: "none" }}>
+        className="inline-block mt-5 text-[13px] text-blue-600 font-semibold"
+       >
         ← Нэвтрэх рүү буцах
       </Link>
     </div>

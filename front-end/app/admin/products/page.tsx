@@ -127,7 +127,7 @@ export default function AdminProductsPage() {
           <p className="text-[13px] text-gray-500">{items.length} бараа</p>
         </div>
         <button onClick={() => setEditing({ ...emptyForm })}
-          className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
           <Plus size={14} /> Шинэ бараа
         </button>
       </div>
@@ -136,14 +136,14 @@ export default function AdminProductsPage() {
         <div className="relative flex-1 max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && reload()}
-            className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[13px] focus:border-violet-500"
+            className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[13px] focus:border-blue-500"
             placeholder="Хайх (нэр, OEM, брэнд) — Enter" />
         </div>
         <div className="flex gap-1">
           {[{ id: "all", label: "Бүгд" }, { id: "pending", label: "Хянагдаж буй" }, { id: "approved", label: "Зөвшөөрсөн" }, { id: "rejected", label: "Татгалзсан" }].map(s => (
             <button key={s.id} onClick={() => setStatusFilter(s.id)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-                statusFilter === s.id ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-200 hover:border-violet-400"
+                statusFilter === s.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
               }`}>{s.label}</button>
           ))}
         </div>
@@ -172,7 +172,7 @@ export default function AdminProductsPage() {
               ) : items.map(p => (
                 <tr key={p._id ?? p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                   <td className="px-3 py-2">
-                    <div className="relative w-8 h-8 bg-violet-50 rounded-md overflow-hidden flex items-center justify-center">
+                    <div className="relative w-8 h-8 bg-blue-50 rounded-md overflow-hidden flex items-center justify-center">
                       {p.images && p.images.length > 0
                         ? <Image src={p.images[0]} alt="" fill sizes="32px" className="object-cover" />
                         : <ImagePlus size={12} className="text-gray-300" />
@@ -193,7 +193,7 @@ export default function AdminProductsPage() {
                     }
                   </td>
                   <td className="px-4 py-2.5 text-gray-500 font-mono text-[12px]">{p.oem}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-violet-600">₮{p.price.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-blue-600">₮{p.price.toLocaleString()}</td>
                   <td className={`px-4 py-2.5 text-right font-medium ${(p.stockQty ?? 0) <= 5 ? "text-red-600" : (p.stockQty ?? 0) <= 20 ? "text-amber-600" : "text-gray-700"}`}>
                     {p.stockQty ?? 0}
                   </td>
@@ -222,7 +222,7 @@ export default function AdminProductsPage() {
                       </>
                     )}
                     <button onClick={() => setEditing(p)} title="Засах"
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 cursor-pointer bg-transparent border-none transition-colors mr-1">
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors mr-1">
                       <Pencil size={13} />
                     </button>
                     <button onClick={() => remove(p)} title="Устгах"
@@ -259,7 +259,7 @@ export default function AdminProductsPage() {
                     <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 group bg-gray-50">
                       <Image src={url} alt={`img-${i}`} fill sizes="80px" className="object-cover" unoptimized />
                       {i === 0 && (
-                        <span className="absolute top-1 left-1 bg-violet-600 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded">Үндсэн</span>
+                        <span className="absolute top-1 left-1 bg-blue-600 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded">Үндсэн</span>
                       )}
                       <button type="button" onClick={() => removeImage(url)}
                         className="absolute top-1 right-1 w-5 h-5 bg-black/70 text-white rounded-full flex items-center justify-center cursor-pointer border-none opacity-0 group-hover:opacity-100 transition-opacity">
@@ -268,9 +268,9 @@ export default function AdminProductsPage() {
                     </div>
                   ))}
                   <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                    className="aspect-square rounded-lg border-2 border-dashed border-gray-300 hover:border-violet-400 hover:bg-violet-50 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white transition-colors disabled:opacity-50 disabled:cursor-wait">
+                    className="aspect-square rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white transition-colors disabled:opacity-50 disabled:cursor-wait">
                     {uploading
-                      ? <Loader2 size={16} className="text-violet-500 animate-spin" />
+                      ? <Loader2 size={16} className="text-blue-500 animate-spin" />
                       : <ImagePlus size={16} className="text-gray-400" />}
                     <span className="text-[10px] text-gray-500 font-medium">{uploading ? "Хуулж байна..." : "Нэмэх"}</span>
                   </button>
@@ -344,7 +344,7 @@ export default function AdminProductsPage() {
                 </Field>
                 <label className="flex items-end gap-2 cursor-pointer pb-2">
                   <input type="checkbox" checked={editing.inStock ?? true} onChange={e => setEditing(s => ({ ...s, inStock: e.target.checked }))}
-                    className="accent-violet-600 w-4 h-4" />
+                    className="accent-blue-600 w-4 h-4" />
                   <span className="text-[13px] text-gray-700">Идэвхтэй (худалдаалагдана)</span>
                 </label>
               </div>
@@ -355,7 +355,7 @@ export default function AdminProductsPage() {
                   Болих
                 </button>
                 <button type="submit" disabled={busy}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
                   {busy ? "Хадгалж байна..." : "Хадгалах"}
                 </button>
               </div>

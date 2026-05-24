@@ -47,14 +47,14 @@ export default function SellerApplyPage() {
   const status = user.sellerStatus;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-amber-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <Link href="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-violet-600 mb-6 transition-colors" style={{ textDecoration: "none" }}>
+        <Link href="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-6 transition-colors">
           <ArrowLeft size={14} /> Нүүр хуудас
         </Link>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xl shadow-gray-100">
-          <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center mb-3">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-amber-500 rounded-2xl flex items-center justify-center mb-3">
             <Store size={20} className="text-white" />
           </div>
           <h1 className="text-[20px] font-semibold text-gray-900 mb-1">Seller болох</h1>
@@ -97,24 +97,24 @@ export default function SellerApplyPage() {
             <div>
               <label className="block text-[12px] font-medium text-gray-700 mb-1">Дэлгүүрийн нэр *</label>
               <input required value={form.shopName} onChange={e => setForm(f => ({ ...f, shopName: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white transition-colors"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white transition-colors"
                 placeholder="HiAuto Parts" />
             </div>
             <div>
               <label className="block text-[12px] font-medium text-gray-700 mb-1">Танилцуулга</label>
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white transition-colors resize-none h-20 font-sans"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white transition-colors resize-none h-20 font-sans"
                 placeholder="Япон, Солонгосын OEM сэлбэгийн нийлүүлэгч..." />
             </div>
             <div>
               <label className="block text-[12px] font-medium text-gray-700 mb-1">Дансны мэдээлэл</label>
               <input value={form.bankAccount} onChange={e => setForm(f => ({ ...f, bankAccount: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white transition-colors font-mono"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white transition-colors font-mono"
                 placeholder="Хаан банк — 5001 1234 5678" />
             </div>
 
             <button type="submit" disabled={busy || status === "approved"}
-              className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold transition-all cursor-pointer border-none font-sans shadow-lg shadow-violet-200">
+              className="w-full bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold transition-all cursor-pointer border-none font-sans shadow-lg shadow-blue-200">
               {busy ? "Илгээж байна..." : status === "pending" ? "Дахин илгээх" : status === "approved" ? "Аль хэдийн зөвшөөрөгдсөн" : "Хүсэлт илгээх"}
             </button>
           </form>

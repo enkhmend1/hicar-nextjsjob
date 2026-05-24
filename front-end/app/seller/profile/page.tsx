@@ -86,7 +86,7 @@ export default function SellerProfilePage() {
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium cursor-pointer bg-transparent border-none border-b-2 transition-colors font-sans ${
-                tab === t.id ? "border-violet-600 text-violet-700" : "border-transparent text-gray-500 hover:text-gray-700"
+                tab === t.id ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
               }`}>
               <Icon size={13} /> {t.label}
             </button>
@@ -110,7 +110,7 @@ export default function SellerProfilePage() {
                 </div>
                 <div className="flex-1">
                   <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                    className="text-[12px] border border-gray-200 rounded-lg px-3 py-1.5 hover:border-violet-400 text-gray-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+                    className="text-[12px] border border-gray-200 rounded-lg px-3 py-1.5 hover:border-blue-400 text-gray-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
                     {uploading ? <Loader2 size={12} className="inline animate-spin" /> : "Зураг сонгох"}
                   </button>
                   <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e.target.files?.[0] || null)} />
@@ -121,15 +121,15 @@ export default function SellerProfilePage() {
 
             <Field label="Дэлгүүрийн нэр">
               <input value={shopForm.shopName} onChange={(e) => setShopForm((f) => ({ ...f, shopName: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white outline-none transition-colors" />
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white outline-none transition-colors" />
             </Field>
             <Field label="Танилцуулга">
               <textarea value={shopForm.description} onChange={(e) => setShopForm((f) => ({ ...f, description: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors resize-none h-20 font-sans" />
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors resize-none h-20 font-sans" />
             </Field>
             <Field label="Дансны мэдээлэл">
               <input value={shopForm.bankAccount} onChange={(e) => setShopForm((f) => ({ ...f, bankAccount: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-mono" />
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-mono" />
             </Field>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
@@ -148,7 +148,7 @@ export default function SellerProfilePage() {
             </p>
 
             <button type="submit" disabled={busy}
-              className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-2 font-sans">
+              className="w-full bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-2 font-sans">
               <Save size={14} /> {busy ? "Хадгалж байна..." : "Хадгалах"}
             </button>
           </form>
@@ -165,17 +165,17 @@ export default function SellerProfilePage() {
               <input type="number" min={0} max={1000}
                 value={invForm.defaultLowStockThreshold}
                 onChange={(e) => setInvForm((f) => ({ ...f, defaultLowStockThreshold: Number(e.target.value) }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white outline-none transition-colors" />
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white outline-none transition-colors" />
             </Field>
 
-            <label className="flex items-start gap-3 cursor-pointer bg-violet-50/40 border border-violet-100 rounded-xl p-3">
+            <label className="flex items-start gap-3 cursor-pointer bg-blue-50/40 border border-blue-100 rounded-xl p-3">
               <input type="checkbox"
                 checked={invForm.emailAlertsEnabled}
                 onChange={(e) => setInvForm((f) => ({ ...f, emailAlertsEnabled: e.target.checked }))}
-                className="accent-violet-600 w-4 h-4 mt-0.5" />
+                className="accent-blue-600 w-4 h-4 mt-0.5" />
               <div>
                 <div className="text-[13px] font-medium text-gray-900 flex items-center gap-1.5">
-                  <Bell size={12} className="text-violet-600" /> Email сэрэмжлүүлэг
+                  <Bell size={12} className="text-blue-600" /> Email сэрэмжлүүлэг
                 </div>
                 <p className="text-[11px] text-gray-500 mt-0.5">
                   Low-stock болон захиалгын статус өөрчлөгдөх үед {user.email}-руу мэйл явуулна.
@@ -184,7 +184,7 @@ export default function SellerProfilePage() {
             </label>
 
             <button type="submit" disabled={busy}
-              className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-2 font-sans">
+              className="w-full bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-all flex items-center justify-center gap-2 font-sans">
               <Save size={14} /> {busy ? "Хадгалж байна..." : "Хадгалах"}
             </button>
           </form>

@@ -56,7 +56,7 @@ export default function WishlistPage() {
             <Heart size={48} className="mx-auto text-gray-200 mb-3" />
             <p className="text-[15px] font-medium text-gray-700 mb-1">Хадгалсан бараа байхгүй</p>
             <p className="text-[13px] text-gray-400 mb-5">Дэлгүүрээс таалагдсан бараагаа ❤️ дарж хадгална уу</p>
-            <Link href="/shop" className="inline-block bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-colors" style={{ textDecoration: "none" }}>
+            <Link href="/shop" className="inline-block bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-colors">
               Дэлгүүр үзэх
             </Link>
           </div>

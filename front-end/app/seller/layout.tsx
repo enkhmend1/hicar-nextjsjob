@@ -46,7 +46,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <p className="text-gray-700 text-[14px] mb-3">Та эхлээд seller болохоор хүсэлт явуулах хэрэгтэй.</p>
-          <Link href="/seller/apply" className="inline-block bg-violet-600 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold" style={{ textDecoration: "none" }}>
+          <Link href="/seller/apply" className="inline-block bg-blue-600 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold">
             Seller болох хүсэлт
           </Link>
         </div>
@@ -61,9 +61,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     <div className="min-h-screen bg-gray-50 flex">
       <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col shrink-0">
         <div className="px-5 py-4 border-b border-gray-100">
-          <Link href="/" className="text-[20px] font-semibold tracking-tight" style={{ textDecoration: "none", color: "inherit" }}>
-            <em className="text-violet-600 not-italic">Hi</em>car
-            <span className="ml-1.5 text-[10px] bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded font-semibold align-middle">SELLER</span>
+          <Link href="/" className="text-[20px] font-semibold tracking-tight">
+            <em className="text-blue-600 not-italic">Hi</em>car
+            <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold align-middle">SELLER</span>
           </Link>
         </div>
 
@@ -74,9 +74,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             return (
               <Link key={n.href} href={n.href}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  active ? "bg-fuchsia-50 text-fuchsia-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  active ? "bg-amber-50 text-amber-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
-                style={{ textDecoration: "none" }}>
+               >
                 <Icon size={15} />
                 {n.label}
               </Link>
@@ -85,7 +85,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
         </nav>
 
         <div className="p-3 border-t border-gray-100 space-y-1">
-          <Link href="/" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors" style={{ textDecoration: "none" }}>
+          <Link href="/" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors">
             <Home size={15} /> Дэлгүүр рүү
           </Link>
           <div className="px-3 py-2 border-t border-gray-100 mt-2 pt-3">
@@ -101,8 +101,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden bg-white border-b border-gray-200 px-4 h-12 flex items-center justify-between">
-          <Link href="/" className="text-[16px] font-semibold" style={{ textDecoration: "none", color: "inherit" }}>
-            <em className="text-violet-600 not-italic">Hi</em>car <span className="text-[10px] text-fuchsia-600">SELLER</span>
+          <Link href="/" className="text-[16px] font-semibold">
+            <em className="text-blue-600 not-italic">Hi</em>car <span className="text-[10px] text-amber-600">SELLER</span>
           </Link>
           <div className="flex gap-1">
             {NAV.map(n => {
@@ -110,8 +110,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
               const Icon = n.icon;
               return (
                 <Link key={n.href} href={n.href}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg ${active ? "bg-fuchsia-100 text-fuchsia-700" : "text-gray-500"}`}
-                  style={{ textDecoration: "none" }}>
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg ${active ? "bg-amber-100 text-amber-700" : "text-gray-500"}`}
+                 >
                   <Icon size={15} />
                 </Link>
               );

@@ -35,9 +35,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-gray-50 flex">
       <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col shrink-0">
         <div className="px-5 py-4 border-b border-gray-100">
-          <Link href="/" className="text-[20px] font-semibold tracking-tight" style={{ textDecoration: "none", color: "inherit" }}>
-            <em className="text-violet-600 not-italic">Hi</em>car
-            <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-semibold align-middle">ADMIN</span>
+          <Link href="/" className="text-[20px] font-semibold tracking-tight">
+            <em className="text-blue-600 not-italic">Hi</em>car
+            <span className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold align-middle">ADMIN</span>
           </Link>
         </div>
 
@@ -48,9 +48,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             return (
               <Link key={n.href} href={n.href}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  active ? "bg-violet-50 text-violet-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  active ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
-                style={{ textDecoration: "none" }}>
+               >
                 <Icon size={15} />
                 {n.label}
               </Link>
@@ -59,7 +59,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="p-3 border-t border-gray-100 space-y-1">
-          <Link href="/" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors" style={{ textDecoration: "none" }}>
+          <Link href="/" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors">
             <Home size={15} /> Дэлгүүр рүү
           </Link>
           <div className="px-3 py-2 border-t border-gray-100 mt-2 pt-3">
@@ -75,8 +75,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden bg-white border-b border-gray-200 px-4 h-12 flex items-center justify-between">
-          <Link href="/" className="text-[16px] font-semibold" style={{ textDecoration: "none", color: "inherit" }}>
-            <em className="text-violet-600 not-italic">Hi</em>car <span className="text-[10px] text-violet-600">ADMIN</span>
+          <Link href="/" className="text-[16px] font-semibold">
+            <em className="text-blue-600 not-italic">Hi</em>car <span className="text-[10px] text-blue-600">ADMIN</span>
           </Link>
           <div className="flex gap-1">
             {NAV.map(n => {
@@ -84,8 +84,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               const Icon = n.icon;
               return (
                 <Link key={n.href} href={n.href}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg ${active ? "bg-violet-100 text-violet-700" : "text-gray-500"}`}
-                  style={{ textDecoration: "none" }}>
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg ${active ? "bg-blue-100 text-blue-700" : "text-gray-500"}`}
+                 >
                   <Icon size={15} />
                 </Link>
               );

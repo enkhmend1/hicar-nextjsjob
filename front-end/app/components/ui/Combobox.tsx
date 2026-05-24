@@ -105,7 +105,7 @@ export default function Combobox({
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       {open ? (
-        <div className="flex items-center bg-white border border-violet-500 rounded-lg pl-2.5 pr-1 py-1.5 focus-within:ring-2 focus-within:ring-violet-100">
+        <div className="flex items-center bg-white border border-blue-500 rounded-lg pl-2.5 pr-1 py-1.5 focus-within:ring-2 focus-within:ring-blue-100">
           <input
             ref={inputRef}
             value={query}
@@ -137,7 +137,7 @@ export default function Combobox({
       ) : (
         <button type="button" disabled={disabled}
           onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }}
-          className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] hover:border-violet-400 focus:border-violet-500 focus:bg-white outline-none cursor-pointer font-sans disabled:opacity-50">
+          className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] hover:border-blue-400 focus:border-blue-500 focus:bg-white outline-none cursor-pointer font-sans disabled:opacity-50">
           <span className={value ? "text-gray-900" : "text-gray-400"}>
             {value ? format(value) : placeholder}
           </span>
@@ -179,13 +179,13 @@ export default function Combobox({
                   onClick={() => pick(r.value)}
                   onMouseEnter={() => setHighlight(i)}
                   className={`w-full text-left flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] cursor-pointer bg-transparent border-none font-sans ${
-                    isHighlight ? "bg-violet-50 text-violet-700" : "text-gray-700"
+                    isHighlight ? "bg-blue-50 text-blue-700" : "text-gray-700"
                   } ${isSelected ? "font-semibold" : ""}`}>
                   <span className="flex items-center gap-1.5 truncate">
-                    {isCreate && <Plus size={11} className="text-violet-600" />}
+                    {isCreate && <Plus size={11} className="text-blue-600" />}
                     {isCreate ? createLabel(display) : format(display)}
                   </span>
-                  {isSelected && <Check size={12} className="text-violet-600 shrink-0" />}
+                  {isSelected && <Check size={12} className="text-blue-600 shrink-0" />}
                 </button>
               </li>
             );

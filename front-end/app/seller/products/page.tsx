@@ -170,8 +170,8 @@ export default function SellerProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link href="/seller/products/import"
-            className="inline-flex items-center gap-1.5 border border-violet-200 hover:border-violet-400 hover:bg-violet-50 text-violet-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all font-sans"
-            style={{ textDecoration: "none" }}>
+            className="inline-flex items-center gap-1.5 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all font-sans"
+           >
             <Sparkles size={14} /> AI Bulk Import
           </Link>
           {/*
@@ -180,8 +180,8 @@ export default function SellerProductsPage() {
             ЗАСАХАД л үлдсэн (хүснэгтийн мөр доторх Pencil товч).
           */}
           <Link href="/seller/products/new"
-            className="flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans shadow-md shadow-violet-200"
-            style={{ textDecoration: "none" }}>
+            className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans shadow-md shadow-blue-200"
+           >
             <Plus size={14} /> Шинэ бараа
           </Link>
         </div>
@@ -191,7 +191,7 @@ export default function SellerProductsPage() {
       <div className="grid grid-cols-3 gap-3">
         <Kpi label="Цөөн үлдсэн" value={inventoryStats.low} tone={inventoryStats.low > 0 ? "amber" : "gray"} icon={AlertTriangle} />
         <Kpi label="Дууссан" value={inventoryStats.out} tone={inventoryStats.out > 0 ? "red" : "gray"} icon={XCircle} />
-        <Kpi label="Нөөцийн үнэлгээ" value={`₮${inventoryStats.totalValue.toLocaleString()}`} tone="violet" icon={Tag} />
+        <Kpi label="Нөөцийн үнэлгээ" value={`₮${inventoryStats.totalValue.toLocaleString()}`} tone="blue" icon={Tag} />
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
@@ -215,7 +215,7 @@ export default function SellerProductsPage() {
               ) : items.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                   Бараа байхгүй.{" "}
-                  <Link href="/seller/products/new" className="text-violet-600 hover:text-violet-700 font-semibold underline" style={{ textDecoration: "underline" }}>
+                  <Link href="/seller/products/new" className="text-blue-600 hover:text-blue-700 font-semibold underline" style={{ textDecoration: "underline" }}>
                     Шинэ бараа нэмэх
                   </Link>
                   .
@@ -228,7 +228,7 @@ export default function SellerProductsPage() {
                 return (
                   <tr key={p._id ?? p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                     <td className="px-3 py-2">
-                      <div className="relative w-9 h-9 bg-fuchsia-50 rounded-md overflow-hidden flex items-center justify-center">
+                      <div className="relative w-9 h-9 bg-amber-50 rounded-md overflow-hidden flex items-center justify-center">
                         {p.images && p.images.length > 0
                           ? <Image src={p.images[0]} alt="" fill sizes="36px" className="object-cover" />
                           : <ImagePlus size={13} className="text-gray-300" />}
@@ -243,7 +243,7 @@ export default function SellerProductsPage() {
                     </td>
                     <td className="px-4 py-2.5 text-gray-500 font-mono text-[12px]">{p.oem || "—"}</td>
                     <td className="px-4 py-2.5 text-gray-600">{categoryLabel(p.category)}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-violet-600">₮{p.price.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-blue-600">₮{p.price.toLocaleString()}</td>
                     <td className={`px-4 py-2.5 text-right font-medium ${stockTone(qty, threshold)}`}>
                       {qty}
                       {qty <= threshold && (
@@ -257,7 +257,7 @@ export default function SellerProductsPage() {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <button onClick={() => setEditing(p)} title="Засах"
-                        className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 cursor-pointer bg-transparent border-none transition-colors mr-1">
+                        className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors mr-1">
                         <Pencil size={13} />
                       </button>
                       <button onClick={() => remove(p)} title="Устгах"
@@ -300,7 +300,7 @@ export default function SellerProductsPage() {
                   <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 group bg-gray-50">
                     <Image src={url} alt={`img-${i}`} fill sizes="80px" className="object-cover" unoptimized />
                     {i === 0 && (
-                      <span className="absolute top-1 left-1 bg-violet-600 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded">Үндсэн</span>
+                      <span className="absolute top-1 left-1 bg-blue-600 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded">Үндсэн</span>
                     )}
                     <button type="button" onClick={() => removeImage(url)}
                       className="absolute top-1 right-1 w-5 h-5 bg-black/70 text-white rounded-full flex items-center justify-center cursor-pointer border-none opacity-0 group-hover:opacity-100 transition-opacity">
@@ -309,9 +309,9 @@ export default function SellerProductsPage() {
                   </div>
                 ))}
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                  className="aspect-square rounded-lg border-2 border-dashed border-gray-300 hover:border-violet-400 hover:bg-violet-50 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white transition-colors disabled:opacity-50 disabled:cursor-wait">
+                  className="aspect-square rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white transition-colors disabled:opacity-50 disabled:cursor-wait">
                   {uploading
-                    ? <Loader2 size={16} className="text-violet-500 animate-spin" />
+                    ? <Loader2 size={16} className="text-blue-500 animate-spin" />
                     : <ImagePlus size={16} className="text-gray-400" />}
                   <span className="text-[10px] text-gray-500 font-medium">{uploading ? "Хуулж байна..." : "Нэмэх"}</span>
                 </button>
@@ -416,7 +416,7 @@ export default function SellerProductsPage() {
               <label className="flex items-center gap-2 cursor-pointer mt-1">
                 <input type="checkbox" checked={editing.inStock ?? true}
                   onChange={(e) => setEditing((s) => ({ ...s, inStock: e.target.checked }))}
-                  className="accent-violet-600 w-4 h-4" />
+                  className="accent-blue-600 w-4 h-4" />
                 <span className="text-[13px] text-gray-700">Идэвхтэй (худалдаалагдана)</span>
               </label>
             </Section>
@@ -427,7 +427,7 @@ export default function SellerProductsPage() {
                 Болих
               </button>
               <button type="submit" disabled={busy}
-                className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-lg py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans flex items-center justify-center gap-1.5">
+                className="flex-1 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-lg py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans flex items-center justify-center gap-1.5">
                 {busy && <Loader2 size={12} className="animate-spin" />}
                 {busy ? "Хадгалж байна..." : "Хадгалах"}
               </button>
@@ -479,9 +479,9 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
   );
 }
 
-function Kpi({ label, value, tone, icon: Icon }: { label: string; value: string | number; tone: "violet" | "amber" | "red" | "gray"; icon: typeof Tag }) {
+function Kpi({ label, value, tone, icon: Icon }: { label: string; value: string | number; tone: "blue" | "amber" | "red" | "gray"; icon: typeof Tag }) {
   const toneClass = {
-    violet: "bg-violet-50 text-violet-700",
+    blue: "bg-blue-50 text-blue-700",
     amber:  "bg-amber-50 text-amber-700",
     red:    "bg-red-50 text-red-700",
     gray:   "bg-gray-50 text-gray-500",

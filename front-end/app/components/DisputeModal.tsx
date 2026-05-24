@@ -125,10 +125,10 @@ export default function DisputeModal({
               {REASONS.map((r) => (
                 <label key={r.id}
                   className={`flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer transition-colors ${
-                    reason === r.id ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"
+                    reason === r.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
                   }`}>
                   <input type="radio" name="reason" value={r.id} checked={reason === r.id}
-                    onChange={() => setReason(r.id)} className="mt-0.5 accent-violet-600 shrink-0" />
+                    onChange={() => setReason(r.id)} className="mt-0.5 accent-blue-600 shrink-0" />
                   <div className="min-w-0">
                     <div className="text-[12px] font-semibold text-gray-900">{r.label}</div>
                     <div className="text-[10px] text-gray-500 leading-snug">{r.hint}</div>
@@ -146,7 +146,7 @@ export default function DisputeModal({
               rows={4}
               maxLength={4000}
               placeholder="Юу болсон, та яаж мэдсэн, ямар хариу хүлээж байгаа..."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none resize-none font-sans"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
             />
             <div className="text-[10px] text-gray-400 text-right mt-1">{description.length}/4000</div>
           </div>
@@ -162,10 +162,10 @@ export default function DisputeModal({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 min={1} max={max} step={1000}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
               />
               <button type="button" onClick={() => setAmount(String(max))}
-                className="text-[12px] text-violet-700 hover:underline cursor-pointer bg-transparent border-none font-sans">
+                className="text-[12px] text-blue-700 hover:underline cursor-pointer bg-transparent border-none font-sans">
                 Бүгд
               </button>
             </div>
@@ -185,12 +185,12 @@ export default function DisputeModal({
               ))}
               {images.length < 8 && (
                 <label className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                  uploading ? "border-violet-300 bg-violet-50" : "border-gray-300 hover:border-violet-400"
+                  uploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400"
                 }`}>
                   <input type="file" accept="image/*" multiple className="hidden"
                     onChange={(e) => onFiles(e.target.files)} disabled={uploading} />
                   {uploading
-                    ? <Loader2 size={16} className="animate-spin text-violet-500" />
+                    ? <Loader2 size={16} className="animate-spin text-blue-500" />
                     : <Upload size={16} className="text-gray-400" />}
                   <span className="text-[10px] text-gray-400 mt-1">{uploading ? "Хадгалж…" : "Нэмэх"}</span>
                 </label>

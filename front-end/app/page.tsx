@@ -14,7 +14,7 @@ import { Product } from "@/app/types";
 import { Shield, Truck, Clock, Star } from "lucide-react";
 
 function CatIcon({ d }: { d: string }) {
-  return <svg className="w-4 h-4 fill-violet-600" viewBox="0 0 24 24"><path d={d} /></svg>;
+  return <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={d} /></svg>;
 }
 
 /**
@@ -50,41 +50,57 @@ export default function Home() {
   return (
     <>
       <Navbar />
-      <section className="hero-bg px-5 pt-10 pb-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="inline-flex items-center gap-1.5 bg-violet-100 text-violet-600 text-[11px] font-semibold px-3 py-1.5 rounded-full mb-5 tracking-wide">
-            <span className="w-1.5 h-1.5 rounded-full bg-violet-600" />{t("home.badge")}
+      {/* Phase N — hero re-architected. The OLD hero buried the search
+          under a wall of copy + redundant CTAs (Register + Shop). The
+          single most valuable action on this site is "find a part for
+          my car" → the search card now anchors the hero, headline is
+          leaner, trust strip + register link move BELOW the search
+          where they don't compete for the user's attention. */}
+      <section className="hero-bg px-5 pt-12 pb-10">
+        <div className="max-w-5xl mx-auto text-center">
+          <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-[11px] font-semibold px-3 py-1.5 rounded-full mb-6 tracking-wide border border-blue-100">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{t("home.badge")}
           </div>
-          <h1 className="text-[clamp(28px,5vw,46px)] font-semibold text-gray-900 leading-[1.15] tracking-tight mb-3">
-            {t("home.title1")}<br />
-            {t("home.title2")} <em className="text-violet-600 not-italic">{t("home.titleAi")}</em>{t("home.title3")}<br />
-            {t("home.title4")}
+
+          <h1 className="text-[clamp(32px,5.5vw,52px)] font-semibold text-gray-900 leading-[1.1] tracking-tight mb-4 max-w-3xl mx-auto">
+            {t("home.title1")}{" "}
+            <em className="text-blue-700 not-italic relative inline-block">
+              {t("home.titleAi")}
+              {/* Amber underline accent — small dose, big visual weight. */}
+              <span className="absolute -bottom-1 left-0 right-0 h-1 bg-amber-400/60 rounded" />
+            </em>
+            {t("home.title3")} {t("home.title4")}
           </h1>
-          <p className="text-[15px] text-gray-500 leading-relaxed mb-6 max-w-md">
+          <p className="text-[15px] text-gray-500 leading-relaxed mb-8 max-w-xl mx-auto">
             {t("home.subtitle")}
           </p>
-          <div className="flex flex-wrap gap-3 mb-4">
-            {[{ icon: <Shield size={13} />, text: t("home.trust1") }, { icon: <Truck size={13} />, text: t("home.trust2") }, { icon: <Star size={13} />, text: t("home.trust3") }].map(({ icon, text }) => (
-              <div key={text} className="flex items-center gap-1.5 text-[12px] text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1.5">
-                <span className="text-violet-500">{icon}</span>{text}
+
+          {/* Search dominates — wider container + shadow anchors it visually. */}
+          <div className="max-w-2xl mx-auto mb-6 text-left">
+            <SearchCard />
+          </div>
+
+          {/* Trust strip below — compact, doesn't compete with the search. */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
+            {[
+              { icon: <Shield size={12} />, text: t("home.trust1") },
+              { icon: <Truck size={12} />,  text: t("home.trust2") },
+              { icon: <Star size={12} />,   text: t("home.trust3") },
+            ].map(({ icon, text }) => (
+              <div key={text} className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-white/80 backdrop-blur border border-gray-200/80 rounded-full px-3 py-1">
+                <span className="text-amber-600">{icon}</span>{text}
               </div>
             ))}
           </div>
-          <div className="flex gap-2.5 mb-8">
-            {!user && (
-              <Link href="/auth/register"
-                className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-6 py-2.5 text-[14px] font-semibold transition-colors"
-                style={{ textDecoration: "none" }}>
-                {t("home.btnRegister")}
-              </Link>
-            )}
-            <Link href="/shop"
-              className={`${user ? "bg-violet-600 hover:bg-violet-700 text-white" : "border border-gray-300 hover:border-violet-500 hover:text-violet-600 text-gray-700"} rounded-xl px-6 py-2.5 text-[14px] ${user ? "font-semibold" : ""} transition-colors`}
-              style={{ textDecoration: "none" }}>
-              {t("home.btnShop")}
+
+          {/* Only show register CTA for anon users — logged-in users
+              don't need to be sold on signing up. */}
+          {!user && (
+            <Link href="/auth/register"
+              className="inline-flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-700 transition-colors">
+              {t("home.btnRegister")} <span className="text-blue-700">→</span>
             </Link>
-          </div>
-          <SearchCard />
+          )}
         </div>
       </section>
 
@@ -94,7 +110,7 @@ export default function Home() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[16px] font-semibold text-gray-900">{t("home.categoriesTitle")}</h2>
-            <Link href="/shop" className="text-[13px] text-violet-600 hover:underline font-medium" style={{ textDecoration: "none" }}>{t("home.viewAll")} →</Link>
+            <Link href="/shop" className="text-[13px] text-blue-600 hover:underline font-medium">{t("home.viewAll")} →</Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {categories.length === 0
@@ -102,7 +118,7 @@ export default function Home() {
                   <div key={i} className="bg-white border border-gray-200 rounded-xl h-[90px] animate-pulse" />
                 ))
               : categories.map((c) => (
-                  <Link key={c.id} href={`/shop?cat=${c.id}`} style={{ textDecoration: "none" }}>
+                  <Link key={c.id} href={`/shop?cat=${c.id}`}>
                     <CategoryCard
                       name={c.name}
                       count={`${c.count.toLocaleString()} зүйл`}
@@ -116,7 +132,7 @@ export default function Home() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[16px] font-semibold text-gray-900">{t("home.featuredTitle")}</h2>
-            <Link href="/shop" className="text-[13px] text-violet-600 hover:underline font-medium" style={{ textDecoration: "none" }}>{t("home.viewAll")} →</Link>
+            <Link href="/shop" className="text-[13px] text-blue-600 hover:underline font-medium">{t("home.viewAll")} →</Link>
           </div>
           {loading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -144,22 +160,67 @@ export default function Home() {
             { icon: <Clock size={20} />, title: "7/24 Дэмжлэг", desc: "Техникийн асуудлаар манай багт хандана уу" },
           ].map(({ icon, title, desc }) => (
             <div key={title} className="bg-white border border-gray-200 rounded-xl p-4 flex gap-3 items-start">
-              <div className="w-9 h-9 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 text-violet-600">{icon}</div>
+              <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 text-blue-600">{icon}</div>
               <div><div className="text-[13px] font-semibold text-gray-900 mb-0.5">{title}</div><div className="text-[12px] text-gray-500 leading-relaxed">{desc}</div></div>
             </div>
           ))}
         </div>
       </div>
 
-      <footer className="bg-white border-t border-gray-200 mt-4">
-        <div className="max-w-6xl mx-auto px-5 py-5 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[18px] font-semibold"><em className="text-violet-600 not-italic">Hi</em>car</span>
-          <div className="flex flex-wrap gap-5">
-            {[t("home.footerHelp"), t("home.footerShipping"), t("home.footerReturn"), t("home.footerAbout")].map(l => (
-              <a key={l} href="#" className="text-[13px] text-gray-400 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>{l}</a>
-            ))}
+      {/* Phase N — footer expanded from 1-line strip to a proper
+          marketplace footer: brand block + 3 link columns + payment
+          row. Builds trust (the previous footer felt placeholder-y for
+          a checkout-bearing site that handles real money). */}
+      <footer className="bg-gray-900 text-gray-300 mt-8">
+        <div className="max-w-6xl mx-auto px-5 py-10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+            <div className="col-span-2 md:col-span-1">
+              <div className="text-[22px] font-semibold text-white mb-3">
+                <em className="text-amber-400 not-italic">Hi</em>car
+              </div>
+              <p className="text-[12px] text-gray-400 leading-relaxed mb-4 max-w-xs">
+                {t("home.subtitle")}
+              </p>
+              <div className="flex gap-2 text-[10px] text-gray-500">
+                <span className="bg-gray-800 border border-gray-700 px-2 py-1 rounded">QPay</span>
+                <span className="bg-gray-800 border border-gray-700 px-2 py-1 rounded">Khan Bank</span>
+                <span className="bg-gray-800 border border-gray-700 px-2 py-1 rounded">Golomt</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">{t("home.footerHelp")}</div>
+              <ul className="space-y-2 text-[13px]">
+                <li><Link href="/shop" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.shop")}</Link></li>
+                <li><Link href="/lookup" className="text-gray-400 hover:text-amber-400 transition-colors">Улсын дугаар</Link></li>
+                <li><Link href="/orders" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.orders")}</Link></li>
+                <li><Link href="/garage" className="text-gray-400 hover:text-amber-400 transition-colors">Миний машинууд</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">{t("home.footerAbout")}</div>
+              <ul className="space-y-2 text-[13px]">
+                <li><a href="#" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerShipping")}</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerReturn")}</a></li>
+                <li><Link href="/seller/apply" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.becomeSeller")}</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">Холбоо барих</div>
+              <ul className="space-y-2 text-[13px] text-gray-400">
+                <li>📞 +976 7700-0000</li>
+                <li>✉ info@hicar.mn</li>
+                <li>📍 Улаанбаатар</li>
+              </ul>
+            </div>
           </div>
-          <div className="text-[12px] text-gray-400">© 2026 HiCar MN</div>
+
+          <div className="pt-6 border-t border-gray-800 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
+            <span>© 2026 HiCar MN. Бүх эрх хуулиар хамгаалагдсан.</span>
+            <span>OEM-баталгаатай авто сэлбэгийн платформ</span>
+          </div>
         </div>
       </footer>
     </>

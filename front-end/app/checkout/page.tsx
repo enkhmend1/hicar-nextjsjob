@@ -85,7 +85,7 @@ export default function CheckoutPage() {
       <div className="min-h-[70vh] flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">Таны сагс хоосон байна</p>
-          <Link href="/shop" className="bg-violet-600 text-white rounded-xl px-6 py-3 text-[14px] font-semibold" style={{ textDecoration: "none" }}>Дэлгүүр</Link>
+          <Link href="/shop" className="bg-blue-600 text-white rounded-xl px-6 py-3 text-[14px] font-semibold">Дэлгүүр</Link>
         </div>
       </div>
     </>
@@ -199,28 +199,28 @@ export default function CheckoutPage() {
         <div className="flex items-center gap-2 mb-6">
           {steps.map((s, i) => (
             <div key={s} className="flex items-center gap-2 flex-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0 ${i < stepIdx ? "bg-emerald-500 text-white" : i === stepIdx ? "bg-violet-600 text-white" : "bg-gray-200 text-gray-400"}`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0 ${i < stepIdx ? "bg-emerald-500 text-white" : i === stepIdx ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-400"}`}>
                 {i < stepIdx ? <CheckCircle size={14} /> : i + 1}
               </div>
-              <span className={`text-[12px] font-medium ${i === stepIdx ? "text-violet-600" : "text-gray-400"}`}>{s}</span>
+              <span className={`text-[12px] font-medium ${i === stepIdx ? "text-blue-600" : "text-gray-400"}`}>{s}</span>
               {i < 2 && <div className={`flex-1 h-0.5 ${i < stepIdx ? "bg-emerald-400" : "bg-gray-200"}`} />}
             </div>
           ))}
         </div>
 
-        <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 mb-5">
-          <div className="text-[12px] text-violet-600 font-semibold mb-1.5">ЗАХИАЛГЫН ДҮН</div>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
+          <div className="text-[12px] text-blue-600 font-semibold mb-1.5">ЗАХИАЛГЫН ДҮН</div>
           {items.map(i => (
             <div key={i.product._id ?? i.product.id} className="flex justify-between text-[13px] text-gray-600 py-0.5">
               <span className="truncate flex-1 mr-3">{i.product.name} ×{i.quantity}</span>
               <span className="shrink-0">₮{(i.product.price * i.quantity).toLocaleString()}</span>
             </div>
           ))}
-          <div className="flex justify-between text-[13px] text-gray-500 mt-1 pt-1 border-t border-violet-100">
+          <div className="flex justify-between text-[13px] text-gray-500 mt-1 pt-1 border-t border-blue-100">
             <span>Хүргэлт</span>
             <span>₮{items.reduce((s, i) => s + DELIVERY_PRICE[i.deliveryType], 0).toLocaleString()}</span>
           </div>
-          <div className="flex justify-between text-[16px] font-bold text-violet-700 mt-2 pt-2 border-t border-violet-200">
+          <div className="flex justify-between text-[16px] font-bold text-blue-700 mt-2 pt-2 border-t border-blue-200">
             <span>Нийт</span>
             <span>₮{orderTotal.toLocaleString()}</span>
           </div>
@@ -238,18 +238,18 @@ export default function CheckoutPage() {
                 <div>
                   <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Хүлээн авах хаяг</label>
                   <textarea value={address} onChange={e => setAddress(e.target.value)} required
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white transition-colors resize-none h-20 font-sans"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white transition-colors resize-none h-20 font-sans"
                     placeholder="Дүүрэг, хороо, байр, орц, тоот..." />
                 </div>
                 <div>
                   <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Утасны дугаар</label>
                   <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white transition-colors"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white transition-colors"
                     placeholder="9900 1122" />
                 </div>
               </div>
               <button type="submit"
-                className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-3.5 text-[14px] font-semibold mt-5 cursor-pointer border-none transition-colors font-sans shadow-lg shadow-violet-200">
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3.5 text-[14px] font-semibold mt-5 cursor-pointer border-none transition-colors font-sans shadow-lg shadow-blue-200">
                 Үргэлжлүүлэх →
               </button>
             </div>
@@ -259,14 +259,14 @@ export default function CheckoutPage() {
         {step === "payment" && (
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <button onClick={() => setStep("info")}
-              className="flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-violet-600 mb-4 cursor-pointer bg-transparent border-none transition-colors">
+              className="flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-blue-600 mb-4 cursor-pointer bg-transparent border-none transition-colors">
               <ArrowLeft size={13} /> Буцах
             </button>
             <h2 className="text-[16px] font-semibold text-gray-900 mb-4">Төлбөрийн арга</h2>
 
             <div className="space-y-3 mb-5">
-              <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "qpay" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"}`}>
-                <input type="radio" name="pay" value="qpay" checked={payMethod === "qpay"} onChange={() => setPayMethod("qpay")} className="accent-violet-600" />
+              <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "qpay" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}>
+                <input type="radio" name="pay" value="qpay" checked={payMethod === "qpay"} onChange={() => setPayMethod("qpay")} className="accent-blue-600" />
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
                   <QrCode size={20} className="text-blue-600" />
                 </div>
@@ -277,8 +277,8 @@ export default function CheckoutPage() {
                 <span className="text-[11px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full font-medium">Түгээмэл</span>
               </label>
 
-              <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "card" ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-violet-300"}`}>
-                <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-violet-600" />
+              <label className={`flex items-center gap-3 border-2 rounded-xl p-4 cursor-pointer transition-all ${payMethod === "card" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}>
+                <input type="radio" name="pay" value="card" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="accent-blue-600" />
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
                   <CreditCard size={20} className="text-emerald-600" />
                 </div>
@@ -296,7 +296,7 @@ export default function CheckoutPage() {
             )}
 
             <button onClick={submitPayment} disabled={!user || busy}
-              className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 text-white rounded-xl py-3.5 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans shadow-lg shadow-violet-200">
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl py-3.5 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans shadow-lg shadow-blue-200">
               {busy ? "Уншиж байна..." : `₮${orderTotal.toLocaleString()} — Төлбөр хийх`}
             </button>
           </div>
@@ -336,7 +336,7 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-3 gap-2 mb-4">
                 {qpayInvoice.urls.slice(0, 6).map((u, i) => (
                   <a key={i} href={u.link} target="_blank" rel="noopener noreferrer"
-                    className="text-[11px] bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 hover:border-violet-400 hover:bg-violet-50 transition-colors text-gray-700 font-medium" style={{ textDecoration: "none" }}>
+                    className="text-[11px] bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 hover:border-blue-400 hover:bg-blue-50 transition-colors text-gray-700 font-medium">
                     {u.name}
                   </a>
                 ))}
@@ -348,14 +348,14 @@ export default function CheckoutPage() {
               <span className={`font-bold ${qpayTimer < 60 ? "text-red-500" : "text-gray-700"}`}>{fmtTime(qpayTimer)}</span>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-[13px] text-violet-600 font-medium py-3">
+            <div className="flex items-center justify-center gap-2 text-[13px] text-blue-600 font-medium py-3">
               <Loader2 size={14} className="animate-spin" />
               Төлбөрийг хүлээж байна...
             </div>
 
             {!qpayInvoice && (
               <button onClick={() => placeOrder("qpay")} disabled={busy}
-                className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl py-3 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
                 Mock төлбөр баталгаажуулах
               </button>
             )}
@@ -363,7 +363,7 @@ export default function CheckoutPage() {
               if (pollRef.current) clearInterval(pollRef.current);
               setStep("payment");
             }}
-              className="w-full mt-2 text-[13px] text-gray-400 hover:text-violet-600 cursor-pointer bg-transparent border-none py-1.5 transition-colors">
+              className="w-full mt-2 text-[13px] text-gray-400 hover:text-blue-600 cursor-pointer bg-transparent border-none py-1.5 transition-colors">
               ← Буцах
             </button>
           </div>

@@ -101,7 +101,7 @@ interface PreviewSummary {
 
 const GRADE_COLOR: Record<string, string> = {
   "OEM":                  "bg-emerald-100 text-emerald-700 border-emerald-200",
-  "Premium Aftermarket":  "bg-violet-100 text-violet-700 border-violet-200",
+  "Premium Aftermarket":  "bg-blue-100 text-blue-700 border-blue-200",
   "Standard Aftermarket": "bg-gray-100 text-gray-700 border-gray-200",
 };
 const SOURCE_COLOR: Record<string, string> = {
@@ -289,13 +289,13 @@ export default function ImportWizardPage() {
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Sparkles size={20} className="text-fuchsia-500" /> AI Bulk Import
+            <Sparkles size={20} className="text-amber-500" /> AI Bulk Import
           </h1>
           <p className="text-[13px] text-gray-500 mt-0.5">
             Excel/CSV эсвэл зургаар оруулж, AI-аар цэвэрлэгдсэн бараагаа dataset-руу нэгтгэнэ
           </p>
         </div>
-        <Link href="/seller/products" className="text-[12px] text-violet-600 hover:underline" style={{ textDecoration: "none" }}>
+        <Link href="/seller/products" className="text-[12px] text-blue-600 hover:underline">
           ← Бараа жагсаалт руу буцах
         </Link>
       </header>
@@ -320,13 +320,13 @@ export default function ImportWizardPage() {
               onClick={() => fileInputRef.current?.click()}
             />
             <SourceCard
-              icon={ScanLine} color="violet"
+              icon={ScanLine} color="blue"
               title="Зураг / Barcode (OCR)"
               body="Баглааны зургийг авч AI таних. OEM код + нэрийг автоматаар уншина (OpenAI key шаардана)."
               onClick={() => ocrInputRef.current?.click()}
             />
             <SourceCard
-              icon={Plus} color="fuchsia"
+              icon={Plus} color="amber"
               title="Гараар оруулах"
               body="Нэг бараа нэмж туршихад тохиромжтой. Доорх хүснэгтэд шууд нэмнэ."
               onClick={addEmptyRow}
@@ -336,11 +336,11 @@ export default function ImportWizardPage() {
           <input ref={ocrInputRef}   type="file" hidden accept="image/*"          onChange={(e) => onOcr(e.target.files?.[0] || null)} />
 
           {ocrPreview && (
-            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center gap-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
               <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-white shrink-0">
                 <Image src={ocrPreview} alt="OCR" fill sizes="64px" className="object-cover" unoptimized />
               </div>
-              <div className="text-[12px] text-violet-700">
+              <div className="text-[12px] text-blue-700">
                 ✓ Зургийг танисан. Доорх жагсаалтад нэмэгдсэн — шалгаад үргэлжлүүлээрэй.
               </div>
             </div>
@@ -351,7 +351,7 @@ export default function ImportWizardPage() {
               <header className="flex items-center justify-between mt-3">
                 <h2 className="text-[14px] font-semibold text-gray-900">Оруулсан мөрүүд ({rawRows.length})</h2>
                 <button onClick={addEmptyRow} disabled={busy}
-                  className="inline-flex items-center gap-1 text-[12px] border border-gray-200 hover:border-violet-400 rounded-lg px-3 py-1.5 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+                  className="inline-flex items-center gap-1 text-[12px] border border-gray-200 hover:border-blue-400 rounded-lg px-3 py-1.5 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
                   <Plus size={12} /> Мөр нэмэх
                 </button>
               </header>
@@ -392,7 +392,7 @@ export default function ImportWizardPage() {
 
               <div className="flex justify-end">
                 <button onClick={runEnrich} disabled={busy || rawRows.length === 0}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans">
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans">
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                   AI-аар цэвэрлэх ({rawRows.length}) <ArrowRight size={13} />
                 </button>
@@ -408,7 +408,7 @@ export default function ImportWizardPage() {
       {/* ── PREVIEW ────────────────────────────────────────────────── */}
       {step === "preview" && (
         <div className="space-y-3">
-          <div className="bg-violet-50/40 border border-violet-100 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-[12px]">
+          <div className="bg-blue-50/40 border border-blue-100 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-[12px]">
             <span className="font-semibold text-gray-700">{stats.total} мөр AI-аар цэвэрлэгдлээ</span>
             {Object.entries(stats.grades).map(([g, c]) => (
               <span key={g} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${GRADE_COLOR[g] ?? ""}`}>
@@ -551,7 +551,7 @@ export default function ImportWizardPage() {
                                   : r.action === "merge_stock" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                   : r.action === "skip"        ? "bg-gray-50 text-gray-600 border-gray-200"
                                   : r.action === "review"      ? "bg-amber-50 text-amber-700 border-amber-300 animate-pulse"
-                                  : "bg-violet-50 text-violet-700 border-violet-200"
+                                  : "bg-blue-50 text-blue-700 border-blue-200"
                                 }`}>
                                 <option value="merge_stock">Нэгтгэх (+нөөц)</option>
                                 <option value="overwrite_all">Дарж бичих</option>
@@ -587,21 +587,21 @@ export default function ImportWizardPage() {
             <div className="flex items-center gap-3 text-[12px] text-gray-600">
               <span>Давхардсан OEM-той бараа байвал:</span>
               <label className="inline-flex items-center gap-1 cursor-pointer">
-                <input type="radio" name="dupe" value="skip" checked={onDuplicate === "skip"} onChange={() => setOnDuplicate("skip")} className="accent-violet-600 w-3 h-3" />
+                <input type="radio" name="dupe" value="skip" checked={onDuplicate === "skip"} onChange={() => setOnDuplicate("skip")} className="accent-blue-600 w-3 h-3" />
                 Алгасах
               </label>
               <label className="inline-flex items-center gap-1 cursor-pointer">
-                <input type="radio" name="dupe" value="update" checked={onDuplicate === "update"} onChange={() => setOnDuplicate("update")} className="accent-violet-600 w-3 h-3" />
+                <input type="radio" name="dupe" value="update" checked={onDuplicate === "update"} onChange={() => setOnDuplicate("update")} className="accent-blue-600 w-3 h-3" />
                 Шинэчлэх
               </label>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setStep("source")} disabled={busy}
-                className="inline-flex items-center gap-1 border border-gray-200 hover:border-violet-400 rounded-xl px-4 py-2 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+                className="inline-flex items-center gap-1 border border-gray-200 hover:border-blue-400 rounded-xl px-4 py-2 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
                 <ArrowLeft size={12} /> Буцах
               </button>
               <button onClick={runCommit} disabled={busy || enrichedRows.length === 0}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl px-5 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans">
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl px-5 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans">
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                 Хадгалах ({enrichedRows.length})
               </button>
@@ -613,7 +613,7 @@ export default function ImportWizardPage() {
       {/* ── RESULT ─────────────────────────────────────────────────── */}
       {step === "result" && result && (
         <div className="space-y-4">
-          <div className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white rounded-3xl p-6">
+          <div className="bg-gradient-to-br from-blue-500 to-amber-500 text-white rounded-3xl p-6">
             <div className="text-[14px] opacity-80 mb-1">Импорт амжилттай</div>
             <div className="text-[40px] font-bold tabular-nums">{result.created + result.updated}</div>
             <div className="text-[13px] opacity-80">{result.total} мөрөөс</div>
@@ -643,11 +643,11 @@ export default function ImportWizardPage() {
 
           <div className="flex gap-2">
             <button onClick={() => { setStep("source"); setRawRows([]); setEnrichedRows([]); setResult(null); }}
-              className="border border-gray-200 hover:border-violet-400 rounded-xl px-4 py-2 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors font-sans">
+              className="border border-gray-200 hover:border-blue-400 rounded-xl px-4 py-2 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors font-sans">
               Дахин импортлох
             </button>
             <button onClick={() => router.push("/seller/products")}
-              className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-5 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
               Барааны жагсаалт руу очих
             </button>
           </div>
@@ -670,11 +670,11 @@ function Stepper({ step }: { step: Step }) {
       {steps.map((s, i) => (
         <div key={s.id} className="flex items-center gap-2">
           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
-            i < idx ? "bg-emerald-500 text-white" : i === idx ? "bg-violet-600 text-white" : "bg-gray-200 text-gray-500"
+            i < idx ? "bg-emerald-500 text-white" : i === idx ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"
           }`}>
             {i < idx ? <CheckCircle2 size={13} /> : i + 1}
           </div>
-          <span className={`text-[12px] font-medium ${i === idx ? "text-violet-700" : "text-gray-500"}`}>{s.label}</span>
+          <span className={`text-[12px] font-medium ${i === idx ? "text-blue-700" : "text-gray-500"}`}>{s.label}</span>
           {i < steps.length - 1 && <div className={`w-8 h-0.5 ${i < idx ? "bg-emerald-400" : "bg-gray-200"}`} />}
         </div>
       ))}
@@ -683,16 +683,16 @@ function Stepper({ step }: { step: Step }) {
 }
 
 function SourceCard({ icon: Icon, color, title, body, onClick }: {
-  icon: typeof Upload; color: "emerald" | "violet" | "fuchsia"; title: string; body: string; onClick: () => void;
+  icon: typeof Upload; color: "emerald" | "blue" | "amber"; title: string; body: string; onClick: () => void;
 }) {
   const cls = {
     emerald: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100",
-    violet:  "bg-violet-50 text-violet-600 hover:bg-violet-100",
-    fuchsia: "bg-fuchsia-50 text-fuchsia-600 hover:bg-fuchsia-100",
+    blue:  "bg-blue-50 text-blue-600 hover:bg-blue-100",
+    amber: "bg-amber-50 text-amber-600 hover:bg-amber-100",
   }[color];
   return (
     <button onClick={onClick}
-      className="text-left bg-white border border-gray-200 hover:border-violet-300 rounded-2xl p-4 cursor-pointer transition-all hover:shadow-md">
+      className="text-left bg-white border border-gray-200 hover:border-blue-300 rounded-2xl p-4 cursor-pointer transition-all hover:shadow-md">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${cls}`}>
         <Icon size={18} />
       </div>
@@ -710,7 +710,7 @@ function InputCell({ value, onChange, mono, type = "text", align = "left" }: {
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-violet-500 focus:bg-white rounded px-1.5 py-1 text-[12px] outline-none transition-colors ${mono ? "font-mono text-[11px]" : ""}`}
+      className={`w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white rounded px-1.5 py-1 text-[12px] outline-none transition-colors ${mono ? "font-mono text-[11px]" : ""}`}
       style={{ textAlign: align }}
     />
   );

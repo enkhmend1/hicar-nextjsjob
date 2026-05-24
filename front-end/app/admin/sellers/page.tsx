@@ -84,7 +84,7 @@ function EconomicsModal({
               value={fee}
               onChange={(e) => setFee(e.target.value)}
               type="number" min={0} max={50} step={0.5}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
             />
             <p className="text-[11px] text-gray-500 mt-1">
               0-50 хооронд. Захиалга төлөгдөх агшинд snapshot хийгдэх ба тэр захиалгад
@@ -101,19 +101,19 @@ function EconomicsModal({
                 value={bank}
                 onChange={(e) => setBank(e.target.value)}
                 placeholder='Банкны нэр (жнь "Хаан банк")'
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
               />
               <input
                 value={acct}
                 onChange={(e) => setAcct(e.target.value)}
                 placeholder="Дансны дугаар"
-                className="w-full font-mono border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+                className="w-full font-mono border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
               />
               <input
                 value={hold}
                 onChange={(e) => setHold(e.target.value)}
                 placeholder="Данс эзэмшигчийн нэр"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
               />
             </div>
           </div>
@@ -132,7 +132,7 @@ function EconomicsModal({
             Болих
           </button>
           <button onClick={save} disabled={busy}
-            className="bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-[12px] font-semibold cursor-pointer border-none transition-colors font-sans inline-flex items-center gap-1.5">
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-[12px] font-semibold cursor-pointer border-none transition-colors font-sans inline-flex items-center gap-1.5">
             <Save size={12} /> {busy ? "Хадгалж байна..." : "Хадгалах"}
           </button>
         </footer>
@@ -194,7 +194,7 @@ export default function AdminSellersPage() {
         {STATUS_FILTER.map(s => (
           <button key={s.id} onClick={() => setFilter(s.id)}
             className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === s.id ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-200 hover:border-violet-400"
+              filter === s.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
             }`}>
             {s.label}
           </button>
@@ -218,10 +218,10 @@ export default function AdminSellersPage() {
               const id = s._id ?? s.id;
               return (
                 <div key={id} className="p-4 flex flex-wrap items-start gap-3">
-                  <div className="relative w-12 h-12 rounded-2xl bg-fuchsia-50 overflow-hidden flex items-center justify-center shrink-0">
+                  <div className="relative w-12 h-12 rounded-2xl bg-amber-50 overflow-hidden flex items-center justify-center shrink-0">
                     {sp.logo
                       ? <Image src={sp.logo} alt="" fill sizes="48px" className="object-cover" unoptimized />
-                      : <Store size={20} className="text-fuchsia-400" />
+                      : <Store size={20} className="text-amber-400" />
                     }
                   </div>
                   <div className="min-w-0 flex-1">
@@ -272,7 +272,7 @@ export default function AdminSellersPage() {
                     )}
                     {(s.sellerStatus === "approved" || s.sellerStatus === "pending") && (
                       <button onClick={() => setEditing(s)}
-                        className="flex items-center gap-1 border border-violet-200 text-violet-700 hover:bg-violet-50 rounded-lg px-3 py-1.5 text-[12px] font-semibold cursor-pointer bg-white transition-colors font-sans">
+                        className="flex items-center gap-1 border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg px-3 py-1.5 text-[12px] font-semibold cursor-pointer bg-white transition-colors font-sans">
                         <Pencil size={12} /> Хураамж/Данс
                       </button>
                     )}

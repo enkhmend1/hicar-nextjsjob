@@ -46,13 +46,13 @@ export default function TagInput({
 
   return (
     <div className={className}>
-      <div className="flex flex-wrap items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 focus-within:border-violet-500 focus-within:bg-white transition-colors">
+      <div className="flex flex-wrap items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 focus-within:border-blue-500 focus-within:bg-white transition-colors">
         {value.map((t) => (
           <span key={t}
-            className="inline-flex items-center gap-1 bg-violet-100 text-violet-700 text-[11px] font-medium px-2 py-0.5 rounded-full">
+            className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-[11px] font-medium px-2 py-0.5 rounded-full">
             {t}
             <button type="button" onClick={() => remove(t)}
-              className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-violet-500 hover:text-white hover:bg-violet-500 cursor-pointer bg-transparent border-none">
+              className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-blue-500 hover:text-white hover:bg-blue-500 cursor-pointer bg-transparent border-none">
               <X size={9} />
             </button>
           </span>
@@ -77,7 +77,7 @@ export default function TagInput({
         <div className="mt-1.5 flex flex-wrap gap-1">
           {suggested.map((s) => (
             <button key={s} type="button" onClick={() => add(s)}
-              className="inline-flex items-center gap-0.5 text-[11px] border border-gray-200 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 rounded-full px-2 py-0.5 cursor-pointer bg-white text-gray-600 transition-colors font-sans">
+              className="inline-flex items-center gap-0.5 text-[11px] border border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 rounded-full px-2 py-0.5 cursor-pointer bg-white text-gray-600 transition-colors font-sans">
               <Plus size={9} /> {s}
             </button>
           ))}

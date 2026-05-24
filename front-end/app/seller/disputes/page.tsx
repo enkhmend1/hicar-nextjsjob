@@ -22,7 +22,7 @@ import {
 const STATUS_CHIP: Record<DisputeStatus, { label: string; cls: string }> = {
   open:             { label: "Шинэ",       cls: "bg-rose-50 text-rose-700 border-rose-200" },
   awaiting_seller:  { label: "Хариу хүлээж буй", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  ai_analyzing:     { label: "AI шинжилж буй", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  ai_analyzing:     { label: "AI шинжилж буй", cls: "bg-blue-50 text-blue-700 border-blue-200" },
   awaiting_buyer:   { label: "Худалдан авагч",  cls: "bg-blue-50 text-blue-700 border-blue-200" },
   escalated_admin:  { label: "Admin шийдэх",    cls: "bg-orange-50 text-orange-700 border-orange-200" },
   resolved_refund:  { label: "Бүрэн буцаалт",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -222,9 +222,9 @@ function DisputeDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: ()
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-[12px]">
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
-          <div className="text-[10px] text-violet-700 uppercase tracking-wide">Хүсэлт</div>
-          <div className="text-[16px] font-bold text-violet-800">₮{dispute.requestedRefundAmount.toLocaleString()}</div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+          <div className="text-[10px] text-blue-700 uppercase tracking-wide">Хүсэлт</div>
+          <div className="text-[16px] font-bold text-blue-800">₮{dispute.requestedRefundAmount.toLocaleString()}</div>
         </div>
         {dispute.aiAnalysis?.fraudScore !== undefined && (
           <div className={`border rounded-xl p-3 ${
@@ -282,7 +282,7 @@ function DisputeDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: ()
             onChange={(e) => setNote(e.target.value)}
             placeholder="Тайлбар (заавал биш) — буцаалт өгөх / татгалзах шалтгаан..."
             rows={3} maxLength={2000}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none resize-none font-sans"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
           />
 
           <div className="grid sm:grid-cols-3 gap-2">
@@ -294,7 +294,7 @@ function DisputeDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: ()
             <div className="flex gap-1">
               <input type="number" value={partial} onChange={(e) => setPartial(e.target.value)}
                 min={1} max={dispute.requestedRefundAmount - 1}
-                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[12px] focus:border-violet-500 outline-none w-0" />
+                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[12px] focus:border-blue-500 outline-none w-0" />
               <button onClick={() => respond("partial_refund_offered")} disabled={busy}
                 className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-2 py-2 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans inline-flex items-center gap-1 whitespace-nowrap">
                 <Coins size={11} /> Хэсэг
@@ -336,7 +336,7 @@ function MessageThread({ messages }: { messages: Dispute["messages"] }) {
         {messages.map((m, i) => (
           <div key={m._id || i} className={`text-[12px] rounded-lg p-2 ${
             m.author === "system" ? "bg-gray-50 text-gray-500 italic"
-            : m.author === "ai"     ? "bg-violet-50 text-violet-800"
+            : m.author === "ai"     ? "bg-blue-50 text-blue-800"
             : m.author === "admin"  ? "bg-orange-50 text-orange-800"
             : m.author === "seller" ? "bg-blue-50 text-blue-800"
             : "bg-rose-50 text-rose-800"

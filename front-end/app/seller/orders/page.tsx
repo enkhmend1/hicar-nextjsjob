@@ -11,7 +11,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700",
   paid: "bg-blue-50 text-blue-700",
-  processing: "bg-violet-50 text-violet-700",
+  processing: "bg-blue-50 text-blue-700",
   shipped: "bg-indigo-50 text-indigo-700",
   delivered: "bg-emerald-50 text-emerald-700",
   cancelled: "bg-red-50 text-red-700",
@@ -62,7 +62,7 @@ export default function SellerOrdersPage() {
                         {new Date(o.createdAt).toLocaleString("mn-MN")} · {o.paymentMethod.toUpperCase()} · {o.items.length} бараа
                       </div>
                     </div>
-                    <div className="text-[14px] font-bold text-fuchsia-600 shrink-0">₮{o.total.toLocaleString()}</div>
+                    <div className="text-[14px] font-bold text-amber-600 shrink-0">₮{o.total.toLocaleString()}</div>
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[o.status]}`}>
                       {STATUS_LABEL[o.status]}
                     </span>

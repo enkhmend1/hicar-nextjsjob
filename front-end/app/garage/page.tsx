@@ -70,13 +70,13 @@ export default function GaragePage() {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-              <Car size={22} className="text-violet-600" />
+              <Car size={22} className="text-blue-600" />
               Миний машинууд
             </h1>
             <p className="text-[13px] text-gray-500 mt-0.5">Машинаа бүртгүүлэн тохирох сэлбэг хайхад тус болно</p>
           </div>
           <button onClick={() => setEditing({ ...emptyForm })}
-            className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
             <Plus size={14} /> Шинэ машин
           </button>
         </div>
@@ -97,7 +97,7 @@ export default function GaragePage() {
           <div className="space-y-3">
             {vehicles.map(v => (
               <div key={v._id} className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-wrap items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-amber-500 text-white flex items-center justify-center shrink-0">
                   <Car size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -119,7 +119,7 @@ export default function GaragePage() {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => setEditing(v)}
-                    className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 cursor-pointer bg-transparent border-none transition-colors">
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors">
                     <Pencil size={14} />
                   </button>
                   <button onClick={() => remove(v)}
@@ -176,7 +176,7 @@ export default function GaragePage() {
                 </Field>
                 <label className="flex items-center gap-2 cursor-pointer pt-1">
                   <input type="checkbox" checked={!!editing.isDefault} onChange={e => setEditing(s => ({ ...s, isDefault: e.target.checked }))}
-                    className="accent-violet-600 w-4 h-4" />
+                    className="accent-blue-600 w-4 h-4" />
                   <span className="text-[13px] text-gray-700">Үндсэн машин болгох</span>
                 </label>
 
@@ -186,7 +186,7 @@ export default function GaragePage() {
                     Болих
                   </button>
                   <button type="submit" disabled={busy}
-                    className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
                     {busy ? "Хадгалж байна..." : "Хадгалах"}
                   </button>
                 </div>

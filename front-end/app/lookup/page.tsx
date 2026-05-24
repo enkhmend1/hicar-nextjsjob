@@ -40,7 +40,7 @@ interface CompatibleResponse {
 
 const TIER_BADGE: Record<number, { label: string; color: string }> = {
   100: { label: "Яг таарсан OEM",      color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  80:  { label: "Хөдөлгүүрийн код",   color: "bg-violet-100 text-violet-700 border-violet-200" },
+  80:  { label: "Хөдөлгүүрийн код",   color: "bg-blue-100 text-blue-700 border-blue-200" },
   60:  { label: "Загвар таарсан",     color: "bg-blue-100 text-blue-700 border-blue-200" },
   40:  { label: "Үйлдвэр таарсан",   color: "bg-amber-100 text-amber-700 border-amber-200" },
 };
@@ -107,7 +107,7 @@ function LookupInner() {
     <>
       <Navbar />
       <div className="max-w-6xl mx-auto px-5 py-6">
-        <section className="bg-gradient-to-br from-violet-600 via-violet-500 to-fuchsia-500 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-violet-200 mb-6">
+        <section className="bg-gradient-to-br from-blue-600 via-blue-500 to-amber-500 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-blue-200 mb-6">
           <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur text-white text-[11px] font-semibold px-3 py-1.5 rounded-full mb-4 tracking-wide">
             <Sparkles size={11} /> AI VEHICLE LOOKUP
           </div>
@@ -130,7 +130,7 @@ function LookupInner() {
               disabled={busy}
             />
             <button type="submit" disabled={busy || !plate.trim()}
-              className="bg-white text-violet-700 hover:bg-violet-50 disabled:bg-white/40 rounded-xl px-5 py-2 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans flex items-center gap-2">
+              className="bg-white text-blue-700 hover:bg-blue-50 disabled:bg-white/40 rounded-xl px-5 py-2 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans flex items-center gap-2">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               {busy ? "Хайж байна..." : "Хайх"}
             </button>
@@ -182,7 +182,7 @@ function LookupInner() {
                 <p className="text-[12px] text-gray-400 mt-1">
                   Танай машинд тохирох бараа админуудын каталогт хараахан бүртгэгдээгүй байна.
                 </p>
-                <Link href="/shop" className="inline-block mt-4 text-[12px] text-violet-600 underline" style={{ textDecoration: "underline" }}>
+                <Link href="/shop" className="inline-block mt-4 text-[12px] text-blue-600 underline" style={{ textDecoration: "underline" }}>
                   Бүх дэлгүүрийг үзэх →
                 </Link>
               </div>
@@ -211,7 +211,7 @@ function LookupInner() {
 function VehicleCard({ vehicle, oemBagSize }: { vehicle: IdentifiedVehicle; oemBagSize: number }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4 flex flex-wrap items-center gap-5">
-      <div className="w-14 h-14 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center text-white shrink-0">
+      <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-amber-500 rounded-2xl flex items-center justify-center text-white shrink-0">
         <Car size={24} />
       </div>
       <div className="flex-1 min-w-[200px]">
@@ -230,7 +230,7 @@ function VehicleCard({ vehicle, oemBagSize }: { vehicle: IdentifiedVehicle; oemB
       {oemBagSize > 0 && (
         <div className="text-right">
           <div className="text-[11px] text-gray-400">OEM equivalence cloud</div>
-          <div className="text-[18px] font-bold text-violet-600 tabular-nums">{oemBagSize}</div>
+          <div className="text-[18px] font-bold text-blue-600 tabular-nums">{oemBagSize}</div>
         </div>
       )}
     </div>
@@ -248,7 +248,7 @@ export default function LookupPage() {
 function CountsBar({ counts, total }: { counts: CompatibleResponse["counts"]; total: number }) {
   const tiers = [
     { id: "oem",          label: "OEM",       v: counts.oem ?? 0,          color: "bg-emerald-500" },
-    { id: "engine",       label: "Engine",    v: counts.engine ?? 0,       color: "bg-violet-500" },
+    { id: "engine",       label: "Engine",    v: counts.engine ?? 0,       color: "bg-blue-500" },
     { id: "model",        label: "Model",     v: counts.model ?? 0,        color: "bg-blue-500" },
     { id: "manufacturer", label: "Mfr",       v: counts.manufacturer ?? 0, color: "bg-amber-500" },
   ];

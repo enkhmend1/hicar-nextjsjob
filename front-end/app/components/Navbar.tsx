@@ -19,27 +19,27 @@ export default function Navbar() {
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
 
-        <Link href="/" className="text-[20px] font-semibold tracking-tight shrink-0" style={{ textDecoration: "none", color: "inherit" }}>
-          <em className="text-violet-600 not-italic">Hi</em>car
+        <Link href="/" className="text-[20px] font-semibold tracking-tight shrink-0">
+          <em className="text-blue-600 not-italic">Hi</em>car
         </Link>
 
         <div className="hidden md:flex gap-5">
-          <Link href="/shop" className="text-[14px] text-gray-500 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>{t("nav.shop")}</Link>
-          <Link href="/lookup" className="text-[14px] text-gray-500 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>Улсын дугаар</Link>
-          <Link href="/orders" className="text-[14px] text-gray-500 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>{t("nav.orders")}</Link>
-          <Link href="/#help" className="text-[14px] text-gray-500 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>{t("nav.help")}</Link>
+          <Link href="/shop" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.shop")}</Link>
+          <Link href="/lookup" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">Улсын дугаар</Link>
+          <Link href="/orders" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.orders")}</Link>
+          <Link href="/#help" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.help")}</Link>
           {isSeller && !isAdmin && (
-            <Link href="/seller" className="flex items-center gap-1 text-[14px] text-fuchsia-600 font-semibold hover:underline transition-colors" style={{ textDecoration: "none" }}>
+            <Link href="/seller" className="flex items-center gap-1 text-[14px] text-amber-600 font-semibold hover:underline transition-colors">
               <Store size={13} /> {t("nav.seller")}
             </Link>
           )}
           {isAdmin && (
-            <Link href="/admin" className="flex items-center gap-1 text-[14px] text-violet-600 font-semibold hover:underline transition-colors" style={{ textDecoration: "none" }}>
+            <Link href="/admin" className="flex items-center gap-1 text-[14px] text-blue-600 font-semibold hover:underline transition-colors">
               <Shield size={13} /> {t("nav.admin")}
             </Link>
           )}
           {user && !isAdmin && !isSeller && (
-            <Link href="/seller/apply" className="text-[14px] text-gray-500 hover:text-fuchsia-600 transition-colors" style={{ textDecoration: "none" }}>
+            <Link href="/seller/apply" className="text-[14px] text-gray-500 hover:text-amber-600 transition-colors">
               {t("nav.becomeSeller")}
             </Link>
           )}
@@ -60,19 +60,19 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/auth/login" className="border border-gray-200 rounded-lg px-4 py-1.5 text-[13px] text-gray-600 hover:border-violet-500 hover:text-violet-600 transition-colors" style={{ textDecoration: "none" }}>{t("nav.login")}</Link>
-              <Link href="/auth/register" className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg px-4 py-1.5 text-[13px] font-medium transition-colors" style={{ textDecoration: "none" }}>{t("nav.register")}</Link>
+              <Link href="/auth/login" className="border border-gray-200 rounded-lg px-4 py-1.5 text-[13px] text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors">{t("nav.login")}</Link>
+              <Link href="/auth/register" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-1.5 text-[13px] font-medium transition-colors">{t("nav.register")}</Link>
             </>
           )}
           {user && (
-            <Link href="/wishlist" className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors" style={{ textDecoration: "none" }} title="Wishlist">
+            <Link href="/wishlist" className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors" title="Wishlist">
               <Heart size={18} />
             </Link>
           )}
-          <Link href="/cart" className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-violet-600 hover:bg-violet-50 transition-colors" style={{ textDecoration: "none" }}>
+          <Link href="/cart" className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
             <ShoppingCart size={19} />
             {count > 0 && (
-              <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-violet-600 text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-semibold">{count}</span>
+              <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-blue-600 text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-semibold">{count}</span>
             )}
           </Link>
         </div>
@@ -84,37 +84,37 @@ export default function Navbar() {
 
       {open && (
         <div className="md:hidden bg-white border-t border-gray-100 px-5 pb-4 pt-3 shadow-lg">
-          <Link href="/shop" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Package size={16} />{t("nav.shop")}</Link>
-          <Link href="/orders" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Package size={16} />{t("nav.orders")}</Link>
+          <Link href="/shop" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Package size={16} />{t("nav.shop")}</Link>
+          <Link href="/orders" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Package size={16} />{t("nav.orders")}</Link>
           {isSeller && !isAdmin && (
-            <Link href="/seller" className="flex items-center gap-3 text-[15px] text-fuchsia-600 font-semibold py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Store size={16} />{t("nav.seller")}</Link>
+            <Link href="/seller" className="flex items-center gap-3 text-[15px] text-amber-600 font-semibold py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Store size={16} />{t("nav.seller")}</Link>
           )}
           {isAdmin && (
-            <Link href="/admin" className="flex items-center gap-3 text-[15px] text-violet-600 font-semibold py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Shield size={16} />{t("nav.admin")}</Link>
+            <Link href="/admin" className="flex items-center gap-3 text-[15px] text-blue-600 font-semibold py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Shield size={16} />{t("nav.admin")}</Link>
           )}
           {user && !isAdmin && !isSeller && (
-            <Link href="/seller/apply" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Store size={16} />{t("nav.becomeSeller")}</Link>
+            <Link href="/seller/apply" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Store size={16} />{t("nav.becomeSeller")}</Link>
           )}
           {user && (
             <>
-              <Link href="/wishlist" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Heart size={16} />Wishlist</Link>
-              <Link href="/garage" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}><Car size={16} />Миний машинууд</Link>
+              <Link href="/wishlist" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Heart size={16} />Wishlist</Link>
+              <Link href="/garage" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Car size={16} />Миний машинууд</Link>
             </>
           )}
-          <Link href="/cart" className="flex items-center justify-between text-[15px] text-gray-700 py-2.5 border-b border-gray-100" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}>
+          <Link href="/cart" className="flex items-center justify-between text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}>
             <span className="flex items-center gap-3"><ShoppingCart size={16} />{t("nav.cart")}</span>
-            {count > 0 && <span className="bg-violet-600 text-white text-[11px] px-2 py-0.5 rounded-full">{count}</span>}
+            {count > 0 && <span className="bg-blue-600 text-white text-[11px] px-2 py-0.5 rounded-full">{count}</span>}
           </Link>
           <div className="pt-3"><LangSwitcher /></div>
           {user ? (
             <div className="pt-3 flex gap-2">
-              <div className="flex-1 bg-violet-50 border border-violet-200 rounded-lg py-2.5 text-[13px] text-violet-700 font-medium text-center">{user.name}</div>
+              <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg py-2.5 text-[13px] text-blue-700 font-medium text-center">{user.name}</div>
               <button onClick={() => { logout(); setOpen(false); }} className="flex-1 border border-gray-200 rounded-lg py-2.5 text-[13px] text-gray-500 cursor-pointer bg-transparent font-sans">{t("nav.logout")}</button>
             </div>
           ) : (
             <div className="pt-3 flex gap-2">
-              <Link href="/auth/login" className="flex-1 border border-gray-200 rounded-lg py-2.5 text-[13px] text-gray-600 text-center" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}>{t("nav.login")}</Link>
-              <Link href="/auth/register" className="flex-1 bg-violet-600 text-white rounded-lg py-2.5 text-[13px] font-medium text-center" style={{ textDecoration: "none" }} onClick={() => setOpen(false)}>{t("nav.register")}</Link>
+              <Link href="/auth/login" className="flex-1 border border-gray-200 rounded-lg py-2.5 text-[13px] text-gray-600 text-center" onClick={() => setOpen(false)}>{t("nav.login")}</Link>
+              <Link href="/auth/register" className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-[13px] font-medium text-center" onClick={() => setOpen(false)}>{t("nav.register")}</Link>
             </div>
           )}
         </div>

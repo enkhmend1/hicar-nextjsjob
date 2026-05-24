@@ -36,12 +36,14 @@ export default function ProductCard({ p }: { p: Product }) {
   const src = srcMeta(p.source);
 
   return (
-    <Link href={`/shop/${p._id ?? p.id}`} style={{textDecoration:"none"}}
-      className="group block bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-violet-400 hover:shadow-lg hover:shadow-violet-100/50 transition-all duration-200">
-      {/* Image area */}
-      <div className="relative h-[96px] bg-gradient-to-br from-violet-50 to-purple-50 flex items-center justify-center group-hover:from-violet-100 group-hover:to-purple-100 transition-colors overflow-hidden">
+    <Link href={`/shop/${p._id ?? p.id}`}
+      className="group block bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-lg hover:shadow-blue-100/50 transition-all duration-200">
+      {/* Phase N: image background is now blue↔amber (matches the new
+          palette) instead of the leftover blue↔purple. Subtle, so the
+          actual product image still dominates. */}
+      <div className="relative h-[96px] bg-gradient-to-br from-blue-50 to-amber-50 flex items-center justify-center group-hover:from-blue-100 group-hover:to-amber-100 transition-colors overflow-hidden">
         {p.badge && (
-          <span className="absolute top-2 left-2 bg-violet-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md z-10">{p.badge}</span>
+          <span className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md z-10 shadow-sm">{p.badge}</span>
         )}
         <button onClick={handleFav}
           className={`absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 hover:bg-white shadow-sm border-none cursor-pointer z-10 transition-all ${isFav ? "text-red-500" : "text-gray-300 hover:text-red-400"}`}
@@ -56,9 +58,9 @@ export default function ProductCard({ p }: { p: Product }) {
         {p.images && p.images.length > 0 ? (
           <Image src={p.images[0]} alt={p.name} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />
         ) : p.iconPath ? (
-          <svg className="w-10 h-10 fill-violet-400 group-hover:fill-violet-500 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
+          <svg className="w-10 h-10 fill-blue-400 group-hover:fill-blue-500 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
         ) : (
-          <Package className="w-8 h-8 text-violet-300" />
+          <Package className="w-8 h-8 text-blue-300" />
         )}
       </div>
       {/* Body */}
@@ -76,13 +78,17 @@ export default function ProductCard({ p }: { p: Product }) {
         </div>
         <div className="flex items-end justify-between mt-1">
           <div>
-            <div className="text-[15px] font-bold text-violet-600">₮{p.price.toLocaleString()}</div>
+            {/* Phase N: price is the single most important number on
+                the card — promoted to amber-700 (darker, weightier than
+                the previous blue) so it stays the visual anchor even
+                surrounded by other blue chrome. */}
+            <div className="text-[15px] font-bold text-amber-700">₮{p.price.toLocaleString()}</div>
             {p.originalPrice && <div className="text-[11px] text-gray-400 line-through">₮{p.originalPrice.toLocaleString()}</div>}
           </div>
           <button onClick={handleAdd}
             className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold cursor-pointer border-none transition-all ${
               added ? "bg-emerald-500 text-white" :
-              p.inStock ? "bg-violet-600 hover:bg-violet-700 text-white" :
+              p.inStock ? "bg-blue-700 hover:bg-blue-800 text-white shadow-sm shadow-blue-200" :
               "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}>
             {added ? <><CheckCircle size={11}/>Нэмсэн</> : p.inStock ? <><ShoppingCart size={11}/>Сагс</> : <><Package size={11}/>Дууссан</>}

@@ -20,7 +20,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
   paid: "bg-blue-50 text-blue-700 border-blue-200",
-  processing: "bg-violet-50 text-violet-700 border-violet-200",
+  processing: "bg-blue-50 text-blue-700 border-blue-200",
   shipped: "bg-indigo-50 text-indigo-700 border-indigo-200",
   delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
@@ -90,7 +90,7 @@ export default function OrdersPage() {
               <Package size={36} className="text-gray-300" />
             </div>
             <p className="text-[15px] font-medium text-gray-700 mb-2">Захиалга байхгүй</p>
-            <Link href="/shop" className="inline-block bg-violet-600 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold" style={{ textDecoration: "none" }}>Дэлгүүр</Link>
+            <Link href="/shop" className="inline-block bg-blue-600 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold">Дэлгүүр</Link>
           </div>
         ) : (
           <div className="space-y-3">
@@ -131,7 +131,7 @@ export default function OrdersPage() {
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
                       <ShieldCheck size={12} className="text-emerald-500" /> Escrow хамгаалалт
                     </div>
-                    <span className="text-[15px] font-bold text-violet-600">₮{o.total.toLocaleString()}</span>
+                    <span className="text-[15px] font-bold text-blue-600">₮{o.total.toLocaleString()}</span>
                   </div>
 
                   {isDisputable(o) && (
