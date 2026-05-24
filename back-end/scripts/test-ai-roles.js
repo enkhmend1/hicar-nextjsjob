@@ -68,6 +68,51 @@ assert( isToolAllowed(userScope, "search_products"),       "user CAN call search
 assert( isToolAllowed(userScope, "search_vehicle_parts"),  "user CAN call search_vehicle_parts");
 
 assert( isToolAllowed(sellerScope, "get_sales_summary"),   "seller CAN call get_sales_summary (own-sales scope; Phase J.3)");
+
+// ────────────────────────────────────────────────────────────────────
+// ⑰ Phase K — Role-tiered tool-loop budgets
+// ────────────────────────────────────────────────────────────────────
+const { __internal: aiControllerInternal } = await import("../Controller/ai.controller.js");
+const { limitsForRole, BASE_LIMITS, ROLE_MULT } = aiControllerInternal;
+
+const userL   = limitsForRole("user");
+const sellerL = limitsForRole("seller");
+const adminL  = limitsForRole("admin");
+
+assert(userL.maxRounds === BASE_LIMITS.maxRounds,           "user baseline rounds = BASE");
+assert(userL.maxToolCalls === BASE_LIMITS.maxToolCalls,     "user baseline tool calls = BASE");
+assert(userL.maxTotalTokens === BASE_LIMITS.maxTotalTokens, "user baseline tokens = BASE");
+
+assert(sellerL.maxRounds === BASE_LIMITS.maxRounds * 2,           "seller rounds = 2× BASE");
+assert(sellerL.maxToolCalls === BASE_LIMITS.maxToolCalls * 2,     "seller tool calls = 2× BASE");
+assert(sellerL.maxTotalTokens === BASE_LIMITS.maxTotalTokens * 2, "seller tokens = 2× BASE");
+
+assert(adminL.maxRounds === BASE_LIMITS.maxRounds * 3,           "admin rounds = 3× BASE");
+assert(adminL.maxToolCalls === BASE_LIMITS.maxToolCalls * 3,     "admin tool calls = 3× BASE");
+assert(adminL.maxTotalTokens === BASE_LIMITS.maxTotalTokens * 3, "admin tokens = 3× BASE");
+assert(adminL.walltimeMs === BASE_LIMITS.walltimeMs * 3,         "admin walltime = 3× BASE");
+
+// maxOutputTokens stays constant — long single replies are bad UX
+// regardless of role.
+assert(userL.maxOutputTokens   === BASE_LIMITS.maxOutputTokens, "USER  output cap unchanged");
+assert(sellerL.maxOutputTokens === BASE_LIMITS.maxOutputTokens, "SELLER output cap unchanged");
+assert(adminL.maxOutputTokens  === BASE_LIMITS.maxOutputTokens, "ADMIN  output cap unchanged");
+
+// Unknown role falls back to user-tier baseline (defence in depth)
+const unknownL = limitsForRole("hacker");
+assert(unknownL.maxRounds === BASE_LIMITS.maxRounds,
+       "unknown role falls back to USER tier (no privilege escalation)");
+
+// Multiplier defaults documented
+assert(ROLE_MULT.user === 1,   "USER multiplier = 1");
+assert(ROLE_MULT.seller === 2, "SELLER multiplier = 2");
+assert(ROLE_MULT.admin === 3,  "ADMIN multiplier = 3");
+
+// Limits are frozen — caller can't accidentally mutate a per-call copy
+// and affect later requests.
+assert(Object.isFrozen(userL),   "USER limits object is frozen");
+assert(Object.isFrozen(sellerL), "SELLER limits object is frozen");
+assert(Object.isFrozen(adminL),  "ADMIN limits object is frozen");
 assert( isToolAllowed(sellerScope, "get_low_stock"),       "seller CAN call low_stock");
 assert( isToolAllowed(sellerScope, "get_deadstock"),       "seller CAN call deadstock (Phase B)");
 

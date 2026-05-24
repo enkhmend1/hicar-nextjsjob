@@ -950,18 +950,62 @@ const toCompletionMessage = (m) => {
 };
 
 // ────────────────────────────────────────────────────────────────────
-// Tool-loop limits (unchanged)
+// Tool-loop limits — Phase K: scaled per role.
+//
+// USER queries are usually 1-2 turns ("show me brake pads"); the
+// baseline budget is sized for that. SELLER and ADMIN tasks routinely
+// chain 4-6 tools ("deadstock → low_stock → sales summary → quote")
+// and would otherwise hit caps mid-thought.
+//
+// Scaling rules:
+//   USER   = baseline (env-overridable)
+//   SELLER = 2× baseline
+//   ADMIN  = 3× baseline
+//
+// Free-tier Groq cost = 0; the only resource is rate-limit quota.
+// Sellers + admins are rare, so giving them headroom does not starve
+// regular users. Caps still exist — these are bounded agents, not
+// runaway loops.
 // ────────────────────────────────────────────────────────────────────
 const num = (v, d) => {
   const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d;
 };
-const LIMITS = Object.freeze({
+
+const BASE_LIMITS = Object.freeze({
   maxRounds:       num(process.env.AI_MAX_TOOL_ROUNDS,   3),
   maxToolCalls:    num(process.env.AI_MAX_TOOL_CALLS,    6),
   maxTotalTokens:  num(process.env.AI_MAX_TOTAL_TOKENS,  8000),
   walltimeMs:      num(process.env.AI_WALLTIME_MS,       25_000),
   maxOutputTokens: num(process.env.AI_MAX_OUTPUT_TOKENS, 1024),
 });
+
+const ROLE_MULT = Object.freeze({
+  user:   num(process.env.AI_ROLE_MULT_USER,   1),
+  seller: num(process.env.AI_ROLE_MULT_SELLER, 2),
+  admin:  num(process.env.AI_ROLE_MULT_ADMIN,  3),
+});
+
+/**
+ * Compose the effective limits for a given role. Walltime scales too
+ * — admins on a slow link still need elbow room for multi-tool turns.
+ *
+ * `maxOutputTokens` is NOT scaled: a single reply over ~1.5K tokens
+ * is bad UX regardless of role (long walls of text are unreadable).
+ */
+const limitsForRole = (role) => {
+  const mult = ROLE_MULT[role] || ROLE_MULT.user;
+  return Object.freeze({
+    maxRounds:       Math.round(BASE_LIMITS.maxRounds      * mult),
+    maxToolCalls:    Math.round(BASE_LIMITS.maxToolCalls   * mult),
+    maxTotalTokens:  Math.round(BASE_LIMITS.maxTotalTokens * mult),
+    walltimeMs:      Math.round(BASE_LIMITS.walltimeMs     * mult),
+    maxOutputTokens: BASE_LIMITS.maxOutputTokens,
+  });
+};
+
+// Backward-compat alias for any out-of-tree caller (tests, scripts).
+// Code inside this file uses limitsForRole() exclusively now.
+const LIMITS = BASE_LIMITS;
 
 const callSignature = (tc) =>
   `${tc.function?.name || "?"}:${tc.function?.arguments || ""}`;
@@ -972,6 +1016,11 @@ const callSignature = (tc) =>
 // ────────────────────────────────────────────────────────────────────
 const runConversation = async ({ profile, messages, runtime, transliterationHint }) => {
   const { scope, locale, vehicleContext } = runtime;
+
+  // Phase K: budget scales with role. limits is per-call (a frozen
+  // copy of the role's allowance) so concurrent requests for different
+  // roles never share counters.
+  const limits = limitsForRole(scope.role);
 
   // Filter the TOOLS catalogue by what this role is allowed to call.
   const availableTools = !profile.supportsTools ? undefined
@@ -988,7 +1037,7 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
   const ac = new AbortController();
   const walltimeTimer = setTimeout(
     () => ac.abort(new Error("walltime_exceeded")),
-    LIMITS.walltimeMs,
+    limits.walltimeMs,
   );
 
   const toolCalls = [];
@@ -999,16 +1048,16 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
   let terminate = { reason: "model_finished" };
 
   try {
-    for (let round = 0; round < LIMITS.maxRounds; round++) {
-      if (totalTokens >= LIMITS.maxTotalTokens)  { terminate = { reason: "token_budget", totalTokens }; break; }
-      if (toolCalls.length >= LIMITS.maxToolCalls){ terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length }; break; }
+    for (let round = 0; round < limits.maxRounds; round++) {
+      if (totalTokens >= limits.maxTotalTokens)  { terminate = { reason: "token_budget", totalTokens }; break; }
+      if (toolCalls.length >= limits.maxToolCalls){ terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length }; break; }
       if (ac.signal.aborted)                      { terminate = { reason: "walltime" }; break; }
 
       const body = {
         model: profile.model,
         messages: conversation,
         temperature: 0.3,
-        max_tokens: LIMITS.maxOutputTokens,
+        max_tokens: limits.maxOutputTokens,
       };
       if (availableTools && availableTools.length > 0) {
         body.tools = availableTools;
@@ -1032,7 +1081,7 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
       conversation.push(lastMessage);
 
       for (const tc of newCalls) {
-        if (toolCalls.length >= LIMITS.maxToolCalls) {
+        if (toolCalls.length >= limits.maxToolCalls) {
           terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length };
           break;
         }
@@ -1073,7 +1122,7 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
       // the LAST one and decide whether to inject a recovery hint that
       // the LLM will see on the NEXT round. This is what turns
       // "search → 0 → end" into "search → 0 → cross_ref → match".
-      const roundsRemaining = LIMITS.maxRounds - (round + 1);
+      const roundsRemaining = limits.maxRounds - (round + 1);
       const reflection = reflectOnToolCalls(toolCalls, runtime, { roundsRemaining });
       if (reflection.recoveryHint && roundsRemaining > 0) {
         conversation.push({ role: "system", content: reflection.recoveryHint });
@@ -1480,7 +1529,7 @@ export const handleClearActiveVehicle = async (req, res) => {
 
 // Test/diagnostic exports — not on the public route surface.
 export const __internal = Object.freeze({
-  TOOLS, TOOL_HANDLERS, LIMITS,
+  TOOLS, TOOL_HANDLERS, LIMITS, BASE_LIMITS, ROLE_MULT, limitsForRole,
   cleanupUploadedAsset, validateUserIntent,
   callSignature, mapUpstreamError, runScopedProductSearch,
 });
