@@ -10,6 +10,11 @@ const notificationSchema = new mongoose.Schema(
         "seller_application", "seller_approved", "seller_rejected",
         "product_pending", "product_approved", "product_rejected",
         "low_stock", "review_received", "system",
+        // Phase L — proactive background-agent insights. The `data`
+        // field carries a `kind` discriminator
+        // (deadstock_alert / market_gap_digest / financial_summary)
+        // so we don't bloat the enum with one entry per agent check.
+        "ai_insight",
       ],
       required: true,
     },

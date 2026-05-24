@@ -944,6 +944,139 @@ assert(diagnosticEnv.payload.candidates?.length === 1, "diagnostic payload carri
 assert(diagnosticEnv.payload.urgency === "high", "diagnostic payload carries urgency");
 
 // ────────────────────────────────────────────────────────────────────
+// ⑱ Phase L — Background agents (proactive notifications)
+// Pure-function checks only: registry shape, constants, helpers, queue
+// exports, and Notification enum extension. Running the actual checks
+// is reserved for integration tests (needs Mongo).
+// ────────────────────────────────────────────────────────────────────
+const {
+  CHECKS, runAllBackgroundChecks,
+  __internal: bgAgentInternal,
+} = await import("../Service/backgroundAgent.service.js");
+
+// ─── CHECKS registry ─────────────────────────────────────────────
+assert(Array.isArray(CHECKS) && CHECKS.length === 4,
+       "CHECKS registry has 4 entries (deadstock, low-stock, market-gap, financial)");
+assert(Object.isFrozen(CHECKS),
+       "CHECKS registry is frozen (no runtime mutation)");
+
+const expectedCheckNames = [
+  "seller_deadstock_alert",
+  "seller_low_stock_alert",
+  "admin_market_gap_digest",
+  "admin_financial_summary",
+];
+for (const name of expectedCheckNames) {
+  assert(CHECKS.some((c) => c.name === name),
+         `CHECKS contains "${name}"`);
+}
+
+for (const c of CHECKS) {
+  assert(typeof c.name === "string" && c.name.length > 0,
+         `check "${c.name}" has a non-empty name`);
+  assert(Number.isFinite(c.cooldownMs) && c.cooldownMs > 0,
+         `check "${c.name}" has a positive cooldownMs`);
+  assert(typeof c.enabled === "boolean",
+         `check "${c.name}" has boolean enabled flag`);
+  assert(typeof c.compute === "function",
+         `check "${c.name}" has compute() function`);
+}
+
+// All cooldowns are 7-day by default — sellers/admins don't want a daily nag.
+assert(CHECKS.every((c) => c.cooldownMs === bgAgentInternal.ONE_WEEK_MS),
+       "every check defaults to a 7-day cooldown");
+
+// ─── __internal constants ───────────────────────────────────────
+assert(bgAgentInternal.DEADSTOCK_NOTIFY_THRESHOLD_MNT === 500_000,
+       "deadstock notification threshold default = ₮500,000");
+assert(bgAgentInternal.ONE_DAY_MS  === 24 * 60 * 60 * 1000,
+       "ONE_DAY_MS constant correct");
+assert(bgAgentInternal.ONE_WEEK_MS === 7  * 24 * 60 * 60 * 1000,
+       "ONE_WEEK_MS constant correct");
+
+// ─── Helpers ─────────────────────────────────────────────────────
+assert(typeof bgAgentInternal.isCoolDownPassed === "function",
+       "isCoolDownPassed exported via __internal");
+assert(typeof bgAgentInternal.fire === "function",
+       "fire() exported via __internal");
+assert(typeof bgAgentInternal.fmtMNT === "function",
+       "fmtMNT() exported via __internal");
+
+// fmtMNT — Mongolian currency formatting
+const fmtMNT = bgAgentInternal.fmtMNT;
+assert(fmtMNT(500_000).startsWith("₮"),
+       "fmtMNT prefixes the tugrik symbol");
+assert(fmtMNT(0).includes("0"),    "fmtMNT(0) doesn't crash");
+assert(fmtMNT(null).includes("0"), "fmtMNT(null) coerces to 0 (no NaN)");
+
+// ─── runAllBackgroundChecks — surface only (real run needs DB) ──
+assert(typeof runAllBackgroundChecks === "function",
+       "runAllBackgroundChecks exported");
+
+// ─── Queue file ──────────────────────────────────────────────────
+const {
+  BACKGROUND_AGENT_QUEUE,
+  startBackgroundAgentScheduler,
+  stopBackgroundAgentScheduler,
+} = await import("../Queue/backgroundAgent.queue.js");
+
+assert(BACKGROUND_AGENT_QUEUE === "background-agent",
+       "queue name constant = 'background-agent'");
+assert(typeof startBackgroundAgentScheduler === "function",
+       "startBackgroundAgentScheduler exported");
+assert(typeof stopBackgroundAgentScheduler  === "function",
+       "stopBackgroundAgentScheduler exported");
+
+// Scheduler is idempotent — starting twice is a no-op.
+// We use a huge intervalMs + bootDelayMs so the timer doesn't actually
+// tick during the test run, but Node still registers the handles.
+const start1 = startBackgroundAgentScheduler({
+  intervalMs: 999_999_999, bootDelayMs: 999_999_999,
+});
+const start2 = startBackgroundAgentScheduler({
+  intervalMs: 999_999_999, bootDelayMs: 999_999_999,
+});
+assert(start1 === true || start1 === false,
+       "startBackgroundAgentScheduler returns boolean");
+// Either first call returned true (started) and second returned false
+// (already running), OR both returned false (AI_BG_AGENT_DISABLED=true
+// in test env — both shapes are valid).
+if (start1 === true) {
+  assert(start2 === false,
+         "second start call is a no-op when scheduler is already running");
+}
+stopBackgroundAgentScheduler();        // clean up handles
+stopBackgroundAgentScheduler();        // double-stop must not throw
+
+// ─── Notification model enum extension ──────────────────────────
+const NotificationModel = (await import("../Model/notification.model.js")).default;
+const notifTypeEnum = NotificationModel.schema.path("type").enumValues;
+assert(notifTypeEnum.includes("ai_insight"),
+       "Notification.type enum includes 'ai_insight' (Phase L)");
+
+// ─── BackgroundAgentLog model shape ─────────────────────────────
+const LogModel = (await import("../Model/backgroundAgentLog.model.js")).default;
+const logPaths = LogModel.schema.paths;
+assert(!!logPaths.checkName,  "BackgroundAgentLog has checkName field");
+assert(!!logPaths.recipient,  "BackgroundAgentLog has recipient field");
+assert(!!logPaths.lastRunAt,  "BackgroundAgentLog has lastRunAt field");
+assert(!!logPaths.payload,    "BackgroundAgentLog has payload field");
+
+// Compound unique index on (checkName, recipient) — guarantees one
+// throttle row per (check, recipient) pair.
+const logIndexes = LogModel.schema.indexes();
+const hasUniquePair = logIndexes.some(([keys, opts]) =>
+  keys.checkName === 1 && keys.recipient === 1 && opts?.unique === true);
+assert(hasUniquePair,
+       "BackgroundAgentLog has unique compound index on (checkName, recipient)");
+
+// TTL on lastRunAt — 60-day expiry keeps the collection bounded.
+const hasTtlIndex = logIndexes.some(([keys, opts]) =>
+  keys.lastRunAt === 1 && typeof opts?.expireAfterSeconds === "number");
+assert(hasTtlIndex,
+       "BackgroundAgentLog has TTL index on lastRunAt");
+
+// ────────────────────────────────────────────────────────────────────
 // Summary
 // ────────────────────────────────────────────────────────────────────
 console.log("");

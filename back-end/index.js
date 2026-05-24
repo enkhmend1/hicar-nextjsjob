@@ -19,6 +19,7 @@ import './Queue/escrowRelease.queue.js';      // Phase-2 escrow worker
 import './Queue/disputeDeadline.queue.js';    // Phase-2 dispute SLA worker
 import { startReconciliationScheduler } from './Queue/reconciliation.queue.js';
 import { startOutboxWorker } from './Queue/notificationOutbox.queue.js';
+import { startBackgroundAgentScheduler } from './Queue/backgroundAgent.queue.js';   // Phase L
 import './Service/notification.service.js';
 import './Service/qpay.service.js';
 
@@ -113,4 +114,5 @@ app.listen(PORT, () => {
   // wait for Mongo + Redis to settle before firing the first tick.
   startReconciliationScheduler();
   startOutboxWorker();
+  startBackgroundAgentScheduler();  // Phase L — daily AI insight notifications
 });
