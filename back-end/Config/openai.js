@@ -56,7 +56,12 @@ const VISION_BASE_URL = env("GEMINI_BASE_URL", "https://generativelanguage.googl
 const VISION_MODEL    = env("GEMINI_MODEL",    "gemini-2.0-flash");
 
 const CLIENT_TIMEOUT_MS = Number(env("AI_REQUEST_TIMEOUT_MS", "30000")) || 30_000;
-const CLIENT_MAX_RETRIES = Number(env("AI_REQUEST_MAX_RETRIES", "1")) || 1;
+// Phase M.1: bumped 1 → 4. The OpenAI SDK retries internally on 429/5xx
+// with exponential backoff and respects the upstream's `Retry-After`
+// header. Groq free-tier limits clear in 1-5s; 4 retries (~0.5/1/2/4s)
+// usually covers it. After SDK retries exhaust, aiFallback.service
+// walks to the next entry in the chain.
+const CLIENT_MAX_RETRIES = Number(env("AI_REQUEST_MAX_RETRIES", "4")) || 4;
 
 // ────────────────────────────────────────────────────────────────────
 // Safe instantiation — never throws at module-load time

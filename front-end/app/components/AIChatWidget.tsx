@@ -13,7 +13,7 @@ import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
 import type { AIResponse } from "@/app/lib/services/chat.service";
-import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Search as SearchIcon } from "lucide-react";
+import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Search as SearchIcon, Clock } from "lucide-react";
 
 /** /car or /changecar — both open the switcher dropdown without sending. */
 const SLASH_CAR_RX = /^\/(?:car|changecar)\b/i;
@@ -155,7 +155,11 @@ export default function HiCarAIChat() {
     return detectMongolianPlate(input);
   }, [input, activeVehicle?.plate]);
   // Aliases for legacy ref points below (kept short to minimise diff).
-  const busy      = agent.busy || agent.plateBusy;
+  // Phase M.1: during the rate-limit cooldown the input is also disabled
+  // — the auto-retry will fire when the timer expires, and we don't want
+  // the user to fire a duplicate request that just adds to the queue.
+  const inCooldown = agent.secondsUntilRetry > 0;
+  const busy      = agent.busy || agent.plateBusy || inCooldown;
   const plateBusy = agent.plateBusy;
   const plateErr  = agent.plateError;
   const idRef = useRef(10);
@@ -640,12 +644,32 @@ export default function HiCarAIChat() {
             </div>
           </div>
         ))}
-        {busy && (
+        {/* Phase M.1: separate visual for "actively waiting on AI" vs
+            "cooling down before auto-retry". The cooldown chip shows a
+            live countdown + cancel affordance so the user knows
+            EXACTLY what's happening and can bail out if they want. */}
+        {busy && !inCooldown && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3 py-2 text-[13px] text-gray-400 shadow-sm flex gap-1 items-center">
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
+        )}
+        {inCooldown && (
+          <div className="flex justify-start">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl rounded-bl-sm px-3 py-2 text-[12px] text-amber-800 shadow-sm flex items-center gap-2">
+              <Clock size={12} className="animate-pulse" />
+              <span>
+                {locale === "en"
+                  ? `Auto-retrying in ${agent.secondsUntilRetry}s…`
+                  : `${agent.secondsUntilRetry}с дараа автоматаар…`}
+              </span>
+              <button onClick={agent.cancelRateLimit}
+                className="text-amber-700 hover:text-amber-900 underline cursor-pointer bg-transparent border-none text-[11px] p-0">
+                {locale === "en" ? "Cancel" : "Болих"}
+              </button>
             </div>
           </div>
         )}
@@ -714,8 +738,16 @@ export default function HiCarAIChat() {
         <input value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && send()}
           disabled={busy}
-          placeholder={listening ? (locale === "en" ? "Listening..." : "Хүлээж байна...") : placeholder}
-          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white transition-colors outline-none" />
+          placeholder={
+            inCooldown
+              ? (locale === "en"
+                  ? `Auto-retrying in ${agent.secondsUntilRetry}s…`
+                  : `${agent.secondsUntilRetry}с дараа автоматаар…`)
+              : listening
+                ? (locale === "en" ? "Listening..." : "Хүлээж байна...")
+                : placeholder
+          }
+          className={`flex-1 ${inCooldown ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"} border rounded-xl px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white transition-colors outline-none`} />
         <button onClick={() => send()} disabled={busy || !input.trim()}
           className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-violet-300 disabled:to-fuchsia-300 text-white rounded-xl cursor-pointer border-none transition-colors shrink-0">
           <Send size={14} />

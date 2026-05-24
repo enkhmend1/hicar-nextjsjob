@@ -1077,6 +1077,202 @@ assert(hasTtlIndex,
        "BackgroundAgentLog has TTL index on lastRunAt");
 
 // ────────────────────────────────────────────────────────────────────
+// ⑲ Phase M.1 — Fallback chain (rate-limit fortress)
+// Pure-function checks for chatWithFallback walking + error classifier.
+// Doesn't require Groq/Gemini keys: builds tiny fake clients that
+// resolve / throw on demand.
+// ────────────────────────────────────────────────────────────────────
+const { chatWithFallback, buildTextFallbackChain, __internal: fallbackInternal } =
+  await import("../Service/aiFallback.service.js");
+
+const { isFallbackableError } = fallbackInternal;
+
+// ─── isFallbackableError — classifier behaviour ────────────────
+assert(isFallbackableError({ status: 429 }) === true,
+       "429 is fallbackable");
+assert(isFallbackableError({ status: 503 }) === true,
+       "503 is fallbackable (provider overloaded)");
+assert(isFallbackableError({ status: 502 }) === true,
+       "502 is fallbackable (gateway)");
+assert(isFallbackableError({ status: 504 }) === true,
+       "504 is fallbackable (timeout)");
+assert(isFallbackableError({ code: "ETIMEDOUT" }) === true,
+       "ETIMEDOUT is fallbackable");
+assert(isFallbackableError({ code: "ECONNRESET" }) === true,
+       "ECONNRESET is fallbackable");
+assert(isFallbackableError({ status: 400 }) === false,
+       "400 bad request is NOT fallbackable (smaller model won't help)");
+assert(isFallbackableError({ status: 401 }) === false,
+       "401 auth failure is NOT fallbackable");
+assert(isFallbackableError({ status: 500 }) === false,
+       "500 generic server error is NOT fallbackable (likely provider bug)");
+assert(isFallbackableError({}) === false,
+       "empty error object is NOT fallbackable");
+
+// ─── chatWithFallback walks the chain on 429 ───────────────────
+// Build fake clients: first 429s, second succeeds.
+const fakeOk = { choices: [{ message: { content: "hello from entry-2" } }], usage: { total_tokens: 100 } };
+const make429Client = () => ({
+  chat: { completions: { create: async () => {
+    const e = new Error("Rate limited");
+    e.status = 429;
+    throw e;
+  } } },
+});
+const makeOkClient = (resp) => ({
+  chat: { completions: { create: async () => resp } },
+});
+
+const chain = [
+  { client: make429Client(), model: "model-a", label: "entry-1" },
+  { client: makeOkClient(fakeOk), model: "model-b", label: "entry-2" },
+];
+const fbWalk = await chatWithFallback({ chain, body: { messages: [] } });
+assert(fbWalk.response === fakeOk,
+       "fallback walks past 429 to the next entry");
+assert(fbWalk.usedEntry.label === "entry-2",
+       "usedEntry surfaces the entry that actually answered");
+assert(fbWalk.attempts.length === 2,
+       "attempts array records BOTH the failure and the success");
+assert(fbWalk.attempts[0].ok === false && fbWalk.attempts[0].status === 429,
+       "attempts[0] = failed entry with status=429");
+assert(fbWalk.attempts[1].ok === true,
+       "attempts[1] = successful entry");
+
+// ─── First entry succeeds → no walk, no attempts beyond first ──
+const happyChain = [
+  { client: makeOkClient(fakeOk), model: "model-a", label: "entry-1" },
+  { client: makeOkClient(fakeOk), model: "model-b", label: "entry-2" },
+];
+const fbHappy = await chatWithFallback({ chain: happyChain, body: { messages: [] } });
+assert(fbHappy.usedEntry.label === "entry-1",
+       "happy path uses entry-1 without touching entry-2");
+assert(fbHappy.attempts.length === 1,
+       "happy path produces exactly one attempt record");
+
+// ─── Non-fallbackable error short-circuits ─────────────────────
+const badRequestChain = [
+  { client: { chat: { completions: { create: async () => {
+    const e = new Error("Bad request");
+    e.status = 400;
+    throw e;
+  } } } }, model: "model-a", label: "entry-1" },
+  { client: makeOkClient(fakeOk), model: "model-b", label: "entry-2" },
+];
+let threw400 = false;
+try {
+  await chatWithFallback({ chain: badRequestChain, body: { messages: [] } });
+} catch (e) {
+  threw400 = e.status === 400;
+}
+assert(threw400, "400 short-circuits — no walk to next entry");
+
+// ─── All entries exhausted → rethrows last error ───────────────
+const allBadChain = [
+  { client: make429Client(), model: "model-a", label: "entry-1" },
+  { client: make429Client(), model: "model-b", label: "entry-2" },
+];
+let exhaustedStatus = null;
+try {
+  await chatWithFallback({ chain: allBadChain, body: { messages: [] } });
+} catch (e) {
+  exhaustedStatus = e.status;
+}
+assert(exhaustedStatus === 429,
+       "all entries 429 → rethrows the last 429 (frontend countdown takes over)");
+
+// ─── Empty chain → defensive throw, not undefined behaviour ────
+let emptyChainErr = null;
+try {
+  await chatWithFallback({ chain: [], body: { messages: [] } });
+} catch (e) {
+  emptyChainErr = e.message;
+}
+assert(/empty chain/i.test(emptyChainErr || ""),
+       "empty chain throws a clear error");
+
+// ─── chatWithFallback overrides body.model per entry ───────────
+// (caller passes any model; chain entry's model wins so the same body
+// can be reused without copy-mutating.)
+let observedModel = null;
+const modelSpyChain = [
+  { client: { chat: { completions: { create: async (body) => {
+    observedModel = body.model;
+    return fakeOk;
+  } } } }, model: "spy-model", label: "spy" },
+];
+await chatWithFallback({
+  chain: modelSpyChain,
+  body: { model: "caller-supplied", messages: [] },
+});
+assert(observedModel === "spy-model",
+       "chain entry's model overrides caller-supplied model");
+
+// ─── Abort signal short-circuits walk ──────────────────────────
+const aborted = new AbortController();
+aborted.abort();
+let abortedThrew = false;
+try {
+  await chatWithFallback({
+    chain: [{ client: make429Client(), model: "x", label: "x" }],
+    body: { messages: [] },
+    signal: aborted.signal,
+  });
+} catch (e) {
+  abortedThrew = e.aborted === true || /walltime/i.test(e.message);
+}
+assert(abortedThrew,
+       "pre-aborted signal short-circuits with walltime_exceeded");
+
+// ─── buildTextFallbackChain — composes from supplied parts ─────
+// Use stub clients so this works regardless of whether real API keys
+// are set in the test env.
+const stubGroq   = makeOkClient(fakeOk);
+const stubGemini = makeOkClient(fakeOk);
+const builtChain = buildTextFallbackChain({
+  primaryClient: stubGroq,    primaryModel: "groq-70b",   primaryLabel: "groq",
+  groqFallbackModel: "groq-8b",
+  geminiClient: stubGemini,   geminiModel: "gem-2",       geminiLabel: "gem",
+});
+assert(builtChain.length === 3,
+       "buildTextFallbackChain produces 3 entries when all parts present");
+assert(builtChain[0].model === "groq-70b" && builtChain[0].label === "groq",
+       "entry 1 = primary Groq 70b");
+assert(builtChain[1].model === "groq-8b",
+       "entry 2 = Groq 8b fallback (same client, different model)");
+assert(builtChain[1].client === stubGroq,
+       "entry 2 reuses the primary client");
+assert(builtChain[2].client === stubGemini,
+       "entry 3 = Gemini (different client = different rate-limit counter)");
+
+// Same client for Gemini == Groq → dedup'd (would happen if someone
+// pointed both env vars at the same provider).
+const dedupChain = buildTextFallbackChain({
+  primaryClient: stubGroq, primaryModel: "m1", primaryLabel: "p",
+  groqFallbackModel: "m2",
+  geminiClient: stubGroq, geminiModel: "m3", geminiLabel: "g",
+});
+assert(dedupChain.length === 2,
+       "buildTextFallbackChain dedups when Gemini client === primary client");
+
+// Skip 8b fallback if it matches the primary model (degenerate config).
+const sameModelChain = buildTextFallbackChain({
+  primaryClient: stubGroq, primaryModel: "same", primaryLabel: "p",
+  groqFallbackModel: "same",
+  geminiClient: stubGemini, geminiModel: "g", geminiLabel: "g",
+});
+assert(sameModelChain.length === 2,
+       "buildTextFallbackChain skips 8b entry when model matches primary");
+
+// Missing primary key (null client) → chain still works with only Gemini.
+const geminiOnlyChain = buildTextFallbackChain({
+  primaryClient: null, primaryModel: "", primaryLabel: "",
+  geminiClient: stubGemini, geminiModel: "g", geminiLabel: "g",
+});
+assert(geminiOnlyChain.length === 1 && geminiOnlyChain[0].client === stubGemini,
+       "missing primary client → Gemini-only chain (degraded but functional)");
+
+// ────────────────────────────────────────────────────────────────────
 // Summary
 // ────────────────────────────────────────────────────────────────────
 console.log("");

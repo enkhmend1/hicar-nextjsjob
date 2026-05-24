@@ -68,6 +68,7 @@ import {
   normalizeVehicleReference, expandQueryWithVehicle,
 } from "../Service/vehicleKnowledge.service.js";
 import { diagnoseSymptom, isSymptomShaped } from "../Service/diagnostic.service.js";
+import { chatWithFallback, buildTextFallbackChain } from "../Service/aiFallback.service.js";
 
 // ────────────────────────────────────────────────────────────────────
 // TOOL CATALOGUE — registered once, filtered per-request by role scope
@@ -1011,6 +1012,15 @@ const callSignature = (tc) =>
   `${tc.function?.name || "?"}:${tc.function?.arguments || ""}`;
 
 // ────────────────────────────────────────────────────────────────────
+// Phase M.1: build the text-completion fallback chain ONCE at module
+// load. Order: Groq 70b → Groq 8b → Gemini 2.0 Flash. Each entry has
+// an independent rate-limit counter, so when Groq's 30 RPM is saturated
+// we degrade to a smaller / different-provider model instead of 429-ing
+// the user. See Service/aiFallback.service.js for the walking logic.
+// ────────────────────────────────────────────────────────────────────
+const TEXT_FALLBACK_CHAIN = buildTextFallbackChain();
+
+// ────────────────────────────────────────────────────────────────────
 // Conversation engine — passes the runtime context (incl. scope) to
 // every tool handler.
 // ────────────────────────────────────────────────────────────────────
@@ -1046,6 +1056,16 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
   let lastUsage = null;
   let totalTokens = 0;
   let terminate = { reason: "model_finished" };
+  // Phase M.1: track which provider actually served each round so we
+  // can surface "served by Gemini fallback" in diagnostics.
+  let lastUsedProvider = profile.label;
+  const fallbackAttempts = [];
+
+  // Vision (image-bearing) requests have a single-provider chain —
+  // Groq doesn't do vision yet, so we can't fall back to it.
+  const chainForThisRequest = profile === aiConfig.vision
+    ? [{ client: profile.client, model: profile.model, label: profile.label }]
+    : TEXT_FALLBACK_CHAIN;
 
   try {
     for (let round = 0; round < limits.maxRounds; round++) {
@@ -1054,6 +1074,8 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
       if (ac.signal.aborted)                      { terminate = { reason: "walltime" }; break; }
 
       const body = {
+        // model is set per-entry by chatWithFallback; we still pass it
+        // here so single-provider paths (vision) keep working.
         model: profile.model,
         messages: conversation,
         temperature: 0.3,
@@ -1064,7 +1086,11 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
         body.tool_choice = "auto";
       }
 
-      const resp = await profile.client.chat.completions.create(body, { signal: ac.signal });
+      const { response: resp, usedEntry, attempts } = await chatWithFallback({
+        chain: chainForThisRequest, body, signal: ac.signal,
+      });
+      lastUsedProvider = usedEntry.label;
+      fallbackAttempts.push(...attempts);
       lastMessage = resp.choices?.[0]?.message;
       lastUsage   = resp.usage;
       totalTokens += Number(resp.usage?.total_tokens || 0);
@@ -1146,6 +1172,11 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
     totalTokens,
     terminate,
     reflection: finalReflection,
+    // Phase M.1: which provider actually answered, plus the per-attempt
+    // breakdown — useful for ops dashboards ("how often did we fall back
+    // to Gemini last week"). Empty for the happy path on entry #1.
+    usedProvider: lastUsedProvider,
+    fallbackAttempts,
   };
 };
 
@@ -1155,7 +1186,18 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
 const mapUpstreamError = (err) => {
   const upstream = Number(err?.status || err?.response?.status || 0);
   if (upstream === 401 || upstream === 403) return { status: 503, body: { code: "AI_AUTH_FAILED", message: "AI provider rejected credentials." } };
-  if (upstream === 429) return { status: 429, body: { code: "AI_RATE_LIMITED", message: "AI provider is rate-limiting.", retryAfter: Number(err?.headers?.["retry-after"]) || 30 } };
+  if (upstream === 429) {
+    // Phase M.1: cap the suggested cooldown at 15s — by the time the
+    // frontend countdown finishes the user has usually rage-typed
+    // anyway. Groq's actual Retry-After is honoured if present; we just
+    // cap our DEFAULT (was 30) so the worst case isn't a half-minute
+    // dead UI. Also bottom-out at 5s so we don't spin retries.
+    const headerVal = Number(err?.headers?.["retry-after"]);
+    const retryAfter = Number.isFinite(headerVal) && headerVal > 0
+      ? Math.min(headerVal, 30)
+      : 8;
+    return { status: 429, body: { code: "AI_RATE_LIMITED", message: "AI provider is rate-limiting.", retryAfter } };
+  }
   if (upstream === 400 || upstream === 422) return { status: 400, body: { code: "AI_BAD_REQUEST", message: err?.message || "AI rejected request shape." } };
   if (upstream >= 500 && upstream < 600) return { status: 502, body: { code: "AI_UPSTREAM_ERROR", message: "AI provider had internal error." } };
   if (err?.code === "ETIMEDOUT" || err?.code === "ECONNREFUSED"
@@ -1332,7 +1374,7 @@ export const handleAIRequest = async (req, res) => {
       user: req.user, role, scope, locale, memory,
       vehicleContext: effectiveVehicleContext,
     };
-    const { reply, toolCalls, usage, totalTokens, terminate, reflection } =
+    const { reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts } =
       await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint });
 
     // ── Memory write-back: pick up signals from tool calls ────────
@@ -1381,6 +1423,11 @@ export const handleAIRequest = async (req, res) => {
         route: profile === aiConfig.vision ? "vision" : "text",
         model: profile.model,
         provider: profile.label,
+        // Phase M.1: provider that actually answered (may differ from
+        // `provider` when we fell back), and the per-attempt breakdown
+        // for ops dashboards.
+        usedProvider,
+        fallbackAttempts,
         totalTokens,
         usage,
         terminateReason: terminate.reason,
