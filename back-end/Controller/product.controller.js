@@ -238,7 +238,7 @@ export const updateProduct = async (req, res) => {
     }
 
     const item = await Product.findByIdAndUpdate(req.params.id, update, {
-      new: true, runValidators: true,
+      returnDocument: "after", runValidators: true,
     });
     invalidateProductCache();
 
@@ -285,7 +285,7 @@ export const moderateProduct = async (req, res) => {
     const update = action === "approve"
       ? { status: "approved", rejectedReason: "" }
       : { status: "rejected", rejectedReason: reason || "" };
-    const item = await Product.findByIdAndUpdate(req.params.id, update, { new: true });
+    const item = await Product.findByIdAndUpdate(req.params.id, update, { returnDocument: "after" });
     if (!item) return res.status(404).json({ message: "Бараа олдсонгүй" });
     invalidateProductCache();
     if (item.seller) {

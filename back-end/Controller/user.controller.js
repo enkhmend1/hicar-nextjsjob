@@ -51,7 +51,7 @@ export const updateRole = async (req, res) => {
       const check = await ensureNotLastAdmin(req.params.id);
       if (!check.ok) return res.status(check.status).json({ message: check.message });
     }
-    const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true });
+    const user = await User.findByIdAndUpdate(req.params.id, { role }, { returnDocument: "after" });
     if (!user) return res.status(404).json({ message: "Хэрэглэгч олдсонгүй" });
     return res.json({ user });
   } catch (err) {

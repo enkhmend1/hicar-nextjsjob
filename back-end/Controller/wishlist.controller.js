@@ -23,7 +23,7 @@ export const addToWishlist = async (req, res) => {
     const updated = await User.findByIdAndUpdate(
       req.user._id,
       { $addToSet: { wishlist: productId } },
-      { new: true },
+      { returnDocument: "after" },
     );
     return res.json({ wishlist: updated.wishlist });
   } catch (err) {
@@ -36,7 +36,7 @@ export const removeFromWishlist = async (req, res) => {
     const updated = await User.findByIdAndUpdate(
       req.user._id,
       { $pull: { wishlist: req.params.productId } },
-      { new: true },
+      { returnDocument: "after" },
     );
     return res.json({ wishlist: updated.wishlist });
   } catch (err) {

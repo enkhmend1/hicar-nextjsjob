@@ -98,7 +98,7 @@ export const updateMapping = async (req, res) => {
   try {
     const body = sanitize(req.body);
     if (!body.keyword) return res.status(400).json({ message: "keyword шаардлагатай" });
-    const item = await OemMapping.findByIdAndUpdate(req.params.id, body, { new: true });
+    const item = await OemMapping.findByIdAndUpdate(req.params.id, body, { returnDocument: "after" });
     if (!item) return res.status(404).json({ message: "Олдсонгүй" });
     invalidateMappingCache();
     return res.json({ item });

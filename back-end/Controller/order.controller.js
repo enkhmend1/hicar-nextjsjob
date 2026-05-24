@@ -69,7 +69,7 @@ export const createOrder = async (req, res) => {
       const upd = await Product.findOneAndUpdate(
         { _id: e.product, stockQty: { $gte: e.quantity } },
         { $inc: { stockQty: -e.quantity } },
-        { new: true },
+        { returnDocument: "after" },
       );
       if (!upd) {
         // Rollback any previous decrements

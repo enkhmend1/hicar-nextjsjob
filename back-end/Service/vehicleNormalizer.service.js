@@ -97,14 +97,14 @@ const upsertCanonical = async (e) => {
   const manufacturer = await Manufacturer.findOneAndUpdate(
     { code: e.manuname },
     { $setOnInsert: { code: e.manuname, displayName: e.manuname } },
-    { new: true, upsert: true },
+    { returnDocument: "after", upsert: true },
   );
 
   const model = e.modelname
     ? await VehicleModel.findOneAndUpdate(
         { manufacturer: manufacturer._id, code: e.modelname, generation: e.generation || "" },
         { $setOnInsert: { manufacturer: manufacturer._id, code: e.modelname, generation: e.generation || "", displayName: e.modelname } },
-        { new: true, upsert: true },
+        { returnDocument: "after", upsert: true },
       )
     : null;
 
@@ -122,7 +122,7 @@ const upsertCanonical = async (e) => {
               : /petrol|gasoline/i.test(e.motortype) ? "petrol" : "",
           },
         },
-        { new: true, upsert: true },
+        { returnDocument: "after", upsert: true },
       )
     : null;
 
@@ -165,7 +165,7 @@ export const normalizeAndPersist = async (input, { userId = null } = {}) => {
       },
       $setOnInsert: { user: userId },
     },
-    { new: true, upsert: true },
+    { returnDocument: "after", upsert: true },
   );
 
   return { vehicle, manufacturer, model, engine, normalized: e };

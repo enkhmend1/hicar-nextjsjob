@@ -43,6 +43,10 @@ import {
   TRANSLIT_INSTRUCTION_EN, TRANSLIT_INSTRUCTION_MN,
 } from "../Service/latinMongolian.service.js";
 import { smartSearch } from "../Service/smartSearch.service.js";
+import { fetchByPlate, isPlateValid, normalizePlate as garageNormalizePlate } from "../Service/garage.service.js";
+import { normalizeAndPersist } from "../Service/vehicleNormalizer.service.js";
+import * as aiMemory from "../Service/aiMemory.service.js";
+import { detectMongolianPlate } from "../Service/plateDetector.service.js";
 import {
   findDeadstock, findShelfLocations, generateQuotation,
 } from "../Service/sellerInsights.service.js";
@@ -56,6 +60,14 @@ import {
 } from "../Service/aiRole.service.js";
 import { buildSystemPrompt } from "../Service/aiPrompts.service.js";
 import { buildEnvelope, vagueQueryFormFor } from "../Service/aiResponse.service.js";
+import { securityGate } from "../Service/aiSecurity.service.js";
+import {
+  reflectOnToolCalls, buildEscalation, confidenceBand,
+} from "../Service/aiReflection.service.js";
+import {
+  normalizeVehicleReference, expandQueryWithVehicle,
+} from "../Service/vehicleKnowledge.service.js";
+import { diagnoseSymptom, isSymptomShaped } from "../Service/diagnostic.service.js";
 
 // ────────────────────────────────────────────────────────────────────
 // TOOL CATALOGUE — registered once, filtered per-request by role scope
@@ -144,6 +156,62 @@ const TOOLS = [
         type: "object",
         properties: { keyword: { type: "string", description: "The vague keyword the user typed" } },
         required: ["keyword"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "diagnose_symptom",
+      description:
+        "Use this when the user describes a SYMPTOM ('тог тог дуу', 'мотор чичирэх', " +
+        "'тоормосны педал зөөлөн', 'хэт халалт') instead of asking for a specific part. " +
+        "Returns a ranked list of candidate parts WITH ONE clarifying question. " +
+        "ALWAYS call this BEFORE search_products on symptom-shaped input — the " +
+        "spec rule is \"diagnose before selling\".",
+      parameters: {
+        type: "object",
+        properties: {
+          symptom: { type: "string", description: "The user's symptom description verbatim" },
+        },
+        required: ["symptom"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "lookup_vehicle_by_plate",
+      description:
+        "Look up a Mongolian-format license plate (4 digits + 3 Cyrillic letters, e.g. " +
+        "\"1234УБА\") via the Garage.mn provider. Returns the matched vehicle (make/model/" +
+        "generation/engine) WITHOUT changing the active vehicle — the AI should ask the " +
+        "user to confirm, then call switch_active_vehicle. Use this when the user types " +
+        "a plate in the chat or explicitly asks to look up a plate.",
+      parameters: {
+        type: "object",
+        properties: {
+          plate: { type: "string", description: "Plate in 1234УБА or 1234 уба form" },
+        },
+        required: ["plate"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "switch_active_vehicle",
+      description:
+        "Set the user's active vehicle (writes to cross-session memory). Use AFTER the user " +
+        "confirms a vehicle from lookup_vehicle_by_plate or selects one from their history. " +
+        "Once switched, every subsequent search_vehicle_parts / search_products call uses " +
+        "the new vehicle context.",
+      parameters: {
+        type: "object",
+        properties: {
+          vehicleId: { type: "string", description: "Mongo _id of the Vehicle doc to activate" },
+        },
+        required: ["vehicleId"],
       },
     },
   },
@@ -334,9 +402,17 @@ const TOOL_HANDLERS = {
     const { query, category, limit = 5 } = args;
     const { scope, user } = runtime;
 
+    // Phase I: chassis-code normalisation. "P30 тоормос" → enriches
+    // the query with "Toyota Prius ZVW30" so the marketplace catalogue
+    // (which stores the canonical form) actually matches. The original
+    // colloquial token stays in the query string too, so we never
+    // narrow harder than the user did.
+    const vehicleEnriched = expandQueryWithVehicle(query);
+    const queryAfterVehicle = vehicleEnriched.query;
+
     // Belt-and-suspenders Latin→Mongolian deterministic dictionary pass.
-    const translit = transliterate(query);
-    const seedQuery = translit.hasHits ? translit.expandedQuery : query;
+    const translit = transliterate(queryAfterVehicle);
+    const seedQuery = translit.hasHits ? translit.expandedQuery : queryAfterVehicle;
     const seedCategory = category || translit.bestCategory;
 
     const expanded = await expandQueryWithMappings(seedQuery);
@@ -459,6 +535,99 @@ const TOOL_HANDLERS = {
       ? `${runtime.vehicleContext.manufacturer || ""} ${runtime.vehicleContext.model || ""}`.trim()
       : "";
     return { partType: form.partType, fields: form.fields, note };
+  },
+
+  // ── Phase I: symptom → candidate parts diagnostic ─────────────────
+  async diagnose_symptom({ symptom }, _runtime) {
+    if (!symptom) return { error: "symptom required" };
+    const dx = diagnoseSymptom(symptom);
+    if (!dx) {
+      return {
+        symptom,
+        patternId: null,
+        candidates: [],
+        clarifyingQuestions: [
+          "Дугуйнаас, хөдөлгүүрээс, тоормосноос, аль хэсгээс шалтгаалж байгааг бичээрэй.",
+        ],
+        urgency: "low",
+        matchStrength: 0,
+        note: "Бид энэ шинж тэмдгийг таних боломжгүй — нарийвчлан тайлбарлана уу.",
+      };
+    }
+    return dx;
+  },
+
+  // ── Phase G: vehicle switcher tools (USER role) ──────────────────
+  async lookup_vehicle_by_plate({ plate }, runtime) {
+    if (!plate) return { error: "plate required" };
+    if (!isPlateValid(plate)) {
+      return { error: "Plate format буруу — 4 тоо + 3 кирилл (1234УБА)" };
+    }
+    const norm = garageNormalizePlate(plate);
+
+    // Cache hit — Vehicle already in DB. No external roundtrip.
+    let vehicle = await Vehicle.findOne({ plate: norm }).lean();
+    let isFromCache = Boolean(vehicle);
+
+    if (!vehicle) {
+      try {
+        const lookup = await fetchByPlate(norm);
+        const persisted = await normalizeAndPersist(lookup, {
+          userId: runtime.user?._id || null,
+        });
+        vehicle = persisted.vehicle;
+      } catch (e) {
+        return { error: `Дугаар олдсонгүй: ${e.message}`, plate: norm };
+      }
+    }
+
+    // Surface the standard frontend-friendly shape — same keys
+    // useCarStore.activeVehicle expects, so the chat widget can swap
+    // in the vehicle without an extra fetch.
+    return {
+      vehicleId:    String(vehicle._id),
+      plate:        vehicle.plate,
+      manufacturer: vehicle.snapshot?.manuname  || "",
+      model:        vehicle.snapshot?.modelname || "",
+      generation:   vehicle.snapshot?.generation || "",
+      engineCode:   vehicle.snapshot?.motorcode  || "",
+      engineType:   vehicle.snapshot?.motortype  || "",
+      isFromCache,
+    };
+  },
+
+  async switch_active_vehicle({ vehicleId }, runtime) {
+    if (!vehicleId) return { error: "vehicleId required" };
+    if (!runtime.user?._id) {
+      return { error: "Машин хадгалахын тулд нэвтэрсэн байх ёстой" };
+    }
+
+    const vehicle = await Vehicle.findById(vehicleId).lean();
+    if (!vehicle) return { error: "Машин олдсонгүй", vehicleId };
+
+    const payload = {
+      vehicleId:    String(vehicle._id),
+      plate:        vehicle.plate,
+      manufacturer: vehicle.snapshot?.manuname  || "",
+      model:        vehicle.snapshot?.modelname || "",
+      generation:   vehicle.snapshot?.generation || "",
+    };
+    await aiMemory.setActiveVehicle(runtime.user._id, payload);
+
+    // ALSO patch the runtime context so any tool the LLM calls in
+    // the SAME chat turn sees the new vehicle without another round.
+    runtime.vehicleContext = {
+      ...payload,
+      id: payload.vehicleId,
+      engineCode: vehicle.snapshot?.motorcode || "",
+      engineType: vehicle.snapshot?.motortype || "",
+    };
+
+    return {
+      switched: true,
+      ...payload,
+      engineCode: vehicle.snapshot?.motorcode || "",
+    };
   },
 
   async get_low_stock({ threshold = 5 }, runtime) {
@@ -852,11 +1021,27 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
           content: JSON.stringify(result),
         });
       }
+
+      // ── Phase H reflection: after this round's tools fired, look at
+      // the LAST one and decide whether to inject a recovery hint that
+      // the LLM will see on the NEXT round. This is what turns
+      // "search → 0 → end" into "search → 0 → cross_ref → match".
+      const roundsRemaining = LIMITS.maxRounds - (round + 1);
+      const reflection = reflectOnToolCalls(toolCalls, runtime, { roundsRemaining });
+      if (reflection.recoveryHint && roundsRemaining > 0) {
+        conversation.push({ role: "system", content: reflection.recoveryHint });
+      }
+
       if (terminate.reason !== "model_finished") break;
     }
   } finally {
     clearTimeout(walltimeTimer);
   }
+
+  // Final reflection — the user sees the LAST tool's payload, so its
+  // band is the one that determines whether to show an escalation
+  // banner on the frontend.
+  const finalReflection = reflectOnToolCalls(toolCalls, runtime, { roundsRemaining: 0 });
 
   return {
     reply: lastMessage?.content || "",
@@ -864,6 +1049,7 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
     usage: lastUsage,
     totalTokens,
     terminate,
+    reflection: finalReflection,
   };
 };
 
@@ -902,10 +1088,28 @@ export const handleAIRequest = async (req, res) => {
     const role  = deriveAiRole(req.user);
     const scope = buildRoleScope(role, req.user);
 
+    // ── Security gate: prompt-injection / jailbreak / secret extraction
+    //    Runs BEFORE the LLM call so adversarial input never reaches Groq.
+    //    Same generic refusal regardless of category — anti-fingerprinting.
+    const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+    const security = securityGate(lastUserText, locale);
+    if (security) {
+      console.warn(
+        `[ai.security] BLOCKED  category=${security.audit.category}  role=${role}  ` +
+        `user=${req.user?._id || "anon"}  preview="${security.audit.textPreview.replace(/"/g, "'")}"`,
+      );
+      await cleanupUploadedAsset(req);
+      return res.json({
+        reply: security.refusal,
+        layout: "plain",
+        payload: {},
+        diagnostics: { reason: "security_blocked", category: security.audit.category, role },
+      });
+    }
+
     // ── Wrong-persona command short-circuit ───────────────────────
     // (e.g. anonymous user typing "today's sales" — answer locally and
     // never invoke the LLM.)
-    const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.content || "";
     const wrongPersona = detectWrongPersonaCommand(lastUserText, role);
     if (wrongPersona) {
       await cleanupUploadedAsset(req);
@@ -967,16 +1171,116 @@ export const handleAIRequest = async (req, res) => {
     const translitResult = transliterate(lastUserText);
     const transliterationHint = formatHint(translitResult, locale);
 
+    // ── Phase G: load cross-session memory + plate-detect nudge ───
+    // Memory load is unconditional for logged-in users; anon users get
+    // an empty shape so the rest of the pipeline is uniform.
+    const memory = await aiMemory.loadMemory(req.user?._id || null);
+
+    // If the frontend didn't supply a vehicleContext but memory has an
+    // active vehicle, fall through to memory as the source. This makes
+    // the chat "remember" the user's car across sessions even when the
+    // frontend forgot to thread vehicleContext (e.g. cold tab open).
+    let effectiveVehicleContext = vehicleContext;
+    if (!effectiveVehicleContext && memory?.activeVehicle?.vehicleId) {
+      const av = memory.activeVehicle;
+      effectiveVehicleContext = {
+        id:           String(av.vehicleId),
+        plate:        av.plate,
+        manufacturer: av.manufacturer,
+        model:        av.model,
+        generation:   av.generation,
+      };
+    }
+
+    // Detect an embedded plate in the user's latest message — the
+    // controller does NOT switch the vehicle, it just nudges the LLM
+    // via a system note to use lookup_vehicle_by_plate + ask the user
+    // to confirm. This is the "auto + confirmation" UX the user chose.
+    const detectedPlate = detectMongolianPlate(lastUserText);
+    const plateNudge = detectedPlate
+      ? `\n[SYSTEM NOTE] User message contains a Mongolian plate "${detectedPlate.plate}". ` +
+        `Call lookup_vehicle_by_plate to identify the vehicle, then ASK the user to confirm ` +
+        `("${detectedPlate.plate} — энэ машинд солих уу?") before calling switch_active_vehicle. ` +
+        `Do not auto-switch.`
+      : "";
+
+    // Phase I: detect chassis code / model shorthand in the message.
+    // We don't "switch" anything — just nudge the LLM to refer to the
+    // normalised form so its prose is consistent ("Toyota Prius ZVW30"
+    // not "P30") and the search query carries the canonical phrase.
+    const vehicleHit = normalizeVehicleReference(lastUserText);
+    const vehicleNudge = vehicleHit
+      ? `\n[SYSTEM NOTE] User mentioned "${vehicleHit.surface}" which canonicalises to ` +
+        `"${vehicleHit.canonical}". Use this canonical form when calling search tools.`
+      : "";
+
+    // Phase I: detect symptom-shaped input. If the user described a
+    // symptom (not a part name), the agent should call diagnose_symptom
+    // FIRST and present candidates before any product search.
+    const symptomDetected = isSymptomShaped(lastUserText);
+    const symptomNudge = symptomDetected
+      ? `\n[SYSTEM NOTE] The user's message looks like a SYMPTOM, not a part name. ` +
+        `Call diagnose_symptom FIRST. Only after presenting candidate parts (and ` +
+        `optionally asking ONE clarifying question) should you search the catalogue.`
+      : "";
+
+    // Build the memory summary block — appended to the system prompt
+    // so the LLM has cross-session context without us paying for full
+    // conversation history.
+    const memoryHint = aiMemory.summarizeMemoryForPrompt(memory, locale);
+    const enrichedTranslitHint = [transliterationHint, memoryHint, plateNudge, vehicleNudge, symptomNudge]
+      .filter(Boolean).join("\n\n");
+
     // ── Run the bounded conversation ──────────────────────────────
-    const runtime = { user: req.user, role, scope, vehicleContext, locale };
-    const { reply, toolCalls, usage, totalTokens, terminate } =
-      await runConversation({ profile, messages, runtime, transliterationHint });
+    const runtime = {
+      user: req.user, role, scope, locale, memory,
+      vehicleContext: effectiveVehicleContext,
+    };
+    const { reply, toolCalls, usage, totalTokens, terminate, reflection } =
+      await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint });
+
+    // ── Memory write-back: pick up signals from tool calls ────────
+    // search_products → push to recentSearches
+    // search_vehicle_parts → push to recentSearches + vehicleId
+    // identify_part_from_image / cross_reference_oem → push surfaced items
+    if (req.user?._id) {
+      for (const tc of toolCalls) {
+        const r = tc.result;
+        if (!r || r.error) continue;
+        if (tc.name === "search_products" || tc.name === "search_vehicle_parts") {
+          aiMemory.pushRecentSearch(req.user._id, {
+            query:       r.query || lastUserText,
+            category:    r.category || r.plan?.category || "",
+            resultCount: r.count || 0,
+            vehicleId:   effectiveVehicleContext?.id || null,
+          }).catch(() => {});
+        }
+        // Stash up to 3 product references from any tool that produced items.
+        const items = Array.isArray(r.items) ? r.items.slice(0, 3) : [];
+        for (const p of items) {
+          if (!p?.id) continue;
+          aiMemory.pushRecentProduct(req.user._id, {
+            productId: p.id, name: p.name, oem: p.oem,
+          }).catch(() => {});
+        }
+      }
+    }
 
     // ── Assemble the structured envelope ──────────────────────────
+    // Phase H: surface reflection results to the frontend as
+    //   • confidence (0..100 — int for readability)
+    //   • escalation block (or null) — frontend renders prominent banner
+    const confidencePct = reflection ? Math.round(reflection.confidence * 100) : null;
+    const escalation = reflection?.shouldEscalate
+      ? buildEscalation(reflection.escalationReason || "low_confidence", locale)
+      : null;
+
     return res.json(buildEnvelope({
       replyText: reply,
       toolCalls,
       role,
+      confidence: confidencePct,
+      escalation,
       diagnostics: {
         route: profile === aiConfig.vision ? "vision" : "text",
         model: profile.model,
@@ -985,6 +1289,12 @@ export const handleAIRequest = async (req, res) => {
         usage,
         terminateReason: terminate.reason,
         toolCallCount: toolCalls.length,
+        // Phase H — surface reflection internals for ops dashboards.
+        reflection: reflection ? {
+          confidence: reflection.confidence,
+          band: confidenceBand(reflection.confidence),
+          escalationReason: reflection.escalationReason,
+        } : null,
         translit: translitResult.hasHits ? {
           hits: translitResult.hits.map((h) => ({ surface: h.surface, mn: h.mn, en: h.en })),
           expandedQuery: translitResult.expandedQuery,
@@ -1009,6 +1319,117 @@ export const handleAIRequest = async (req, res) => {
 
 /** @deprecated use handleAIRequest */
 export const chat = handleAIRequest;
+
+// ────────────────────────────────────────────────────────────────────
+// Phase G — Memory REST handlers
+//
+// These bypass the LLM entirely. The chat widget calls them directly
+// to power the header switcher UI (recent vehicles dropdown, manual
+// plate input, "switch / clear vehicle" buttons) without paying a
+// Groq round-trip for purely UI-driven state changes.
+//
+// Auth is required upstream (Routes/ai.route.js). Anonymous users
+// don't have memory; their vehicle is local-only (Zustand persist).
+// ────────────────────────────────────────────────────────────────────
+
+/** GET /api/ai/memory — return the current user's full memory shape. */
+export const handleMemoryGet = async (req, res) => {
+  try {
+    const memory = await aiMemory.loadMemory(req.user._id);
+    return res.json({ memory });
+  } catch (err) {
+    console.error("[ai.memory] get failed:", err.message);
+    return res.status(500).json({ code: "INTERNAL_ERROR", message: "Дотоод алдаа" });
+  }
+};
+
+/**
+ * POST /api/ai/memory/active-vehicle
+ *   body: { plate?: string }  OR  { vehicleId?: string }
+ *
+ * Two paths:
+ *   • { plate } — look up via Garage.mn (cache-first), persist
+ *                 vehicle, set as active.
+ *   • { vehicleId } — switch to an already-known vehicle (e.g. one
+ *                     the user picked from their recentVehicles list).
+ *
+ * Returns the updated memory shape so the frontend can re-render the
+ * dropdown without a separate GET round-trip.
+ */
+export const handleSetActiveVehicle = async (req, res) => {
+  try {
+    const { plate, vehicleId } = req.body || {};
+    if (!plate && !vehicleId) {
+      return res.status(400).json({
+        code: "MISSING_INPUT", message: "plate эсвэл vehicleId шаардлагатай",
+      });
+    }
+
+    let vehicle = null;
+    if (vehicleId) {
+      vehicle = await Vehicle.findById(vehicleId).lean();
+      if (!vehicle) {
+        return res.status(404).json({ code: "NOT_FOUND", message: "Машин олдсонгүй" });
+      }
+    } else {
+      // Plate path — validate format, cache-check, fall through to
+      // Garage.mn lookup + persist.
+      if (!isPlateValid(plate)) {
+        return res.status(400).json({
+          code: "PLATE_INVALID",
+          message: "Дугаар буруу — 4 тоо + 3 кирилл үсэг (1234УБА)",
+        });
+      }
+      const norm = garageNormalizePlate(plate);
+      vehicle = await Vehicle.findOne({ plate: norm }).lean();
+      if (!vehicle) {
+        try {
+          const lookup = await fetchByPlate(norm);
+          const persisted = await normalizeAndPersist(lookup, { userId: req.user._id });
+          vehicle = persisted.vehicle;
+        } catch (e) {
+          return res.status(404).json({
+            code: "PLATE_LOOKUP_FAILED",
+            message: `Дугаар олдсонгүй: ${e.message}`,
+          });
+        }
+      }
+    }
+
+    const payload = {
+      vehicleId:    String(vehicle._id),
+      plate:        vehicle.plate,
+      manufacturer: vehicle.snapshot?.manuname  || "",
+      model:        vehicle.snapshot?.modelname || "",
+      generation:   vehicle.snapshot?.generation || "",
+    };
+    await aiMemory.setActiveVehicle(req.user._id, payload);
+    const memory = await aiMemory.loadMemory(req.user._id);
+    return res.json({
+      vehicle: {
+        ...payload,
+        engineCode: vehicle.snapshot?.motorcode || "",
+        engineType: vehicle.snapshot?.motortype || "",
+      },
+      memory,
+    });
+  } catch (err) {
+    console.error("[ai.memory] set active failed:", err.stack || err.message);
+    return res.status(500).json({ code: "INTERNAL_ERROR", message: "Дотоод алдаа" });
+  }
+};
+
+/** DELETE /api/ai/memory/active-vehicle — clear active without touching history. */
+export const handleClearActiveVehicle = async (req, res) => {
+  try {
+    await aiMemory.clearActiveVehicle(req.user._id);
+    const memory = await aiMemory.loadMemory(req.user._id);
+    return res.json({ memory });
+  } catch (err) {
+    console.error("[ai.memory] clear active failed:", err.message);
+    return res.status(500).json({ code: "INTERNAL_ERROR", message: "Дотоод алдаа" });
+  }
+};
 
 // Test/diagnostic exports — not on the public route surface.
 export const __internal = Object.freeze({

@@ -78,7 +78,7 @@ const applyRefund = async ({ order, amount, note }) => {
         paymentStatus: fullyRefunded ? "REFUNDED" : "PARTIAL_REFUND",
       },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   // Audit the refund. Append-only — no further mutation of this row.
@@ -213,7 +213,7 @@ export const createDispute = async (buyerId, orderId, payload) => {
       status: { $in: ["paid", "processing", "shipped", "delivered"] },
     },
     { $set: { hasOpenDispute: true, paymentStatus: "DISPUTED" } },
-    { new: true },
+    { returnDocument: "after" },
   );
   if (!lockedOrder) {
     throw new Error("Захиалгыг өөр процесс өөрчилсөн байж магадгүй — дахин оролдоно уу");

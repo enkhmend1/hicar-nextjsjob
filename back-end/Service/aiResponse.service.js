@@ -93,6 +93,27 @@ export const diagForm = ({ partType, fields = [], note = "" }) => ({
 });
 
 /**
+ * DIAGNOSTIC — symptom → ranked candidate parts (Phase I / diagnose_symptom).
+ *
+ *   symptom              : verbatim user input ("дугуй тог тог дуугарна")
+ *   candidates           : [{ name, likelihood, location, urgency, oem_hints }, …]
+ *   clarifyingQuestions  : 1–2 follow-up questions ranked by mechanic priors
+ *   urgency              : "low" | "medium" | "high" — max across candidates
+ *   matchStrength        : 0..1 confidence in the pattern match itself
+ *
+ * Rendered by the frontend as a card with a likelihood bar per
+ * candidate + a single clarifying-question prompt. This is what makes
+ * the AI feel like a mechanic instead of a search bar.
+ */
+export const diagnostic = ({
+  symptom, patternId = null, candidates = [], clarifyingQuestions = [],
+  urgency = "low", matchStrength = 0, note = "",
+}) => ({
+  layout: "diagnostic",
+  payload: { symptom, patternId, candidates, clarifyingQuestions, urgency, matchStrength, note },
+});
+
+/**
  * QUOTATION — generated B2B quote (Phase B / generate_quotation tool).
  *
  *   quoteId   : "HC-QT-260524-A3F2"
@@ -228,6 +249,17 @@ export const inferLayoutFromTools = (toolCalls, role) => {
         note: result.note || "",
       });
     }
+    if (name === "diagnose_symptom") {
+      return diagnostic({
+        symptom:             result.symptom || "",
+        patternId:           result.patternId || null,
+        candidates:          result.candidates || [],
+        clarifyingQuestions: result.clarifyingQuestions || [],
+        urgency:             result.urgency || "low",
+        matchStrength:       result.matchStrength || 0,
+        note:                result.note || "",
+      });
+    }
     if (name === "get_sales_summary"
         || name === "get_financial_metrics"
         || name === "get_demand_forecast"
@@ -291,7 +323,12 @@ export const inferLayoutFromTools = (toolCalls, role) => {
  * was a tool call), substitute a neutral "Done." so the chat thread
  * never shows an empty bubble.
  */
-export const buildEnvelope = ({ replyText, toolCalls, role, diagnostics, suggestions = [] }) => {
+export const buildEnvelope = ({
+  replyText, toolCalls, role, diagnostics, suggestions = [],
+  // Phase H — first-class confidence + escalation surface.
+  confidence  = null,   // 0..1 (controller already rounded to 2dp)
+  escalation  = null,   // { reason, message, suggestedAction } | null
+}) => {
   const layoutObj = inferLayoutFromTools(toolCalls, role);
   const reply = String(replyText || "").trim() || _defaultReplyFor(layoutObj.layout, role);
   return {
@@ -299,17 +336,29 @@ export const buildEnvelope = ({ replyText, toolCalls, role, diagnostics, suggest
     layout: layoutObj.layout,
     payload: layoutObj.payload,
     suggestions,
+    confidence,
+    escalation,
     diagnostics,
   };
 };
 
+/**
+ * Default reply copy when the LLM emits an empty `content` string but a
+ * tool result is present. Calibrated to the (В) "data-dense + warm"
+ * voice — leads with a fact-ish framing AND ends with a soft action verb,
+ * so the chat thread never shows a bald payload with no human framing.
+ *
+ * Per-persona variation lives in the LLM prompts (aiPrompts.service);
+ * these defaults are the LAST-line safety net.
+ */
 const _defaultReplyFor = (layout) => {
   switch (layout) {
-    case "user_cards":   return "Доорх сэлбэгүүд таарч байна:";
-    case "seller_table": return "Уг хүснэгтийг харна уу:";
-    case "admin_widget": return "Үзүүлэлт бэлэн боллоо.";
-    case "diag_form":    return "Сэлбэгээ нарийвчилъя — доорхыг бөглөнө үү:";
-    case "quotation":    return "Үнийн санал бэлэн боллоо. Хуулж и-мэйлээр илгээж болно.";
+    case "user_cards":   return "Доорх сэлбэгүүдийг тааруулж олсон. Сонгох уу?";
+    case "seller_table": return "Хүснэгт бэлэн боллоо. Дэлгэрэнгүйг доороос харна уу.";
+    case "admin_widget": return "Үзүүлэлт бэлэн. Тоонуудыг доороос харна уу.";
+    case "diag_form":    return "Нэг л зүйл нарийвчлая — доорхоос сонгоно уу.";
+    case "quotation":    return "Үнийн санал бэлэн. \"Хуулах\" товчоор хуулж и-мэйлээр илгээнэ үү.";
+    case "diagnostic":   return "Боломжит шалтгаануудыг доороос харна уу — нэг асуултанд хариулбал илүү нарийн олно.";
     default:             return "Боллоо.";
   }
 };

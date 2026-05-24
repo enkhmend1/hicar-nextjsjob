@@ -4,6 +4,54 @@ import chalk from "chalk";
 import User from "../Model/user.model.js";
 import PasswordResetToken from "../Model/passwordResetToken.model.js";
 import { sendMail } from "../Service/notification.service.js";
+import {
+  registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema,
+  validateAuth, AUTH_ERROR_CODES as ERR,
+} from "../Service/authSchema.service.js";
+
+/**
+ * Internal helper — sanitize an Error before sending it on the wire.
+ *
+ * Mongoose throws messages that often expose schema field names ("E11000
+ * duplicate key error collection: hicar.users index: email_1 dup key"),
+ * which is enough metadata for an attacker to start guessing. We catch
+ * the few known patterns and convert them; everything else gets a
+ * generic INTERNAL_ERROR and the original is logged server-side.
+ */
+const respondSafeError = (res, err) => {
+  const msg = String(err?.message || "");
+
+  // Duplicate-key surfaces during a race between two register requests
+  // for the same email — the unique index catches it after our
+  // findOne() check.
+  if (err?.code === 11000 || /E11000|duplicate key/i.test(msg)) {
+    return res.status(409).json({
+      code: ERR.EMAIL_TAKEN,
+      message: "Энэ имэйлээр бүртгэлтэй байна",
+    });
+  }
+
+  // Mongoose ValidationError — model-level constraints (e.g. malformed
+  // email passing Zod but failing the regex in user.model.js).
+  if (err?.name === "ValidationError" && err?.errors) {
+    const fields = Object.entries(err.errors).map(([path, e]) => ({
+      path,
+      message: e?.message || "Талбар буруу",
+    }));
+    return res.status(400).json({
+      code: ERR.VALIDATION_FAILED,
+      message: fields[0]?.message || "Оруулсан мэдээлэл буруу",
+      fields,
+    });
+  }
+
+  // Default: scrub everything else, log the raw error for ops.
+  console.error(chalk.red("[auth] internal error:"), err?.stack || msg);
+  return res.status(500).json({
+    code: ERR.INTERNAL_ERROR,
+    message: "Дотоод алдаа гарлаа. Дахин оролдоно уу.",
+  });
+};
 
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;          // 30 minutes
 const RESET_TOKEN_BYTES  = 32;                       // 43-char base64url
@@ -49,27 +97,38 @@ const clearRefreshCookie = (res) => {
 };
 
 export const register = async (req, res) => {
+  // ① Zod validation — structured field errors flow back to the form.
+  const v = validateAuth(registerSchema, req.body);
+  if (!v.success) {
+    return res.status(400).json({
+      code: v.code, message: v.message, fields: v.fields,
+    });
+  }
+  const { name, email, password, phone } = v.data;
+
   try {
-    const { name, email, password, phone } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Нэр, имэйл, нууц үг шаардлагатай" });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ message: "Нууц үг хамгийн багадаа 6 тэмдэгт" });
+    // ② Pre-check duplicate (cheap path; the unique index is the actual
+    //    race-safe gate — see respondSafeError's 11000 handler).
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(409).json({
+        code: ERR.EMAIL_TAKEN,
+        message: "Энэ имэйлээр бүртгэлтэй байна",
+      });
     }
 
-    const exists = await User.findOne({ email: email.toLowerCase() });
-    if (exists) return res.status(409).json({ message: "Энэ имэйлээр бүртгэлтэй байна" });
-
+    // ③ Bootstrap-admin election. The first signup with no admins yet
+    //    OR a signup whose email matches BOOTSTRAP_ADMIN_EMAIL becomes
+    //    the platform admin. Everything else is a regular user.
     const adminCount = await User.countDocuments({ role: "admin" });
     const totalCount = adminCount === 0 ? await User.countDocuments() : 1;
     const bootstrapEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || "").toLowerCase();
     const shouldBeAdmin =
       adminCount === 0 &&
-      (totalCount === 0 || (bootstrapEmail && bootstrapEmail === email.toLowerCase()));
+      (totalCount === 0 || (bootstrapEmail && bootstrapEmail === email));
 
     const user = await User.create({
-      name, email, password, phone: phone || "",
+      name, email, password, phone,
       role: shouldBeAdmin ? "admin" : "user",
     });
 
@@ -79,22 +138,36 @@ export const register = async (req, res) => {
 
     return res.status(201).json({ user, token: accessToken });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return respondSafeError(res, err);
   }
 };
 
 export const login = async (req, res) => {
+  // ① Zod validation
+  const v = validateAuth(loginSchema, req.body);
+  if (!v.success) {
+    return res.status(400).json({
+      code: v.code, message: v.message, fields: v.fields,
+    });
+  }
+  const { email, password } = v.data;
+
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: "Имэйл, нууц үг шаардлагатай" });
+    // ② Constant-shape response for both "no such user" and "bad
+    //    password" cases — never reveal which side failed, never use
+    //    different status codes. This is the textbook anti-enumeration
+    //    pattern (timing is still slightly variable because argon2 only
+    //    runs on the existing-user branch, but the wire shape is
+    //    identical and the rate limiters above the controller cap the
+    //    timing-oracle budget).
+    const user = await User.findOne({ email }).select("+password");
+    const ok = user ? await user.verifyPassword(password) : false;
+    if (!user || !ok) {
+      return res.status(401).json({
+        code: ERR.INVALID_CREDS,
+        message: "Имэйл эсвэл нууц үг буруу",
+      });
     }
-
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
-    if (!user) return res.status(401).json({ message: "Имэйл эсвэл нууц үг буруу" });
-
-    const ok = await user.verifyPassword(password);
-    if (!ok) return res.status(401).json({ message: "Имэйл эсвэл нууц үг буруу" });
 
     const accessToken = signAccess(user._id);
     const refreshToken = signRefresh(user._id);
@@ -102,28 +175,40 @@ export const login = async (req, res) => {
 
     return res.json({ user, token: accessToken });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return respondSafeError(res, err);
   }
 };
 
 export const refresh = async (req, res) => {
   try {
     const token = req.cookies?.[REFRESH_COOKIE];
-    if (!token) return res.status(401).json({ message: "Refresh token дутуу байна" });
+    if (!token) {
+      return res.status(401).json({
+        code: ERR.TOKEN_INVALID, message: "Сесс хугацаа дууссан байна",
+      });
+    }
 
     let payload;
     try {
       payload = jwt.verify(token, REFRESH_SECRET);
     } catch {
       clearRefreshCookie(res);
-      return res.status(401).json({ message: "Refresh token буруу эсвэл хугацаа дууссан" });
+      return res.status(401).json({
+        code: ERR.TOKEN_EXPIRED, message: "Сесс хугацаа дууссан байна",
+      });
     }
-    if (payload.type !== "refresh") return res.status(401).json({ message: "Token type буруу" });
+    if (payload.type !== "refresh") {
+      return res.status(401).json({
+        code: ERR.TOKEN_INVALID, message: "Token буруу",
+      });
+    }
 
     const user = await User.findById(payload.id);
     if (!user) {
       clearRefreshCookie(res);
-      return res.status(401).json({ message: "Хэрэглэгч олдсонгүй" });
+      return res.status(401).json({
+        code: ERR.USER_NOT_FOUND, message: "Хэрэглэгч олдсонгүй",
+      });
     }
 
     // Rotate: new refresh token to limit replay window
@@ -131,7 +216,7 @@ export const refresh = async (req, res) => {
     setRefreshCookie(res, signRefresh(user._id));
     return res.json({ user, token: accessToken });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return respondSafeError(res, err);
   }
 };
 
@@ -287,11 +372,19 @@ export const checkResetToken = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { token, password } = req.body || {};
-    if (typeof token !== "string" || !token) {
-      return res.status(400).json({ message: "Token дутуу", code: "TOKEN_INVALID" });
-    }
-    if (typeof password !== "string" || password.length < 6) {
-      return res.status(400).json({ message: "Нууц үг 6+ тэмдэгт байх ёстой", code: "PASSWORD_TOO_SHORT" });
+    // Validate via Zod for a structured error envelope, but keep the
+    // distinct PASSWORD_TOO_SHORT code so the reset form can highlight
+    // the password field specifically.
+    const v = validateAuth(resetPasswordSchema, { token, password });
+    if (!v.success) {
+      // Map the failing path to a more specific code where possible —
+      // the form treats PASSWORD_TOO_SHORT differently from TOKEN_INVALID.
+      const passwordError = v.fields?.some((f) => f.path === "password");
+      return res.status(400).json({
+        code:    passwordError ? ERR.PASSWORD_TOO_SHORT : ERR.TOKEN_INVALID,
+        message: v.message,
+        fields:  v.fields,
+      });
     }
 
     const doc = await PasswordResetToken.findOne({ tokenHash: sha256(token) });

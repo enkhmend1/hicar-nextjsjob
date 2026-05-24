@@ -84,6 +84,11 @@ export const buildRoleScope = (role, user) => {
           "cross_reference_oem",
           "identify_part_from_image",
           "disambiguate_vague_query",
+          // Phase I — symptom → candidate parts diagnostic
+          "diagnose_symptom",
+          // Phase G — vehicle switcher tools
+          "lookup_vehicle_by_plate",
+          "switch_active_vehicle",
           // Phase A — admin financial bedrock
           "get_low_stock",
           "get_sales_summary",
@@ -109,6 +114,11 @@ export const buildRoleScope = (role, user) => {
           "cross_reference_oem",
           "identify_part_from_image",
           "disambiguate_vague_query",
+          // Phase I — symptom → candidate parts diagnostic
+          "diagnose_symptom",
+          // Phase G — sellers also help customers look up plates
+          "lookup_vehicle_by_plate",
+          "switch_active_vehicle",
           // Shared with admin — handler scopes by productFilter anyway.
           "get_low_stock",
           // Seller-only tools land here as Phase B adds them
@@ -134,6 +144,11 @@ export const buildRoleScope = (role, user) => {
           "cross_reference_oem",
           "identify_part_from_image",
           "disambiguate_vague_query",
+          // Phase I — symptom → candidate parts diagnostic
+          "diagnose_symptom",
+          // Phase G — in-chat vehicle switcher tools
+          "lookup_vehicle_by_plate",
+          "switch_active_vehicle",
         ]),
       });
   }

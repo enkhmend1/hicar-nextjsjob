@@ -74,7 +74,7 @@ export const upsertCross = async (payload, addedBy = null) => {
   const saved = await OemCross.findOneAndUpdate(
     { primaryOem: doc.primaryOem },
     { $set: doc },
-    { new: true, upsert: true, runValidators: true },
+    { returnDocument: "after", upsert: true, runValidators: true },
   );
 
   // Invalidate cached lookups (the full pattern is cheaper than enumeration)
