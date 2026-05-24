@@ -96,21 +96,26 @@ export default function CartPage() {
           {items.map(item => {
             const id = pid(item.product);
             return (
-              <div key={id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                <div className="flex gap-3 mb-3">
-                  <div className="relative w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+              <div key={id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex gap-4 mb-3">
+                  {/* Phase O.3: thumbnail 56 → 80px so the buyer
+                      actually sees what they're paying for at a glance.
+                      object-contain with padding matches the catalogue
+                      card treatment (same product → same crop). */}
+                  <div className="relative w-20 h-20 bg-gradient-to-br from-blue-50 to-amber-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-gray-100">
                     {item.product.images && item.product.images.length > 0 ? (
-                      <Image src={item.product.images[0]} alt={item.product.name} fill sizes="56px" className="object-cover" />
+                      <Image src={item.product.images[0]} alt={item.product.name} fill sizes="80px" className="object-contain p-1.5" />
                     ) : item.product.iconPath ? (
-                      <svg className="w-7 h-7 fill-blue-400" viewBox="0 0 24 24"><path d={item.product.iconPath} /></svg>
+                      <svg className="w-9 h-9 fill-blue-400" viewBox="0 0 24 24"><path d={item.product.iconPath} /></svg>
                     ) : (
-                      <ShoppingCart size={20} className="text-blue-300" />
+                      <ShoppingCart size={24} className="text-blue-300" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-semibold text-gray-900 truncate">{item.product.name || "Нэргүй бараа"}</div>
+                    <div className="text-[14px] font-semibold text-gray-900 line-clamp-2 leading-snug">{item.product.name || "Нэргүй бараа"}</div>
                     <div className="text-[11px] text-gray-400 font-mono mt-0.5">{item.product.oem}</div>
-                    <div className="text-[14px] font-bold text-blue-600 mt-1">₮{(item.product.price ?? 0).toLocaleString()}</div>
+                    {/* Amber price — matches ProductCard treatment. */}
+                    <div className="text-[15px] font-bold text-amber-700 mt-1">₮{(item.product.price ?? 0).toLocaleString()}</div>
                   </div>
                   <button onClick={() => removeItem(id)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors cursor-pointer bg-transparent border-none shrink-0">

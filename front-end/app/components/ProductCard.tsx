@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Product } from "@/app/types";
 import { useCartStore, useAuthStore } from "@/store";
 import { useWishlistStore } from "@/store/wishlist";
-import { ShoppingCart, CheckCircle, Package, Heart, Star } from "lucide-react";
+import { ShoppingCart, CheckCircle, Package, Heart, Star, Camera } from "lucide-react";
 import { useState } from "react";
 
 const KNOWN_SRC: Record<string, { label: string; color: string }> = {
@@ -38,30 +38,58 @@ export default function ProductCard({ p }: { p: Product }) {
   return (
     <Link href={`/shop/${p._id ?? p.id}`}
       className="group block bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-lg hover:shadow-blue-100/50 transition-all duration-200">
-      {/* Phase N: image background is now blue↔amber (matches the new
-          palette) instead of the leftover blue↔purple. Subtle, so the
-          actual product image still dominates. */}
-      <div className="relative h-[96px] bg-gradient-to-br from-blue-50 to-amber-50 flex items-center justify-center group-hover:from-blue-100 group-hover:to-amber-100 transition-colors overflow-hidden">
+      {/* Phase O.3 — "senior-grade card" image treatment:
+          • Height bumped 96 → 168px so uploaded part photos breathe
+            (96px hid the whole-part silhouette under 30%-cropped covers)
+          • object-contain with padding so the FULL part is visible —
+            mechanics need to see the shape end-to-end to match against
+            their own. object-cover crops landscape parts in half.
+          • Subtle group-hover scale (1.02) for tactile feedback without
+            being twitchy
+          • Image-count badge when 2+ photos — signals "more views inside"
+          • Empty state upgraded: dashed border + larger icon + caption
+          • Inner ring on hover gives a "selectable" premium feel */}
+      <div className="relative h-[168px] bg-gradient-to-br from-blue-50/60 to-amber-50/60 flex items-center justify-center group-hover:from-blue-100/80 group-hover:to-amber-100/80 transition-colors overflow-hidden">
         {p.badge && (
           <span className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md z-10 shadow-sm">{p.badge}</span>
         )}
+        {/* Photo count chip — only when seller uploaded multiple views. */}
+        {p.images && p.images.length > 1 && (
+          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 bg-black/55 backdrop-blur text-white text-[10px] font-medium px-2 py-0.5 rounded-full z-10">
+            <Camera size={9} /> {p.images.length}
+          </span>
+        )}
         <button onClick={handleFav}
-          className={`absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 hover:bg-white shadow-sm border-none cursor-pointer z-10 transition-all ${isFav ? "text-red-500" : "text-gray-300 hover:text-red-400"}`}
+          className={`absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-white/95 hover:bg-white shadow-sm border-none cursor-pointer z-10 transition-all ${isFav ? "text-red-500" : "text-gray-300 hover:text-red-400"}`}
           aria-label="favorite">
           <Heart size={14} fill={isFav ? "currentColor" : "none"} />
         </button>
         {!p.inStock && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
-            <span className="text-[11px] font-medium text-gray-400 border border-gray-300 bg-white px-2.5 py-1 rounded-full">Дууссан</span>
+          <div className="absolute inset-0 bg-white/75 flex items-center justify-center z-10">
+            <span className="text-[11px] font-medium text-gray-500 border border-gray-300 bg-white px-2.5 py-1 rounded-full shadow-sm">Дууссан</span>
           </div>
         )}
         {p.images && p.images.length > 0 ? (
-          <Image src={p.images[0]} alt={p.name} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />
+          <Image
+            src={p.images[0]}
+            alt={p.name}
+            fill
+            sizes="(max-width: 640px) 50vw, 25vw"
+            className="object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+          />
         ) : p.iconPath ? (
-          <svg className="w-10 h-10 fill-blue-400 group-hover:fill-blue-500 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
+          <div className="flex flex-col items-center gap-1.5">
+            <svg className="w-14 h-14 fill-blue-300/80 group-hover:fill-blue-400 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
+          </div>
         ) : (
-          <Package className="w-8 h-8 text-blue-300" />
+          <div className="flex flex-col items-center gap-1.5 border-2 border-dashed border-blue-200 rounded-xl px-5 py-3 bg-white/40">
+            <Package className="w-9 h-9 text-blue-300/80" strokeWidth={1.5} />
+            <span className="text-[10px] text-gray-400 font-medium">Зураггүй</span>
+          </div>
         )}
+        {/* Inner ring on hover — premium "selectable" feel without
+            adding noise in the default state. */}
+        <div className="absolute inset-0 ring-1 ring-inset ring-blue-500/0 group-hover:ring-blue-500/15 transition-all pointer-events-none rounded-t-xl" />
       </div>
       {/* Body */}
       <div className="p-3">
