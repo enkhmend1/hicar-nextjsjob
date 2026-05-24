@@ -1273,6 +1273,80 @@ assert(geminiOnlyChain.length === 1 && geminiOnlyChain[0].client === stubGemini,
        "missing primary client → Gemini-only chain (degraded but functional)");
 
 // ────────────────────────────────────────────────────────────────────
+// ⑳ Phase M.2 — Symptom Latin coverage + weird_noise catch-all
+// Bug report: "motor hachin dugaraad baina" returned "Алдаа гарлаа"
+// because the symptom detector only matched Cyrillic. Now Latin
+// transliteration is covered, plus a weird_noise catch-all so vague
+// noise complaints still trigger diagnose_symptom.
+// ────────────────────────────────────────────────────────────────────
+
+// ─── weird_noise catch-all ─────────────────────────────────────
+const wnLatin = diagnoseSymptom("motor hachin dugaraad baina");
+assert(wnLatin?.patternId === "weird_noise",
+       "Latin 'motor hachin dugaraad' → weird_noise");
+assert(wnLatin.clarifyingQuestions.length >= 1,
+       "weird_noise always returns a clarifying question");
+assert(wnLatin.candidates.length >= 4,
+       "weird_noise returns multi-candidate list");
+
+const wnCyrillic = diagnoseSymptom("хачин дуу гарч байна");
+assert(wnCyrillic?.patternId === "weird_noise",
+       "Cyrillic 'хачин дуу' → weird_noise");
+
+const wnEnglish = diagnoseSymptom("the engine is making a weird noise");
+assert(wnEnglish?.patternId === "weird_noise",
+       "English 'weird noise' → weird_noise");
+
+// ─── Specific patterns still win over weird_noise ──────────────
+// A "тог тог" (knocking) input should hit knocking_suspension, NOT
+// weird_noise, because knocking_suspension is listed earlier.
+const stillKnock = diagnoseSymptom("дугуй тог тог дуугарна");
+assert(stillKnock?.patternId === "knocking_suspension",
+       "specific 'тог тог' still beats weird_noise catch-all");
+
+// ─── Latin transliteration coverage across existing patterns ──
+assert(diagnoseSymptom("motor asahgui baina")?.patternId === "wont_start",
+       "Latin 'asahgui' → wont_start");
+assert(diagnoseSymptom("het halaa garch baina")?.patternId === "overheating",
+       "Latin 'het halaa' → overheating");
+assert(diagnoseSymptom("huh utaa garch baina")?.patternId === "smoke",
+       "Latin 'huh utaa' → smoke");
+assert(diagnoseSymptom("tog tog dugaraad")?.patternId === "knocking_suspension",
+       "Latin 'tog tog' → knocking_suspension");
+assert(diagnoseSymptom("tormos pedal zoolon")?.patternId === "soft_brake_pedal",
+       "Latin 'tormos pedal' → soft_brake_pedal");
+
+// ─── isSymptomShaped recognises Latin too ──────────────────────
+assert(isSymptomShaped("motor hachin dugaraad baina") === true,
+       "isSymptomShaped: Latin weird-noise phrasing → true");
+assert(isSymptomShaped("asahgu baina") === true,
+       "isSymptomShaped: Latin 'asahgu' → true");
+assert(isSymptomShaped("hello") === false,
+       "isSymptomShaped: bare greeting → false");
+
+// ─── PATTERN_COUNT bumped by the new weird_noise entry ─────────
+assert(diagnosticInternal.PATTERN_COUNT >= 9,
+       "diagnostic patterns now ≥9 with weird_noise catch-all (Phase M.2.3)");
+assert(diagnosticInternal.PATTERN_IDS.includes("weird_noise"),
+       "PATTERN_IDS includes 'weird_noise'");
+
+// ─── SECURITY_DIRECTIVE tightening (Phase M.2.1) ───────────────
+// We can't introspect the prompt directly from outside aiPrompts, but
+// buildSystemPrompt composes the directive into every output. Smoke-
+// check that "WHEN TO USE THE REFUSAL TEMPLATE" guidance is in the
+// USER system prompt now — that's the protection against the over-
+// refusal regression.
+const userPromptSample = buildSystemPrompt({
+  role: "user", locale: "mn", vehicleContext: null, transliterationHint: "",
+});
+assert(userPromptSample.includes("WHEN TO USE THE REFUSAL TEMPLATE"),
+       "USER system prompt includes the refusal-scope guidance (Phase M.2.1)");
+assert(userPromptSample.includes("DO NOT refuse for ANY of the following"),
+       "USER system prompt includes the 'do not refuse' positive examples");
+assert(userPromptSample.includes("When in doubt → ANSWER, don't refuse"),
+       "USER system prompt has the answer-by-default bias");
+
+// ────────────────────────────────────────────────────────────────────
 // Summary
 // ────────────────────────────────────────────────────────────────────
 console.log("");

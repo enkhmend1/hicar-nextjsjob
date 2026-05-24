@@ -62,7 +62,20 @@ export interface UseAgentReturn {
   cancelRateLimit:   () => void;
 
   // Chat
-  sendChat: (messages: ChatMessage[]) => Promise<AIResponse | null>;
+  //
+  // Phase M.2.2: returns a discriminated result so the caller has the
+  // localized error message IN HAND. The previous "return null and read
+  // hook.chatError" pattern was broken because the parent component's
+  // captured closure of `agent` still held the OLD chatError when read
+  // synchronously after `await sendChat(...)` — setState is async, the
+  // re-render hasn't flushed yet. Result: every error displayed as the
+  // generic "Алдаа гарлаа" fallback. With the new shape the caller does:
+  //   const r = await agent.sendChat(history);
+  //   if (!r.ok) pushAi({ text: r.errorMessage, error: true });
+  sendChat: (messages: ChatMessage[]) => Promise<
+    | { ok: true;  response: AIResponse }
+    | { ok: false; errorMessage: string }
+  >;
 
   // Vehicle switcher
   switchVehicleByPlate:    (plate: string) => Promise<{ ok: boolean; vehicle?: ActiveVehicle; message?: string }>;
@@ -142,8 +155,11 @@ export function useAgent(): UseAgentReturn {
   // Phase M.1: ref-pattern indirection so the auto-retry timer can call
   // the LATEST sendChat without taking it as a useCallback dep (which
   // would re-create the callback on every retry and break the dep array).
-  const sendChatRef = useRef<((messages: ChatMessage[]) => Promise<AIResponse | null>) | null>(null);
-  const sendChat = useCallback(async (messages: ChatMessage[]): Promise<AIResponse | null> => {
+  type SendChatResult =
+    | { ok: true;  response: AIResponse }
+    | { ok: false; errorMessage: string };
+  const sendChatRef = useRef<((messages: ChatMessage[]) => Promise<SendChatResult>) | null>(null);
+  const sendChat = useCallback(async (messages: ChatMessage[]): Promise<SendChatResult> => {
     setBusy(true); setChatError("");
     try {
       const resp = await chatService.send(messages, { locale, vehicle: activeVehicle });
@@ -153,7 +169,7 @@ export function useAgent(): UseAgentReturn {
         setRateLimitedUntil(0);
         inAutoRetry.current = false;
       }
-      return resp;
+      return { ok: true, response: resp };
     } catch (e) {
       const ae = e as ApiError;
       const code = (ae.data?.code as string | undefined);
@@ -233,7 +249,10 @@ export function useAgent(): UseAgentReturn {
               : "Чат алдаа гарлаа — дахин оролдоно уу.");
       }
       setChatError(msg);
-      return null;
+      // Phase M.2.2: return the message in-band so the caller has it
+      // immediately, without waiting for the chatError state to flush
+      // through React's render queue (the closure-staleness bug).
+      return { ok: false, errorMessage: msg };
     } finally {
       setBusy(false);
     }

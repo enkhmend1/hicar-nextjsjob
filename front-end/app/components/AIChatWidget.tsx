@@ -332,16 +332,17 @@ export default function HiCarAIChat() {
         return { role: m.role === "ai" ? "assistant" as const : "user" as const, content: m.text! };
       });
 
-    const resp = await agent.sendChat(history);
-    if (!resp) {
-      // Hook already populated chatError; surface it in the chat thread
-      // so the user sees what happened.
-      pushAi({ text: agent.chatError || "Алдаа гарлаа", error: true });
+    const result = await agent.sendChat(history);
+    if (!result.ok) {
+      // Phase M.2.2: errorMessage comes back in-band so we don't read a
+      // stale `agent.chatError` from a closure that captured the value
+      // BEFORE setState had a chance to flush.
+      pushAi({ text: result.errorMessage, error: true });
       return;
     }
 
     // Dispatch on layout — pure UI logic stays in the widget.
-    pushAi(layoutToMessage(resp));
+    pushAi(layoutToMessage(result.response));
   }, [input, busy, isAdminPath, messages, agent, pushAi]);
 
   // ── Voice input ────────────────────────────────────────────────
