@@ -1090,6 +1090,8 @@ const { isFallbackableError } = fallbackInternal;
 // ─── isFallbackableError — classifier behaviour ────────────────
 assert(isFallbackableError({ status: 429 }) === true,
        "429 is fallbackable");
+assert(isFallbackableError({ status: 413 }) === true,
+       "413 is fallbackable (Phase M.3 — Groq returns this when prompt > model TPM)");
 assert(isFallbackableError({ status: 503 }) === true,
        "503 is fallbackable (provider overloaded)");
 assert(isFallbackableError({ status: 502 }) === true,
@@ -1238,12 +1240,14 @@ assert(builtChain.length === 3,
        "buildTextFallbackChain produces 3 entries when all parts present");
 assert(builtChain[0].model === "groq-70b" && builtChain[0].label === "groq",
        "entry 1 = primary Groq 70b");
-assert(builtChain[1].model === "groq-8b",
-       "entry 2 = Groq 8b fallback (same client, different model)");
-assert(builtChain[1].client === stubGroq,
-       "entry 2 reuses the primary client");
-assert(builtChain[2].client === stubGemini,
-       "entry 3 = Gemini (different client = different rate-limit counter)");
+// Phase M.3: chain reordered — Gemini second so big seller/admin
+// prompts that 413 on 8b's 6K TPM still survive via Gemini's 1M TPM.
+assert(builtChain[1].client === stubGemini && builtChain[1].model === "gem-2",
+       "entry 2 = Gemini (1M TPM — handles large prompts; reordered in Phase M.3)");
+assert(builtChain[2].model === "groq-8b",
+       "entry 3 = Groq 8b last-resort fallback");
+assert(builtChain[2].client === stubGroq,
+       "entry 3 reuses the primary client");
 
 // Same client for Gemini == Groq → dedup'd (would happen if someone
 // pointed both env vars at the same provider).
@@ -1263,6 +1267,22 @@ const sameModelChain = buildTextFallbackChain({
 });
 assert(sameModelChain.length === 2,
        "buildTextFallbackChain skips 8b entry when model matches primary");
+
+// ─── 413 walks past too-small-TPM models (Phase M.3) ───────────
+// Simulates the real seller-chat bug: 70b 429s, 8b 413s on the
+// prompt size, Gemini saves the day.
+const big413Chain = [
+  { client: make429Client(),                           model: "70b", label: "groq-70b" },
+  { client: makeOkClient(fakeOk),                      model: "gem", label: "gemini" },
+  { client: { chat: { completions: { create: async () => {
+    const e = new Error("Request too large for model");
+    e.status = 413;
+    throw e;
+  } } } },                                              model: "8b",  label: "groq-8b" },
+];
+const fb413 = await chatWithFallback({ chain: big413Chain, body: { messages: [] } });
+assert(fb413.usedEntry.label === "gemini",
+       "Phase M.3: chain walks 70b 429 → Gemini (skipping nothing) instead of dying on 8b 413");
 
 // Missing primary key (null client) → chain still works with only Gemini.
 const geminiOnlyChain = buildTextFallbackChain({

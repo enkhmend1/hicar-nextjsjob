@@ -212,6 +212,15 @@ export function useAgent(): UseAgentReturn {
             ? "AI provider auth failed. Operator must check API keys."
             : "AI үйлчилгээ нэвтрэх алдаатай. Оператортой холбогдоно уу.";
           break;
+        case "AI_REQUEST_TOO_LARGE":
+          // Phase M.3: 413 — the prompt + tool context blew past the
+          // per-minute token cap on every provider in the chain. Tell
+          // the user how to recover (shorten the message) rather than
+          // hiding it behind a generic error.
+          msg = locale === "en"
+            ? "That message is too long for the AI. Please send a shorter version."
+            : "Хүсэлт хэт том байна. Богино асуултаар туршаад үзнэ үү.";
+          break;
         case "AI_PROVIDER_UNAVAILABLE":
         case "AI_UPSTREAM_UNREACHABLE":
         case "AI_UPSTREAM_ERROR":

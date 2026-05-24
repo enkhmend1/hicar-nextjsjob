@@ -11,9 +11,21 @@
  *   counter is still pinned for the next ~30s — re-trying the same
  *   model wouldn't help. The win is switching to a DIFFERENT counter:
  *
- *     1. Groq llama-3.3-70b-versatile   ← primary (highest quality)
- *     2. Groq llama-3.1-8b-instant      ← fallback (separate model counter)
- *     3. Gemini 2.0 Flash               ← fallback (separate provider, 1M TPM)
+ *     1. Groq llama-3.3-70b-versatile   ← primary (best quality, 30K TPM)
+ *     2. Gemini 2.0 Flash               ← fallback (different provider,
+ *                                          1M TPM = handles big prompts
+ *                                          even when Groq 8b can't)
+ *     3. Groq llama-3.1-8b-instant      ← last resort (separate model
+ *                                          counter but only 6K TPM — fine
+ *                                          for short follow-ups, useless
+ *                                          for big seller/admin prompts)
+ *
+ *   Order rationale: Phase M.3 reordered Gemini ahead of 8b because we
+ *   were watching seller chats die with 70b 429 → 8b 413 (request too
+ *   large) → unhandled. The seller persona's system prompt + tool
+ *   catalogue clears 6K tokens easily, so 8b is the WRONG fallback for
+ *   that surface. Putting Gemini second means a large prompt always
+ *   survives so long as one of the two providers is up.
  *
  *   If all three are pinned simultaneously the user has a real platform
  *   problem (likely paid-tier territory) — we surface the 429 to the
@@ -43,15 +55,21 @@ import { aiConfig } from "../Config/openai.js";
 /**
  * Is this an error we should walk the chain for? Yes for:
  *   • HTTP 429 (rate limited)
+ *   • HTTP 413 (request too large — Groq returns this when the prompt
+ *     exceeds the per-minute token cap on a particular model; a model
+ *     with a bigger TPM budget on the next entry typically succeeds)
  *   • HTTP 503 (provider overloaded)
- *   • Network timeouts
+ *   • HTTP 502 / 504 (gateway / timeout)
+ *   • Network errors (ETIMEDOUT / ECONNRESET / ECONNREFUSED)
  *
- * No for 4xx (request shape problem) or 5xx other than 503 (provider
- * bug — smaller model unlikely to help).
+ * No for 4xx other than 413 (request shape problem — a smaller / bigger
+ * model won't fix malformed JSON) or 5xx other than 503 (provider bug —
+ * a different model is unlikely to help).
  */
 export const isFallbackableError = (err) => {
   const status = Number(err?.status || err?.response?.status || 0);
   if (status === 429 || status === 503) return true;
+  if (status === 413) return true;                            // payload too large
   if (status === 502 || status === 504) return true;          // gateway / timeout
   const code = String(err?.code || "").toUpperCase();
   if (code === "ETIMEDOUT" || code === "ECONNRESET" || code === "ECONNREFUSED") return true;
@@ -80,27 +98,32 @@ export const buildTextFallbackChain = ({
 } = {}) => {
   const chain = [];
 
-  // 1. Primary text model (Groq 70b by default) — best quality.
+  // 1. Primary text model (Groq 70b by default) — best quality, 30K TPM.
   if (primaryClient) {
     chain.push({ client: primaryClient, model: primaryModel, label: primaryLabel });
   }
 
-  // 2. Same Groq client, smaller model. Groq's RPM counter is
-  // sometimes per-model; even if not, the 8b is way faster and the
-  // TPM headroom is bigger.
+  // 2. Gemini — totally separate provider, separate rate-limit counter,
+  // 1M TPM. Phase M.3: PROMOTED ahead of Groq 8b because we were seeing
+  // seller chats die with 70b 429 → 8b 413 (request too large) since
+  // 8b's 6K TPM can't fit the seller system prompt + tool catalogue.
+  // Putting Gemini here means a big prompt survives whenever EITHER
+  // provider is up.
+  if (geminiClient && geminiClient !== primaryClient) {
+    chain.push({ client: geminiClient, model: geminiModel, label: geminiLabel });
+  }
+
+  // 3. Last resort: same Groq client, smaller model. Groq's RPM counter
+  // is sometimes per-model, so 8b may serve when 70b is throttled — but
+  // its TPM cap (6K free tier) makes it unsuitable for large prompts.
+  // Kept in the chain for the case where Gemini is ALSO down or
+  // unconfigured; for tiny user follow-ups it works fine.
   if (primaryClient && groqFallbackModel && groqFallbackModel !== primaryModel) {
     chain.push({
       client: primaryClient,
       model:  groqFallbackModel,
       label:  `${primaryLabel}-fallback-8b`,
     });
-  }
-
-  // 3. Gemini — totally separate provider, separate rate-limit
-  // counter. 1M TPM is generous; only 15 RPM but if we got here Groq
-  // is already saturated, so Gemini's burst budget is mostly intact.
-  if (geminiClient && geminiClient !== primaryClient) {
-    chain.push({ client: geminiClient, model: geminiModel, label: geminiLabel });
   }
 
   return chain;

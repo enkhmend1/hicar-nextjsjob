@@ -1198,6 +1198,14 @@ const mapUpstreamError = (err) => {
       : 8;
     return { status: 429, body: { code: "AI_RATE_LIMITED", message: "AI provider is rate-limiting.", retryAfter } };
   }
+  if (upstream === 413) {
+    // Phase M.3: Groq returns 413 when the prompt exceeds the per-minute
+    // TPM cap on a specific model (e.g. 6548 input tokens on 8b's 6K
+    // ceiling). The fallback chain should have routed past this, but
+    // if EVERY entry 413'd (Gemini unconfigured + only 8b left), give
+    // the user actionable copy instead of a generic 500.
+    return { status: 413, body: { code: "AI_REQUEST_TOO_LARGE", message: "Request payload exceeds the AI provider's per-minute token cap." } };
+  }
   if (upstream === 400 || upstream === 422) return { status: 400, body: { code: "AI_BAD_REQUEST", message: err?.message || "AI rejected request shape." } };
   if (upstream >= 500 && upstream < 600) return { status: 502, body: { code: "AI_UPSTREAM_ERROR", message: "AI provider had internal error." } };
   if (err?.code === "ETIMEDOUT" || err?.code === "ECONNREFUSED"
