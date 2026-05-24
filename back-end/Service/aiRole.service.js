@@ -119,8 +119,9 @@ export const buildRoleScope = (role, user) => {
           // Phase G — sellers also help customers look up plates
           "lookup_vehicle_by_plate",
           "switch_active_vehicle",
-          // Shared with admin — handler scopes by productFilter anyway.
+          // Shared with admin — handler scopes by productFilter / seller-id anyway.
           "get_low_stock",
+          "get_sales_summary",     // Phase J.3 — seller sees OWN sales only
           // Seller-only tools land here as Phase B adds them
           "get_deadstock",
           "find_shelf_location",

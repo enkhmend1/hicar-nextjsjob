@@ -312,7 +312,10 @@ const TOOLS = [
     type: "function",
     function: {
       name: "get_sales_summary",
-      description: "ADMIN. Aggregate revenue/orders/AOV for today|week|month|all.",
+      description:
+        "ADMIN sees platform-wide revenue. SELLER sees their own sales " +
+        "(orders that include items they sold). Aggregates revenue / order " +
+        "count / AOV for today|week|month|all.",
       parameters: {
         type: "object",
         properties: { period: { type: "string", enum: ["today", "week", "month", "all"] } },
@@ -746,25 +749,69 @@ const TOOL_HANDLERS = {
   },
 
   async get_sales_summary({ period = "today" }, runtime) {
-    if (runtime.scope.role !== "admin") return { error: "Admin only" };
+    // Phase J.3: dual-scope. Sellers see ONLY their own line-item revenue;
+    // admins see the platform total. Users are forbidden upstream (scope
+    // doesn't grant the tool), but defence-in-depth says no anyway.
+    const { scope } = runtime;
+    if (scope.role !== "admin" && scope.role !== "seller") {
+      return { error: "Not allowed for this role" };
+    }
+
     const now = new Date();
     let since = null;
     if      (period === "today") { since = new Date(now); since.setHours(0, 0, 0, 0); }
     else if (period === "week")  { since = new Date(now); since.setDate(now.getDate() - 7); }
     else if (period === "month") { since = new Date(now); since.setMonth(now.getMonth() - 1); }
 
-    const filter = { status: { $in: ["paid", "processing", "shipped", "delivered"] } };
-    if (since) filter.createdAt = { $gte: since };
-    const orders = await Order.find(filter).lean();
-    const total = orders.reduce((s, o) => s + (o.total || 0), 0);
+    const baseMatch = { status: { $in: ["paid", "processing", "shipped", "delivered"] } };
+    if (since) baseMatch.createdAt = { $gte: since };
+
+    // Admin path — order total = the full marketplace revenue.
+    if (scope.role === "admin") {
+      const orders = await Order.find(baseMatch).lean();
+      const total = orders.reduce((s, o) => s + (o.total || 0), 0);
+      return {
+        kind: "kpi_grid",
+        title: `Sales — ${period}`,
+        data: {
+          period, scope: "platform",
+          orderCount: orders.length,
+          revenue: total,
+          avgOrder: orders.length ? Math.round(total / orders.length) : 0,
+        },
+      };
+    }
+
+    // Seller path — slice each order by THIS seller's line items only.
+    // We $unwind items, match on items.seller, then sum price * qty.
+    const sellerId = scope.sellerId || runtime.user?._id;
+    if (!sellerId) return { error: "Seller context missing" };
+
+    const [agg] = await Order.aggregate([
+      { $match: baseMatch },
+      { $unwind: "$items" },
+      { $match: { "items.seller": sellerId } },
+      { $group: {
+          _id: "$_id",
+          orderRevenue: { $sum: { $multiply: ["$items.price", { $ifNull: ["$items.qty", 1] }] } },
+      } },
+      { $group: {
+          _id: null,
+          orderCount: { $sum: 1 },
+          revenue:    { $sum: "$orderRevenue" },
+      } },
+    ]);
+
+    const orderCount = agg?.orderCount || 0;
+    const revenue    = agg?.revenue    || 0;
     return {
       kind: "kpi_grid",
-      title: `Sales — ${period}`,
+      title: `Миний борлуулалт — ${period}`,
       data: {
-        period,
-        orderCount: orders.length,
-        revenue: total,
-        avgOrder: orders.length ? Math.round(total / orders.length) : 0,
+        period, scope: "seller",
+        orderCount,
+        revenue,
+        avgOrder: orderCount > 0 ? Math.round(revenue / orderCount) : 0,
       },
     };
   },

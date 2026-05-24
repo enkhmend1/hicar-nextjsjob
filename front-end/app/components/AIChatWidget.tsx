@@ -68,6 +68,11 @@ const USER_GREETING_MN = `Сайн байна уу 👋
 const USER_GREETING_EN = `Hi there 👋
 What auto part are you looking for?`;
 
+const SELLER_GREETING_MN = `Барааны AI бэлэн 📦
+Жишээ: "deadstock", "04465-02220 хаана байна", "энэ сарын борлуулалт", "Бат-д үнийн санал".`;
+const SELLER_GREETING_EN = `Inventory AI ready 📦
+Try: "deadstock", "where is 04465-02220", "this month's sales", "quote for Bat".`;
+
 const ADMIN_GREETING_MN = `Admin AI туслах 🤖
 Жишээ командууд:
 • "цөөн үлдсэн" — low stock
@@ -93,6 +98,12 @@ const USER_SUGGESTIONS_EN: Suggestion[] = [
   { label: "Headlights", cmd: "headlight" },
   { label: "Suspension", cmd: "suspension" },
 ];
+const SELLER_SUGGESTIONS: Suggestion[] = [
+  { label: "📦 Deadstock", cmd: "deadstock" },
+  { label: "🔻 Цөөн үлдсэн", cmd: "цөөн үлдсэн" },
+  { label: "📊 Энэ сарын борлуулалт", cmd: "энэ сарын борлуулалт" },
+  { label: "📋 Үнийн санал", cmd: "үнийн санал" },
+];
 const ADMIN_SUGGESTIONS: Suggestion[] = [
   { label: "🔻 Low stock", cmd: "low stock" },
   { label: "📊 Sales today", cmd: "today's sales" },
@@ -115,7 +126,12 @@ export default function HiCarAIChat() {
   const { locale } = useLocale();
   const activeVehicle    = useCarStore((s) => s.activeVehicle);
   const recentVehicles   = useCarStore((s) => s.recentVehicles);
-  const isAdminPath = pathname?.startsWith("/admin") && user?.role === "admin";
+  // Phase J: detect the THREE possible chat surfaces. Path-AND-role
+  // both have to agree — a logged-out user hitting /admin/* still
+  // gets the buyer chat (the page itself will block them).
+  const isAdminPath  = pathname?.startsWith("/admin")  && user?.role === "admin";
+  const isSellerPath = pathname?.startsWith("/seller") && user?.role === "seller";
+  const isBuyerPath  = !isAdminPath && !isSellerPath;
 
   // ── Phase H-prep: useAgent() owns ALL backend orchestration ─────
   // Widget no longer talks to api.* directly or mutates the car
@@ -149,12 +165,16 @@ export default function HiCarAIChat() {
   const voiceSupported = isVoiceSupported();
 
   useEffect(() => {
-    // Vehicle-aware opening — when the user already picked a car on the
-    // /lookup page we open the chat with a car-specific greeting and
-    // swap the quick-action chips for that car's most-common parts.
+    // Three-surface greeting selector (Phase J).
+    //   admin  → admin command menu
+    //   seller → inventory AI hints
+    //   buyer  → vehicle-aware greeting if a car is picked, generic
+    //            "what part are you looking for" otherwise.
     let greet: string;
     if (isAdminPath) {
       greet = locale === "en" ? ADMIN_GREETING_EN : ADMIN_GREETING_MN;
+    } else if (isSellerPath) {
+      greet = locale === "en" ? SELLER_GREETING_EN : SELLER_GREETING_MN;
     } else if (activeVehicle?.manufacturer && activeVehicle?.model) {
       const car = `${activeVehicle.manufacturer} ${activeVehicle.model}${activeVehicle.generation ? ` [${activeVehicle.generation}]` : ""}`;
       greet = locale === "en"
@@ -164,7 +184,7 @@ export default function HiCarAIChat() {
       greet = locale === "en" ? USER_GREETING_EN : USER_GREETING_MN;
     }
     setMessages([{ id: 1, role: "ai", text: greet }]);
-  }, [isAdminPath, locale, activeVehicle?.manufacturer, activeVehicle?.model, activeVehicle?.generation]);
+  }, [isAdminPath, isSellerPath, locale, activeVehicle?.manufacturer, activeVehicle?.model, activeVehicle?.generation]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -358,20 +378,29 @@ export default function HiCarAIChat() {
     }
   };
 
+  // Phase J — three-surface chips + placeholder picker.
   const suggestions = isAdminPath
     ? ADMIN_SUGGESTIONS
-    : (locale === "en" ? USER_SUGGESTIONS_EN : USER_SUGGESTIONS_MN);
+    : isSellerPath
+      ? SELLER_SUGGESTIONS
+      : (locale === "en" ? USER_SUGGESTIONS_EN : USER_SUGGESTIONS_MN);
   const placeholder = isAdminPath
-    ? (locale === "en" ? "Type a command or question..." : "Команд эсвэл асуулт...")
-    : (locale === "en" ? "Search part name or OEM code..." : "Сэлбэгийн нэр эсвэл OEM код...");
+    ? (locale === "en" ? "Type a command or question..."         : "Команд эсвэл асуулт...")
+    : isSellerPath
+      ? (locale === "en" ? "Inventory question, OEM, or quote..." : "Бараа, OEM, эсвэл үнийн санал...")
+      : (locale === "en" ? "Search part name or OEM code..."     : "Сэлбэгийн нэр эсвэл OEM код...");
 
   if (!isOpen || isMinimized) {
     return (
       <button onClick={() => { setIsOpen(true); setIsMinimized(false); }}
         className="fixed bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-full shadow-lg shadow-violet-300 px-4 h-12 cursor-pointer border-none transition-all font-sans"
         aria-label="AI chat">
-        {isAdminPath ? <Bot size={18} /> : <MessageCircle size={18} />}
-        <span className="text-[13px] font-semibold">{isAdminPath ? "Admin AI" : (locale === "en" ? "AI Assistant" : "AI туслах")}</span>
+        {isAdminPath ? <Bot size={18} /> : isSellerPath ? <FileSpreadsheet size={18} /> : <MessageCircle size={18} />}
+        <span className="text-[13px] font-semibold">
+          {isAdminPath ? "Admin AI"
+            : isSellerPath ? (locale === "en" ? "Inventory AI" : "Барааны AI")
+            : (locale === "en" ? "AI Assistant" : "AI туслах")}
+        </span>
       </button>
     );
   }
@@ -385,10 +414,9 @@ export default function HiCarAIChat() {
           </div>
           <div className="min-w-0">
             <div className="text-[13px] font-semibold leading-tight">{isAdminPath ? "Admin AI" : "HiCar AI"}</div>
-            {!isAdminPath ? (
-              // Phase G — clickable car badge. Always renders a button
-              // (even with no active vehicle) so the user has ONE
-              // affordance to manage their car context.
+            {isBuyerPath ? (
+              // Phase G — clickable car badge ONLY on the buyer surface
+              // (seller / admin chats are not about a specific car).
               <button
                 onClick={() => setSwitcherOpen((v) => !v)}
                 title={locale === "en" ? "Switch vehicle" : "Машин солих"}
@@ -408,6 +436,10 @@ export default function HiCarAIChat() {
                 )}
                 <ChevronDown size={9} className={`transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
               </button>
+            ) : isSellerPath ? (
+              <div className="text-[10px] opacity-80">
+                {locale === "en" ? "Inventory assistant" : "Барааны туслах"}
+              </div>
             ) : (
               <div className="text-[10px] opacity-80">{locale === "en" ? "Powered by AI" : "AI-р хайна"}</div>
             )}

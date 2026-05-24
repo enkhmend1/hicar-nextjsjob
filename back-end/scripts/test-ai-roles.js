@@ -67,7 +67,7 @@ assert(!isToolAllowed(userScope, "get_sales_summary"),     "user CANNOT call get
 assert( isToolAllowed(userScope, "search_products"),       "user CAN call search_products");
 assert( isToolAllowed(userScope, "search_vehicle_parts"),  "user CAN call search_vehicle_parts");
 
-assert(!isToolAllowed(sellerScope, "get_sales_summary"),   "seller CANNOT call admin-only sales summary");
+assert( isToolAllowed(sellerScope, "get_sales_summary"),   "seller CAN call get_sales_summary (own-sales scope; Phase J.3)");
 assert( isToolAllowed(sellerScope, "get_low_stock"),       "seller CAN call low_stock");
 assert( isToolAllowed(sellerScope, "get_deadstock"),       "seller CAN call deadstock (Phase B)");
 
