@@ -107,15 +107,42 @@ export default function Home() {
       <BrandsBar />
 
       <div className="max-w-6xl mx-auto px-5 py-7 space-y-8">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[16px] font-semibold text-gray-900">{t("home.categoriesTitle")}</h2>
-            <Link href="/shop" className="text-[13px] text-blue-600 hover:underline font-medium">{t("home.viewAll")} →</Link>
+        {/* ── CATEGORIES SECTION ──────────────────────────────────────
+            Was: cramped 2/4 col grid, only ~8 cards above the fold.
+            Now: full grid up to 6 cols on desktop showing EVERY visible
+            category (admin-curated in SiteContent), so the user gets a
+            real sense of the catalogue depth at a glance. Section header
+            promotes the count to a chip so "we have 34 categories" lands
+            as a trust signal, not a footnote. */}
+        <section>
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-[20px] font-semibold text-gray-900 tracking-tight">{t("home.categoriesTitle")}</h2>
+                {categories.length > 0 && (
+                  <span className="inline-flex items-center bg-blue-50 text-blue-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-100">
+                    {categories.length}
+                  </span>
+                )}
+              </div>
+              <p className="text-[13px] text-gray-500">
+                Хүссэн сэлбэгээ ангилалаар хайж олоорой
+              </p>
+            </div>
+            <Link href="/shop"
+              className="inline-flex items-center gap-1 self-start sm:self-auto text-[13px] text-blue-700 hover:text-blue-800 font-medium transition-colors">
+              {t("home.viewAll")} <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+
+          {/* Responsive grid: 3 cols on phone (so cards stay legible),
+              4 / 5 / 6 as the viewport grows. With ~34 categories this
+              renders ~5-6 rows on desktop — dense enough to feel like a
+              real catalogue, sparse enough to scan. */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {categories.length === 0
-              ? Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="bg-white border border-gray-200 rounded-xl h-[90px] animate-pulse" />
+              ? Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[120px] animate-pulse" />
                 ))
               : categories.map((c) => (
                   <Link key={c.id} href={`/shop?cat=${c.id}`}>
@@ -128,7 +155,20 @@ export default function Home() {
                   </Link>
                 ))}
           </div>
-        </div>
+
+          {/* Browse-all CTA — a real button below the grid (rather than
+              the small top-right link only), so on long pages with the
+              header link scrolled off, users still have an obvious
+              "see everything" exit. */}
+          {categories.length > 0 && (
+            <div className="mt-5 flex justify-center">
+              <Link href="/shop"
+                className="inline-flex items-center gap-2 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-gray-700 hover:text-blue-700 rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-all shadow-sm hover:shadow-md">
+                Бүх барааг үзэх <span>→</span>
+              </Link>
+            </div>
+          )}
+        </section>
 
         <div>
           <div className="flex items-center justify-between mb-4">
