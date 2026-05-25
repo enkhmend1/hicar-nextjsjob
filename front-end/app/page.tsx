@@ -120,6 +120,7 @@ export default function Home() {
               : categories.map((c) => (
                   <Link key={c.id} href={`/shop?cat=${c.id}`}>
                     <CategoryCard
+                      id={c.id}
                       name={c.name}
                       count={`${c.count.toLocaleString()} зүйл`}
                       icon={<CatIcon d={c.iconPath} />}
@@ -155,7 +156,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { icon: <Shield size={20} />, title: "OEM Баталгаа", desc: "Бүх бараа оригинал OEM чанарын гэрчилгээтэй" },
+            { icon: <Shield size={20} />, title: "OEM Баталгаа", desc: "Оригинал бараа OEM" },
             { icon: <Truck size={20} />, title: "Хурдан хүргэлт", desc: " Хурдан хүргэлт" },
             { icon: <Clock size={20} />, title: "7/24 Дэмжлэг", desc: "Техникийн асуудлаар манай багт хандана уу" },
           ].map(({ icon, title, desc }) => (
