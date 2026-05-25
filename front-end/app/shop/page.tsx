@@ -40,7 +40,7 @@
 
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
 import { CATEGORIES } from "@/lib/data";
 import { api } from "@/lib/api";
@@ -172,8 +172,7 @@ function ShopInner() {
   );
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-6xl mx-auto px-5 py-5">
         {/* Page header */}
         <h1 className="text-[22px] font-semibold text-gray-900 mb-1">{t("shop.title")}</h1>
@@ -298,7 +297,7 @@ function ShopInner() {
           </div>
         </div>
       </div>
-    </>
+    </BuyerShell>
   );
 }
 

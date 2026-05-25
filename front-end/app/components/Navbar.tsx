@@ -1,14 +1,29 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useCartStore, useAuthStore } from "@/store";
 import { useT } from "@/lib/i18n";
 import LangSwitcher from "./LangSwitcher";
 import NotificationBell from "./NotificationBell";
-import { ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car } from "lucide-react";
+import { ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car, Search } from "lucide-react";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  // Phase U.3: persistent search bar. Wired to /shop?q=... so any page
+  // (cart, garage, product detail, store) can launch a query without
+  // navigating to the shop first. Hidden on the homepage where the
+  // big SearchCard already dominates the hero.
+  const router = useRouter();
+  const pathname = usePathname();
+  const [navQuery, setNavQuery] = useState("");
+  const showNavSearch = pathname !== "/";
+  const onSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = navQuery.trim();
+    if (!q) { router.push("/shop"); return; }
+    router.push(`/shop?q=${encodeURIComponent(q)}`);
+  };
   // Phase O.4: gate the cart badge on `_hasHydrated` to avoid an SSR
   // hydration mismatch. Server renders items=[] (no localStorage), the
   // client rehydrates from localStorage and may show count > 0 → React
@@ -35,6 +50,21 @@ export default function Navbar() {
         <Link href="/" className="text-[20px] font-semibold tracking-tight shrink-0">
           <em className="text-blue-600 not-italic">Hi</em>car
         </Link>
+
+        {/* Phase U.3: persistent search — hidden on homepage. */}
+        {showNavSearch && (
+          <form onSubmit={onSearch} className="hidden md:flex flex-1 max-w-md mx-2">
+            <div className="relative w-full">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                value={navQuery}
+                onChange={(e) => setNavQuery(e.target.value)}
+                placeholder="Сэлбэг хайх... (нэр, OEM, брэнд)"
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 hover:border-gray-300 focus:border-blue-500 rounded-xl pl-9 pr-3 py-2 text-[13px] outline-none transition-colors font-sans"
+              />
+            </div>
+          </form>
+        )}
 
         <div className="hidden md:flex gap-5">
           <Link href="/shop" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.shop")}</Link>

@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import ReviewSection from "@/app/components/ReviewSection";
 import { DELIVERY_PRICE } from "@/lib/data";
 import { useCartStore } from "@/store";
@@ -46,19 +46,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
 
   if (loading) return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="min-h-[70vh] flex items-center justify-center text-gray-400">Уншиж байна...</div>
-    </>
+    </BuyerShell>
   );
 
   if (!p) return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="min-h-[70vh] flex items-center justify-center text-gray-400">
         <div className="text-center"><div className="text-5xl mb-3">🔍</div><p>Бараа олдсонгүй</p></div>
       </div>
-    </>
+    </BuyerShell>
   );
 
   const handleAdd = () => {
@@ -70,8 +68,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const totalPrice = p.price + DELIVERY_PRICE[delivery];
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-2xl mx-auto px-5 py-5">
         <button onClick={() => router.back()}
           className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-5 cursor-pointer bg-transparent border-none transition-colors">
@@ -222,6 +219,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
-    </>
+    </BuyerShell>
   );
 }

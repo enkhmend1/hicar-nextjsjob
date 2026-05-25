@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import { useAuthStore } from "@/store";
 import { api } from "@/lib/api";
 import { Vehicle } from "@/app/types";
@@ -64,8 +64,7 @@ export default function GaragePage() {
   };
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-3xl mx-auto px-5 py-5">
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -213,7 +212,7 @@ export default function GaragePage() {
           background: white;
         }
       `}</style>
-    </>
+    </BuyerShell>
   );
 }
 

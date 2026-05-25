@@ -34,7 +34,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/store";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import {
   Trash2, Plus, Minus, ShoppingCart, ArrowRight, AlertTriangle, Store,
   ChevronRight, Package,
@@ -159,8 +159,7 @@ export default function CartPage() {
   // ── EMPTY STATE ──────────────────────────────────────────────────
   if (items.length === 0) {
     return (
-      <>
-        <Navbar />
+      <BuyerShell>
         <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-6">
           <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mb-5">
             <ShoppingCart size={36} className="text-gray-300" />
@@ -176,13 +175,12 @@ export default function CartPage() {
             Сэлбэгүүд үзэх
           </Link>
         </div>
-      </>
+      </BuyerShell>
     );
   }
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-3xl mx-auto px-5 py-5">
         <div className="flex items-baseline justify-between mb-5">
           <h1 className="text-[20px] font-semibold text-gray-900">
@@ -253,7 +251,7 @@ export default function CartPage() {
           </Link>
         </div>
       </div>
-    </>
+    </BuyerShell>
   );
 }
 

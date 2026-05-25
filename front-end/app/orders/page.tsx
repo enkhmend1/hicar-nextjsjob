@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import DisputeModal from "@/app/components/DisputeModal";
 import { useAuthStore } from "@/store";
 import { api } from "@/lib/api";
@@ -73,8 +73,7 @@ export default function OrdersPage() {
   if (!_hasHydrated || !user) return null;
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-2xl mx-auto px-5 py-5">
         <h1 className="text-[20px] font-semibold text-gray-900 mb-5">Миний захиалгууд</h1>
 
@@ -156,6 +155,6 @@ export default function OrdersPage() {
           onCreated={() => { setDisputeFor(null); reload(); }}
         />
       )}
-    </>
+    </BuyerShell>
   );
 }

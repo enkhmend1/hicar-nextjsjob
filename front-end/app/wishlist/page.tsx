@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
 import { useAuthStore } from "@/store";
 import { useWishlistStore } from "@/store/wishlist";
@@ -35,8 +35,7 @@ export default function WishlistPage() {
   if (!_hasHydrated || !user) return null;
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-6xl mx-auto px-5 py-6">
         <header className="mb-6">
           <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
@@ -66,6 +65,6 @@ export default function WishlistPage() {
           </div>
         )}
       </div>
-    </>
+    </BuyerShell>
   );
 }

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import { useCartStore, useAuthStore } from "@/store";
 import { api, ApiError } from "@/lib/api";
 import { Order } from "@/app/types";
@@ -80,15 +80,14 @@ export default function CheckoutPage() {
   const orderTotal = total();
 
   if (items.length === 0) return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="min-h-[70vh] flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">Таны сагс хоосон байна</p>
           <Link href="/shop" className="bg-blue-600 text-white rounded-xl px-6 py-3 text-[14px] font-semibold">Дэлгүүр</Link>
         </div>
       </div>
-    </>
+    </BuyerShell>
   );
 
   const submitInfo = (e: React.FormEvent) => {
@@ -193,8 +192,7 @@ export default function CheckoutPage() {
   const stepIdx = step === "info" ? 0 : step === "payment" ? 1 : 2;
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-xl mx-auto px-5 py-5">
         <div className="flex items-center gap-2 mb-6">
           {steps.map((s, i) => (
@@ -369,6 +367,6 @@ export default function CheckoutPage() {
           </div>
         )}
       </div>
-    </>
+    </BuyerShell>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Navbar from "./components/Navbar";
+import BuyerShell from "./components/BuyerShell";
 import SearchCard from "./components/SearchCard";
 import BrandsBar from "./components/BrandsBar";
 import CategoryCard from "./components/CategoryCard";
@@ -53,8 +53,7 @@ export default function Home() {
   }, []);
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       {/* Phase N — hero re-architected. The OLD hero buried the search
           under a wall of copy + redundant CTAs (Register + Shop). The
           single most valuable action on this site is "find a part for
@@ -230,62 +229,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Phase N — footer expanded from 1-line strip to a proper
-          marketplace footer: brand block + 3 link columns + payment
-          row. Builds trust (the previous footer felt placeholder-y for
-          a checkout-bearing site that handles real money). */}
-      <footer className="bg-gray-900 text-gray-300 mt-8">
-        <div className="max-w-6xl mx-auto px-5 py-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
-            <div className="col-span-2 md:col-span-1">
-              <div className="text-[22px] font-semibold text-white mb-3">
-                <em className="text-amber-400 not-italic">Hi</em>car
-              </div>
-              <p className="text-[12px] text-gray-400 leading-relaxed mb-4 max-w-xs">
-                {t("home.subtitle")}
-              </p>
-              <div className="flex gap-2 text-[10px] text-gray-500">
-                <span className="bg-gray-800 border border-gray-700 px-2 py-1 rounded">QPay</span>
-                <span className="bg-gray-800 border border-gray-700 px-2 py-1 rounded">Khan Bank</span>
-                <span className="bg-gray-800 border border-gray-700 px-2 py-1 rounded">Golomt</span>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">{t("home.footerHelp")}</div>
-              <ul className="space-y-2 text-[13px]">
-                <li><Link href="/shop" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.shop")}</Link></li>
-                <li><Link href="/lookup" className="text-gray-400 hover:text-amber-400 transition-colors">Улсын дугаар</Link></li>
-                <li><Link href="/orders" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.orders")}</Link></li>
-                <li><Link href="/garage" className="text-gray-400 hover:text-amber-400 transition-colors">Миний машинууд</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">{t("home.footerAbout")}</div>
-              <ul className="space-y-2 text-[13px]">
-                <li><a href="#" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerShipping")}</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerReturn")}</a></li>
-                <li><Link href="/seller/apply" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.becomeSeller")}</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">Холбоо барих</div>
-              <ul className="space-y-2 text-[13px] text-gray-400">
-                <li>📞 +976 7700-0000</li>
-                <li>✉ info@hicar.mn</li>
-                <li>📍 Улаанбаатар</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-gray-800 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
-            <span>© 2026 HiCar MN. Бүх эрх хуулиар хамгаалагдсан.</span>
-            <span>OEM-баталгаатай авто сэлбэгийн платформ</span>
-          </div>
-        </div>
-      </footer>
-    </>
+      {/* Phase U.1: footer + bottom nav moved to BuyerShell so every
+          buyer page gets the same chrome (not just the homepage). */}
+    </BuyerShell>
   );
 }

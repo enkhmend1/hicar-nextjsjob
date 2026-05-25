@@ -42,7 +42,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
 import { api, ApiError } from "@/lib/api";
 import { Product } from "@/app/types";
@@ -116,8 +116,7 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
   // a jarring blank flash on slow networks.
   if (loading) {
     return (
-      <>
-        <Navbar />
+      <BuyerShell>
         <div className="bg-gradient-to-br from-blue-100 to-amber-50 h-44" />
         <div className="max-w-6xl mx-auto px-5 -mt-12">
           <div className="bg-white border border-gray-200 rounded-2xl h-32 animate-pulse" />
@@ -127,14 +126,13 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
             <div key={i} className="bg-white border border-gray-200 rounded-xl h-[260px] animate-pulse" />
           ))}
         </div>
-      </>
+      </BuyerShell>
     );
   }
 
   if (notFound || !data) {
     return (
-      <>
-        <Navbar />
+      <BuyerShell>
         <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-6">
           <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mb-5">
             <Store size={36} className="text-gray-300" />
@@ -145,7 +143,7 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
             <ArrowLeft size={14} /> Дэлгүүр рүү буцах
           </Link>
         </div>
-      </>
+      </BuyerShell>
     );
   }
 
@@ -155,8 +153,7 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
   const breakdownEntries = Object.entries(stats.categoryBreakdown).sort((a, b) => b[1] - a[1]);
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
 
       {/* ── Cover banner — seller's custom upload OR brand gradient.
           When a custom cover is set we render it with object-cover
@@ -369,7 +366,7 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
           </div>
         )}
       </div>
-    </>
+    </BuyerShell>
   );
 }
 

@@ -11,7 +11,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import Navbar from "@/app/components/Navbar";
+import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
 import SmartPartSearch from "@/app/components/SmartPartSearch";
 import { useCarStore } from "@/store";
@@ -104,8 +104,7 @@ function LookupInner() {
   }, [params]);
 
   return (
-    <>
-      <Navbar />
+    <BuyerShell>
       <div className="max-w-6xl mx-auto px-5 py-6">
         <section className="bg-gradient-to-br from-blue-600 via-blue-500 to-amber-500 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-blue-200 mb-6">
           <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur text-white text-[11px] font-semibold px-3 py-1.5 rounded-full mb-4 tracking-wide">
@@ -204,7 +203,7 @@ function LookupInner() {
           </>
         )}
       </div>
-    </>
+    </BuyerShell>
   );
 }
 
