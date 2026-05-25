@@ -113,7 +113,9 @@ export const listAllProducts = async (req, res) => {
 export const getProduct = async (req, res) => {
   try {
     const item = await Product.findById(req.params.id)
-      .populate("seller", "name sellerProfile.shopName sellerProfile.rating sellerProfile.ratingCount");
+      // Phase R.1: include sellerProfile.logo so the cart + product
+      // detail can render the seller avatar without a second round-trip.
+      .populate("seller", "name sellerProfile.shopName sellerProfile.logo sellerProfile.rating sellerProfile.ratingCount");
     if (!item) return res.status(404).json({ message: "Бараа олдсонгүй" });
     // Hide unapproved products from non-owner non-admin
     if (item.status !== "approved") {

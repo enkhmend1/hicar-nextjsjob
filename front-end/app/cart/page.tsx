@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCartStore } from "@/store";
 import Navbar from "@/app/components/Navbar";
 import Link from "next/link";
-import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, AlertTriangle } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, AlertTriangle, Store } from "lucide-react";
 import { DELIVERY_PRICE } from "@/lib/data";
 import { api } from "@/lib/api";
 import { Product, CartItem } from "@/app/types";
@@ -116,6 +116,38 @@ export default function CartPage() {
                     <div className="text-[11px] text-gray-400 font-mono mt-0.5">{item.product.oem}</div>
                     {/* Amber price — matches ProductCard treatment. */}
                     <div className="text-[15px] font-bold text-amber-700 mt-1">₮{(item.product.price ?? 0).toLocaleString()}</div>
+
+                    {/* Phase R.1: seller chip with avatar.
+                        Populated server-side via getProduct's seller
+                        populate (now includes sellerProfile.logo). Falls
+                        back to a gradient initial monogram when the
+                        seller hasn't uploaded a logo yet. Clickable →
+                        /store/[id] so buyers can browse the rest of the
+                        seller's catalogue without leaving the cart. */}
+                    {(() => {
+                      const seller = typeof item.product.seller === "object" && item.product.seller ? item.product.seller : null;
+                      const sellerId =
+                        seller?._id ||
+                        (typeof item.product.seller === "string" ? item.product.seller : undefined);
+                      if (!sellerId) return null;
+                      const shopName =
+                        seller?.sellerProfile?.shopName || seller?.name || "Дэлгүүр";
+                      const logo = seller?.sellerProfile?.logo || "";
+                      return (
+                        <Link href={`/store/${sellerId}`}
+                          className="mt-2 inline-flex items-center gap-1.5 bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 rounded-full pl-1 pr-2.5 py-1 transition-colors max-w-full"
+                          title={`${shopName} дэлгүүр рүү очих`}>
+                          <span className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-100 to-amber-100 flex items-center justify-center overflow-hidden shrink-0">
+                            {logo ? (
+                              <Image src={logo} alt="" width={20} height={20} className="object-cover w-full h-full" unoptimized />
+                            ) : (
+                              <Store size={9} className="text-blue-700" />
+                            )}
+                          </span>
+                          <span className="text-[11px] font-medium text-gray-700 truncate">{shopName}</span>
+                        </Link>
+                      );
+                    })()}
                   </div>
                   <button onClick={() => removeItem(id)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors cursor-pointer bg-transparent border-none shrink-0">

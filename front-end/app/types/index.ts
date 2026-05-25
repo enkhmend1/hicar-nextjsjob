@@ -8,6 +8,9 @@ export interface SellerSummary {
   email?: string;
   sellerProfile?: {
     shopName?: string;
+    /** Cloudinary URL of the seller's avatar — populated by GET
+     *  /api/products/:id (cart + product detail use this). */
+    logo?: string;
     rating?: number;
     ratingCount?: number;
   };
