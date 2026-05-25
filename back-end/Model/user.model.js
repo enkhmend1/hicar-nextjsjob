@@ -17,7 +17,11 @@ const userSchema = new mongoose.Schema(
     sellerProfile: {
       shopName: { type: String, trim: true, default: "" },
       description: { type: String, default: "" },
-      logo: { type: String, default: "" },        // Cloudinary URL
+      logo: { type: String, default: "" },        // Cloudinary URL (1:1 avatar)
+      // Phase Q.1: optional cover banner shown at the top of the
+      // public /store/[id] storefront. Recommended 16:5 aspect ratio
+      // (e.g. 1600×500). Falls back to a generated gradient when empty.
+      coverImage: { type: String, default: "" },
 
       // ── Platform economics (per-seller commission split) ──────────
       /** Percentage the platform keeps from every paid order (0–50). */

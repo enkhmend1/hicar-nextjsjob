@@ -76,6 +76,8 @@ export interface SellerProfile {
   shopName?: string;
   description?: string;
   logo?: string;
+  /** Cover banner shown on the public /store/[id] page. Recommended 16:5. */
+  coverImage?: string;
 
   // Platform economics (replaces the old wallet-era `commissionRate`)
   platformFeePercent?: number;

@@ -57,6 +57,9 @@ interface Shop {
   shopName:    string;
   description: string;
   logo:        string;
+  /** Optional custom cover banner (16:5). Empty string → render the
+   *  default brand gradient instead. */
+  coverImage:  string;
   trustScore:  number;
   rating:      number;
   ratingCount: number;
@@ -155,16 +158,37 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
     <>
       <Navbar />
 
-      {/* ── Cover banner — decorative gradient + subtle dot pattern.
-          Height keeps it slim so the overlap card has room above the fold. */}
-      <div className="relative h-44 bg-gradient-to-br from-blue-700 via-blue-600 to-amber-500 overflow-hidden">
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.4) 1px, transparent 0)",
-            backgroundSize: "20px 20px",
-          }}
-        />
+      {/* ── Cover banner — seller's custom upload OR brand gradient.
+          When a custom cover is set we render it with object-cover
+          (matches the 16:5 recommended ratio without letterboxing)
+          plus a slight bottom-fade overlay so the white identity
+          card has enough contrast where it overlaps. */}
+      <div className="relative h-44 sm:h-56 bg-gradient-to-br from-blue-700 via-blue-600 to-amber-500 overflow-hidden">
+        {shop.coverImage ? (
+          <>
+            <Image
+              src={shop.coverImage}
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover"
+              priority
+              unoptimized
+            />
+            {/* Bottom fade — ensures the overlap card's shadow lifts off
+                cleanly even when the cover photo happens to be light at
+                the bottom edge. */}
+            <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/15 to-transparent" />
+          </>
+        ) : (
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.4) 1px, transparent 0)",
+              backgroundSize: "20px 20px",
+            }}
+          />
+        )}
       </div>
 
       {/* ── Overlap identity card — logo + shop name + headline trust. */}

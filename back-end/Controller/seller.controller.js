@@ -44,7 +44,8 @@ export const publicStorefront = async (req, res) => {
     sellerStatus: "approved",
   }).select(
     "name createdAt " +
-    "sellerProfile.shopName sellerProfile.description sellerProfile.logo " +
+    "sellerProfile.shopName sellerProfile.description " +
+    "sellerProfile.logo sellerProfile.coverImage " +
     "sellerProfile.trustScore sellerProfile.rating sellerProfile.ratingCount " +
     "sellerProfile.totalSales sellerProfile.approvedAt"
   ).lean();
@@ -84,6 +85,7 @@ export const publicStorefront = async (req, res) => {
       shopName:     seller.sellerProfile?.shopName || seller.name || "Дэлгүүр",
       description:  seller.sellerProfile?.description || "",
       logo:         seller.sellerProfile?.logo || "",
+      coverImage:   seller.sellerProfile?.coverImage || "",
       trustScore:   seller.sellerProfile?.trustScore ?? 50,
       rating:       seller.sellerProfile?.rating ?? 0,
       ratingCount:  seller.sellerProfile?.ratingCount ?? 0,
@@ -149,12 +151,16 @@ export const updateProfile = async (req, res) => {
     if (!["seller", "admin"].includes(req.user.role)) {
       return res.status(403).json({ message: "Seller эрх шаардлагатай" });
     }
-    const { shopName, description, bankAccount, logo } = req.body;
+    const { shopName, description, bankAccount, logo, coverImage } = req.body;
     const sp = req.user.sellerProfile || {};
     if (shopName !== undefined) sp.shopName = shopName.trim();
     if (description !== undefined) sp.description = description;
     if (bankAccount !== undefined) sp.bankAccount = bankAccount;
     if (logo !== undefined) sp.logo = logo;
+    // Phase Q.1: cover banner for the public storefront. Empty string
+    // is a valid value (seller is removing their custom cover → fall
+    // back to the generated gradient on the public page).
+    if (coverImage !== undefined) sp.coverImage = coverImage;
     req.user.sellerProfile = sp;
     await req.user.save();
     return res.json({ user: req.user });
