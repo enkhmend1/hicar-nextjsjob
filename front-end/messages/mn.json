@@ -1,6 +1,6 @@
 {
   "nav": {
-    "shop": "Дэлгүүр",
+    "shop": "Сэлбэгүүд",
     "orders": "Захиалгууд",
     "help": "Тусламж",
     "admin": "Admin",
@@ -65,7 +65,7 @@
     "language": "Хэл"
   },
   "shop": {
-    "title": "Дэлгүүр",
+    "title": "Бүх сэлбэгүүд",
     "searchPlaceholder": "Сэлбэг хайх... (нэр, OEM, брэнд)",
     "sortLabel": "Ангилах",
     "sortPriceAsc": "Үнэ: бага → их",

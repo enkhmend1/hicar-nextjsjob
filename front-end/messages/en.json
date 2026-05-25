@@ -1,6 +1,6 @@
 {
   "nav": {
-    "shop": "Shop",
+    "shop": "Parts",
     "orders": "Orders",
     "help": "Help",
     "admin": "Admin",
@@ -65,7 +65,7 @@
     "language": "Language"
   },
   "shop": {
-    "title": "Shop",
+    "title": "All parts",
     "searchPlaceholder": "Search parts... (name, OEM, brand)",
     "sortLabel": "Sort",
     "sortPriceAsc": "Price: low to high",
