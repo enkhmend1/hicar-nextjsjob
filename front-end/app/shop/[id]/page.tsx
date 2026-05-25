@@ -8,7 +8,8 @@ import { DELIVERY_PRICE } from "@/lib/data";
 import { useCartStore } from "@/store";
 import { api } from "@/lib/api";
 import { Product } from "@/app/types";
-import { ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package } from "lucide-react";
+import { ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package, Store, ChevronRight, Star as StarIcon } from "lucide-react";
+import Link from "next/link";
 
 const KNOWN_SOURCES: Record<string, { label: string; flag: string; color: string }> = {
   amayama:  { label: "Amayama Japan",    flag: "🇯🇵", color: "text-blue-600 bg-blue-50 border-blue-100" },
@@ -177,6 +178,41 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 {added ? <><CheckCircle size={17} />Нэмэгдлээ!</> : <><ShoppingCart size={17} />Сагсанд нэмэх</>}
               </button>
             </div>
+
+            {/* Phase P.3: seller-shop affordance. The product belongs to
+                a real seller — give buyers an obvious path into that
+                seller's full storefront so they can browse the rest
+                of the catalogue. `p.seller` may be a string id
+                (lean lookup) or a populated SellerSummary; we handle
+                both shapes. */}
+            {p.seller && (() => {
+              const sellerId = typeof p.seller === "string" ? p.seller : p.seller._id;
+              const shopName =
+                typeof p.seller === "object"
+                  ? (p.seller.sellerProfile?.shopName || p.seller.name || "Дэлгүүр")
+                  : "Дэлгүүр";
+              const shopRating = typeof p.seller === "object" ? p.seller.sellerProfile?.rating : undefined;
+              if (!sellerId) return null;
+              return (
+                <Link href={`/store/${sellerId}`}
+                  className="mt-5 flex items-center gap-3 bg-gradient-to-r from-blue-50 to-amber-50 border border-blue-100 hover:border-blue-300 rounded-2xl p-4 transition-all hover:shadow-md group">
+                  <div className="w-11 h-11 rounded-xl bg-white shadow-sm border border-blue-100 flex items-center justify-center shrink-0">
+                    <Store size={18} className="text-blue-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-blue-700 font-semibold uppercase tracking-wider">Зарагч</div>
+                    <div className="text-[14px] font-semibold text-gray-900 truncate">{shopName}</div>
+                    {shopRating !== undefined && shopRating > 0 && (
+                      <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
+                        <StarIcon size={10} className="fill-amber-400 text-amber-400" />
+                        {shopRating.toFixed(1)} · Бүх барааг харах
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight size={16} className="text-blue-700 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </Link>
+              );
+            })()}
 
             <ReviewSection
               productId={(p._id ?? p.id) as string}

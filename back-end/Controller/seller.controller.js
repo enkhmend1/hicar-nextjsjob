@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import User from "../Model/user.model.js";
 import Product from "../Model/product.model.js";
 import Order from "../Model/order.model.js";
@@ -6,6 +7,98 @@ import { getSellerAnalytics, parseRange } from "../Service/analytics.service.js"
 import { FORMATS } from "../Service/export.service.js";
 
 const HISTORY_LIMIT = 50;
+
+/**
+ * Public seller storefront — Phase P.1.
+ *
+ * GET /api/seller/store/:id  (no auth required)
+ *
+ * Returns a sanitized "shop page" payload buyers can render. Strict
+ * allow-list of fields — NEVER include email, phone, bank account,
+ * platform commission, or any other operational data. Only the
+ * customer-facing identity + reputation + product list.
+ *
+ * Why a dedicated endpoint (not just a user-detail call):
+ *   • Sanitization happens server-side — frontend can't accidentally
+ *     leak privileged fields by mis-rendering a fuller payload.
+ *   • Joins the approved-products list in one round-trip so the
+ *     storefront page renders in a single fetch.
+ *   • Adds derived stats (totalProducts, categoryBreakdown) the User
+ *     doc doesn't store directly — keeps the frontend dumb.
+ *
+ * 404 when:
+ *   • id isn't a valid ObjectId
+ *   • user doesn't exist OR isn't an approved seller (anti-enumeration)
+ */
+export const publicStorefront = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(404).json({ message: "Дэлгүүр олдсонгүй" });
+  }
+
+  // Only fetch the fields we'll surface — explicit projection so a
+  // future schema addition can't accidentally leak.
+  const seller = await User.findOne({
+    _id: id,
+    role: { $in: ["seller", "admin"] },
+    sellerStatus: "approved",
+  }).select(
+    "name createdAt " +
+    "sellerProfile.shopName sellerProfile.description sellerProfile.logo " +
+    "sellerProfile.trustScore sellerProfile.rating sellerProfile.ratingCount " +
+    "sellerProfile.totalSales sellerProfile.approvedAt"
+  ).lean();
+
+  if (!seller) {
+    // Anti-enumeration — same 404 whether the user doesn't exist OR
+    // exists-but-isn't-an-approved-seller. Don't leak which.
+    return res.status(404).json({ message: "Дэлгүүр олдсонгүй" });
+  }
+
+  // Approved products only. Include the same shape the catalogue
+  // ProductCard already consumes so the storefront can reuse it.
+  const products = await Product.find({
+    seller: id,
+    status: "approved",
+  })
+    .select("name oem price originalPrice images iconPath category brand " +
+            "source inStock stockQty rating ratingCount badge createdAt")
+    .sort({ createdAt: -1 })
+    .limit(200)            // bounded; future: paginate when sellers cross this
+    .lean();
+
+  // Derived stats — cheap to compute on the wire-down rather than
+  // teaching the frontend to aggregate.
+  const categoryBreakdown = {};
+  for (const p of products) {
+    const k = p.category || "other";
+    categoryBreakdown[k] = (categoryBreakdown[k] || 0) + 1;
+  }
+
+  return res.json({
+    shop: {
+      id: String(seller._id),
+      // Public display: prefer the shop name, fall back to the
+      // seller's personal name so an early-stage shop without a name
+      // still renders something humane.
+      shopName:     seller.sellerProfile?.shopName || seller.name || "Дэлгүүр",
+      description:  seller.sellerProfile?.description || "",
+      logo:         seller.sellerProfile?.logo || "",
+      trustScore:   seller.sellerProfile?.trustScore ?? 50,
+      rating:       seller.sellerProfile?.rating ?? 0,
+      ratingCount:  seller.sellerProfile?.ratingCount ?? 0,
+      totalSales:   seller.sellerProfile?.totalSales ?? 0,
+      // joinedAt = whenever they were APPROVED as a seller, falling
+      // back to account creation if approvedAt isn't set (legacy data).
+      joinedAt:     seller.sellerProfile?.approvedAt || seller.createdAt,
+    },
+    products,
+    stats: {
+      totalProducts: products.length,
+      categoryBreakdown,
+    },
+  });
+};
 
 const mergeHistory = (existing, additions) => {
   const next = [...new Set([
