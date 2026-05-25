@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { useAuthStore } from "@/store";
 import { Product } from "@/app/types";
-import { Shield, Truck, Clock, Star } from "lucide-react";
+import { Shield, Truck, Clock, Star, ChevronDown, LayoutGrid } from "lucide-react";
 
 function CatIcon({ d }: { d: string }) {
   return <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={d} /></svg>;
@@ -36,6 +36,11 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<HomepageCategory[]>([]);
+  // Phase R: categories collapsed by default — show a teaser of the
+  // most popular 6 (one desktop row) + an "expand to all 34" toggle.
+  // Same pattern Amazon / AliExpress use to keep the homepage scannable.
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const CATEGORY_PREVIEW_COUNT = 6;
 
   useEffect(() => {
     api.get<{ items: Product[] }>("/products?limit=8")
@@ -135,16 +140,18 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Responsive grid: 3 cols on phone (so cards stay legible),
-              4 / 5 / 6 as the viewport grows. With ~34 categories this
-              renders ~5-6 rows on desktop — dense enough to feel like a
-              real catalogue, sparse enough to scan. */}
+          {/* Responsive grid: 3 cols on phone, 4 / 5 / 6 as viewport
+              grows. Phase R — sliced to a teaser (6 = one full desktop
+              row) when collapsed; full list when the user opts in. */}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {categories.length === 0
-              ? Array.from({ length: 12 }).map((_, i) => (
+              ? Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[120px] animate-pulse" />
                 ))
-              : categories.map((c) => (
+              : (showAllCategories
+                  ? categories
+                  : categories.slice(0, CATEGORY_PREVIEW_COUNT)
+                ).map((c) => (
                   <Link key={c.id} href={`/shop?cat=${c.id}`}>
                     <CategoryCard
                       id={c.id}
@@ -156,16 +163,31 @@ export default function Home() {
                 ))}
           </div>
 
-          {/* Browse-all CTA — a real button below the grid (rather than
-              the small top-right link only), so on long pages with the
-              header link scrolled off, users still have an obvious
-              "see everything" exit. */}
-          {categories.length > 0 && (
+          {/* Phase R: expand/collapse toggle — anchors the section so
+              the homepage stays scannable above the fold (no infinite
+              scroll of category cards before "Featured products"). */}
+          {categories.length > CATEGORY_PREVIEW_COUNT && (
             <div className="mt-5 flex justify-center">
-              <Link href="/shop"
-                className="inline-flex items-center gap-2 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-gray-700 hover:text-blue-700 rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-all shadow-sm hover:shadow-md">
-                Бүх барааг үзэх <span>→</span>
-              </Link>
+              <button
+                type="button"
+                onClick={() => setShowAllCategories((v) => !v)}
+                className="group inline-flex items-center gap-2 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-gray-700 hover:text-blue-700 rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer transition-all shadow-sm hover:shadow-md font-sans">
+                <LayoutGrid size={13} />
+                {showAllCategories ? (
+                  <>Хумих</>
+                ) : (
+                  <>
+                    Бүх ангилал
+                    <span className="inline-flex items-center bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5">
+                      {categories.length}
+                    </span>
+                  </>
+                )}
+                <ChevronDown
+                  size={13}
+                  className={`transition-transform duration-200 ${showAllCategories ? "rotate-180" : ""}`}
+                />
+              </button>
             </div>
           )}
         </section>
