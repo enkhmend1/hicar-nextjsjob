@@ -36,7 +36,15 @@ const SORT_MAP = {
 };
 
 const buildFilter = (query) => {
-  const { q, category, source, seller } = query;
+  // Phase T: extended filter set for the senior shop sidebar.
+  //   category/source/seller/q  — existing
+  //   priceMin/priceMax         — inclusive Mongo range, numeric coerced
+  //   brand                     — exact match (case-insensitive)
+  //   inStock=true              — drop sold-out products
+  //   minRating=4               — drop products rated < threshold
+  // All filters are best-effort: malformed values silently skip rather
+  // than 400-ing, so a fat-fingered URL param doesn't break browsing.
+  const { q, category, source, seller, priceMin, priceMax, brand, inStock, minRating } = query;
   const f = {};
   if (category && category !== "all") f.category = category;
   if (source && source !== "all") f.source = source;
@@ -45,6 +53,30 @@ const buildFilter = (query) => {
     const rx = new RegExp(q, "i");
     f.$or = [{ name: rx }, { oem: rx }, { brand: rx }];
   }
+
+  const min = Number(priceMin);
+  const max = Number(priceMax);
+  if (Number.isFinite(min) || Number.isFinite(max)) {
+    f.price = {};
+    if (Number.isFinite(min)) f.price.$gte = min;
+    if (Number.isFinite(max)) f.price.$lte = max;
+  }
+
+  if (brand && String(brand).trim()) {
+    // Exact brand match, case-insensitive. Sellers occasionally vary
+    // casing ("Toyota" vs "toyota") so anchor the regex.
+    f.brand = new RegExp(`^${String(brand).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  }
+
+  if (String(inStock).toLowerCase() === "true") {
+    f.inStock = true;
+  }
+
+  const ratingFloor = Number(minRating);
+  if (Number.isFinite(ratingFloor) && ratingFloor > 0) {
+    f.rating = { $gte: ratingFloor };
+  }
+
   return f;
 };
 
