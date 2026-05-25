@@ -9,11 +9,24 @@ import { ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  // Phase O.4: gate the cart badge on `_hasHydrated` to avoid an SSR
+  // hydration mismatch. Server renders items=[] (no localStorage), the
+  // client rehydrates from localStorage and may show count > 0 → React
+  // logs "server HTML didn't match client" because the <span> appears
+  // from nowhere. We render the badge only after the persisted state
+  // is loaded — same pattern as useAuthStore._hasHydrated.
   const count = useCartStore(s => s.count());
-  const { user, logout } = useAuthStore();
+  const cartHydrated = useCartStore(s => s._hasHydrated);
+  const showCartBadge = cartHydrated && count > 0;
+  const { user, logout, _hasHydrated: authHydrated } = useAuthStore();
   const t = useT();
-  const isAdmin = user?.role === "admin";
-  const isSeller = user?.role === "seller" || user?.sellerStatus === "approved";
+  // Same-pattern gate for user-dependent UI (login/register vs avatar+
+  // logout, seller/admin nav badges). Before hydration completes we
+  // render the SSR-matching "anonymous" shell, then swap in the
+  // logged-in view after the persisted token rehydrates.
+  const showUserUI = authHydrated && !!user;
+  const isAdmin  = showUserUI && user?.role === "admin";
+  const isSeller = showUserUI && (user?.role === "seller" || user?.sellerStatus === "approved");
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -38,7 +51,7 @@ export default function Navbar() {
               <Shield size={13} /> {t("nav.admin")}
             </Link>
           )}
-          {user && !isAdmin && !isSeller && (
+          {showUserUI && !isAdmin && !isSeller && (
             <Link href="/seller/apply" className="text-[14px] text-gray-500 hover:text-amber-600 transition-colors">
               {t("nav.becomeSeller")}
             </Link>
@@ -48,7 +61,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-2 shrink-0">
           <LangSwitcher compact />
           <NotificationBell />
-          {user ? (
+          {showUserUI ? (
             <>
               <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-1.5 text-[13px] text-gray-600">
                 <User size={13} />{user.name.split(" ")[0]}
@@ -64,14 +77,14 @@ export default function Navbar() {
               <Link href="/auth/register" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-1.5 text-[13px] font-medium transition-colors">{t("nav.register")}</Link>
             </>
           )}
-          {user && (
+          {showUserUI && (
             <Link href="/wishlist" className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors" title="Wishlist">
               <Heart size={18} />
             </Link>
           )}
           <Link href="/cart" className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
             <ShoppingCart size={19} />
-            {count > 0 && (
+            {showCartBadge && (
               <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-blue-600 text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-semibold">{count}</span>
             )}
           </Link>
@@ -92,10 +105,10 @@ export default function Navbar() {
           {isAdmin && (
             <Link href="/admin" className="flex items-center gap-3 text-[15px] text-blue-600 font-semibold py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Shield size={16} />{t("nav.admin")}</Link>
           )}
-          {user && !isAdmin && !isSeller && (
+          {showUserUI && !isAdmin && !isSeller && (
             <Link href="/seller/apply" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Store size={16} />{t("nav.becomeSeller")}</Link>
           )}
-          {user && (
+          {showUserUI && (
             <>
               <Link href="/wishlist" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Heart size={16} />Wishlist</Link>
               <Link href="/garage" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Car size={16} />Миний машинууд</Link>
@@ -103,10 +116,10 @@ export default function Navbar() {
           )}
           <Link href="/cart" className="flex items-center justify-between text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}>
             <span className="flex items-center gap-3"><ShoppingCart size={16} />{t("nav.cart")}</span>
-            {count > 0 && <span className="bg-blue-600 text-white text-[11px] px-2 py-0.5 rounded-full">{count}</span>}
+            {showCartBadge && <span className="bg-blue-600 text-white text-[11px] px-2 py-0.5 rounded-full">{count}</span>}
           </Link>
           <div className="pt-3"><LangSwitcher /></div>
-          {user ? (
+          {showUserUI ? (
             <div className="pt-3 flex gap-2">
               <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg py-2.5 text-[13px] text-blue-700 font-medium text-center">{user.name}</div>
               <button onClick={() => { logout(); setOpen(false); }} className="flex-1 border border-gray-200 rounded-lg py-2.5 text-[13px] text-gray-500 cursor-pointer bg-transparent font-sans">{t("nav.logout")}</button>

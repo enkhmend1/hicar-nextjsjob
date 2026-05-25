@@ -10,6 +10,11 @@ const pid = (p: Product) => (p._id ?? p.id) as string;
 /* ── Cart ─────────────────────────────────────────────────────── */
 interface CartStore {
   items: CartItem[];
+  // Phase O.4: `_hasHydrated` lets SSR-aware components gate any UI
+  // that depends on persisted cart contents (e.g. the navbar count
+  // badge). Without it, server renders count=0 (empty store) and the
+  // client renders count=N after rehydration → hydration mismatch.
+  _hasHydrated: boolean;
   addItem: (product: Product, dt?: CartItem["deliveryType"]) => void;
   removeItem: (id: string) => void;
   updateQty: (id: string, qty: number) => void;
@@ -21,6 +26,7 @@ interface CartStore {
 export const useCartStore = create<CartStore>()(
   persist((set, get) => ({
     items: [],
+    _hasHydrated: false,
     addItem: (product, dt = "normal") =>
       set(s => {
         const k = pid(product);
@@ -36,7 +42,16 @@ export const useCartStore = create<CartStore>()(
     clearCart: () => set({ items: [] }),
     total: () => get().items.reduce((s, i) => s + i.product.price * i.quantity + DELIVERY_PRICE[i.deliveryType], 0),
     count: () => get().items.reduce((s, i) => s + i.quantity, 0),
-  }), { name: "hicar-cart" })
+  }), {
+    name: "hicar-cart",
+    // Only persist the items themselves — `_hasHydrated` is derived
+    // state and must reset to false on every fresh mount so the gating
+    // logic gives SSR a turn to render the empty-cart shell first.
+    partialize: (s) => ({ items: s.items }),
+    onRehydrateStorage: () => () => {
+      queueMicrotask(() => useCartStore.setState({ _hasHydrated: true }));
+    },
+  })
 );
 
 /* ── Auth ─────────────────────────────────────────────────────── */
