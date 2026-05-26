@@ -6,6 +6,7 @@ import { Product } from "@/app/types";
 import { useCartStore, useAuthStore } from "@/store";
 import { useWishlistStore } from "@/store/wishlist";
 import { toast } from "@/app/lib/toast";
+import { openCartDrawer } from "@/app/lib/cartDrawer";
 import {
   ShoppingCart, CheckCircle, Package, Heart, Star, Camera, Store,
 } from "lucide-react";
@@ -70,11 +71,11 @@ export default function ProductCard({ p }: { p: Product }) {
     addItem(p);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
-    // Phase V.1: also fire a global toast with a "View cart" CTA so the
-    // signal is visible even if the user has scrolled past the card.
-    toast.success(`"${p.name}" сагсанд нэмэгдлээ`, {
-      action: { label: "Сагс үзэх", href: "/cart" },
-    });
+    // Phase Y: open the cart drawer instead of just firing a toast.
+    // Drawer shows the full cart preview right there so the buyer can
+    // decide whether to keep browsing OR checkout WITHOUT leaving the
+    // catalogue page — Amazon / Shopee pattern.
+    openCartDrawer();
   };
   const handleFav = (e: React.MouseEvent) => {
     e.preventDefault();

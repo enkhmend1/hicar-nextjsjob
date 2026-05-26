@@ -27,6 +27,7 @@ import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import Navbar from "./Navbar";
 import MobileBottomNav from "./MobileBottomNav";
+import CartDrawer from "./CartDrawer";
 
 export default function BuyerShell({ children }: { children: React.ReactNode }) {
   const t = useT();
@@ -99,6 +100,13 @@ export default function BuyerShell({ children }: { children: React.ReactNode }) 
 
       {/* Mobile bottom tab bar — sticky, hidden md+ */}
       <MobileBottomNav />
+
+      {/* Phase Y: cart slide-out drawer. Mounted once at the shell
+          level so any page can fire openCartDrawer() and have the
+          right-slide panel appear. Triggered from:
+            • ProductCard add-to-cart (after-add peek + checkout flow)
+            • Navbar cart icon (desktop/mobile both) */}
+      <CartDrawer />
     </>
   );
 }
