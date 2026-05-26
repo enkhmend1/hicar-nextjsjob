@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Product } from "@/app/types";
 import { useCartStore, useAuthStore } from "@/store";
 import { useWishlistStore } from "@/store/wishlist";
+import { toast } from "@/app/lib/toast";
 import {
   ShoppingCart, CheckCircle, Package, Heart, Star, Camera, Store,
 } from "lucide-react";
@@ -69,12 +70,24 @@ export default function ProductCard({ p }: { p: Product }) {
     addItem(p);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
+    // Phase V.1: also fire a global toast with a "View cart" CTA so the
+    // signal is visible even if the user has scrolled past the card.
+    toast.success(`"${p.name}" сагсанд нэмэгдлээ`, {
+      action: { label: "Сагс үзэх", href: "/cart" },
+    });
   };
   const handleFav = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) { window.location.href = "/auth/login"; return; }
+    if (!user) {
+      toast.warning("Нэвтэрнэ үү", { action: { label: "Нэвтрэх", href: "/auth/login" } });
+      return;
+    }
+    const wasFav = isFav;
     toggleFav((p._id ?? p.id) as string);
+    // Optimistic — toggleFav is fire-and-forget API-wise. Show what
+    // the user just did so they know it landed.
+    toast.success(wasFav ? "Wishlist-аас хасагдлаа" : "Wishlist-д нэмэгдлээ");
   };
 
   // ── Seller resolution — three possible shapes from the backend ──

@@ -121,6 +121,12 @@ interface CarStore {
   selectedCar: import("@/app/types").Car | null;   // legacy display obj
   activeVehicle: ActiveVehicle | null;             // canonical id-based context
   /**
+   * Phase V.2: hydration flag (same Phase O.4 pattern as auth/cart
+   * stores). Needed so the Navbar vehicle badge doesn't pop in from
+   * nowhere after client rehydration → SSR mismatch warning.
+   */
+  _hasHydrated: boolean;
+  /**
    * Phase G — last-N vehicles the user has interacted with (LRU,
    * move-to-front). Powers the chat header switcher dropdown so the
    * user can flip between "own car / family / work" in one click
@@ -143,6 +149,7 @@ export const useCarStore = create<CarStore>()(
   persist((set, get) => ({
     selectedCar: null,
     activeVehicle: null,
+    _hasHydrated: false,
     recentVehicles: [],
     setCar: (car) => set({ selectedCar: car }),
     setActiveVehicle: (v) => {
@@ -176,5 +183,17 @@ export const useCarStore = create<CarStore>()(
       set({ recentVehicles: merged });
     },
     clearActiveVehicle: () => set({ activeVehicle: null }),
-  }), { name: "hicar-car" })
+  }), {
+    name: "hicar-car",
+    // Phase V.2: don't persist the hydration flag — it must reset to
+    // false on every fresh mount so the gate fires.
+    partialize: (s) => ({
+      selectedCar:    s.selectedCar,
+      activeVehicle:  s.activeVehicle,
+      recentVehicles: s.recentVehicles,
+    }),
+    onRehydrateStorage: () => () => {
+      queueMicrotask(() => useCarStore.setState({ _hasHydrated: true }));
+    },
+  })
 );

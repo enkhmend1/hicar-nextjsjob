@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCartStore, useAuthStore } from "@/store";
+import { useCartStore, useAuthStore, useCarStore } from "@/store";
 import { useT } from "@/lib/i18n";
 import LangSwitcher from "./LangSwitcher";
 import NotificationBell from "./NotificationBell";
@@ -34,6 +34,12 @@ export default function Navbar() {
   const cartHydrated = useCartStore(s => s._hasHydrated);
   const showCartBadge = cartHydrated && count > 0;
   const { user, logout, _hasHydrated: authHydrated } = useAuthStore();
+  // Phase V.2: active vehicle badge — appears in navbar whenever the
+  // user has set a garage car. Hydration-gated like cart/user state.
+  const activeVehicle = useCarStore((s) => s.activeVehicle);
+  const carHydrated   = useCarStore((s) => s._hasHydrated);
+  const showVehicleBadge =
+    carHydrated && !!activeVehicle && pathname !== "/garage";
   const t = useT();
   // Same-pattern gate for user-dependent UI (login/register vs avatar+
   // logout, seller/admin nav badges). Before hydration completes we
@@ -64,6 +70,23 @@ export default function Navbar() {
               />
             </div>
           </form>
+        )}
+
+        {/* Phase V.2: active vehicle chip → click takes to /garage. */}
+        {showVehicleBadge && activeVehicle && (
+          <Link
+            href="/garage"
+            title={`${activeVehicle.manufacturer} ${activeVehicle.model} · ${activeVehicle.plate} — гараж нээх`}
+            className="hidden md:inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full pl-2 pr-3 py-1 text-[12px] transition-colors shrink-0 max-w-[180px]"
+          >
+            <Car size={11} className="text-blue-700 shrink-0" />
+            <span className="font-semibold text-blue-700 truncate">
+              {activeVehicle.manufacturer}
+            </span>
+            <span className="text-blue-600/70 truncate">
+              {activeVehicle.model}
+            </span>
+          </Link>
         )}
 
         <div className="hidden md:flex gap-5">

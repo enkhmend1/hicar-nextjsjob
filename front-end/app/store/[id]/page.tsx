@@ -44,6 +44,7 @@ import Link from "next/link";
 import Image from "next/image";
 import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
+import Breadcrumbs from "@/app/components/Breadcrumbs";
 import { api, ApiError } from "@/lib/api";
 import { Product } from "@/app/types";
 import { visualFor, toneStyles, type CategoryTone } from "@/app/lib/categoryIcons";
@@ -190,6 +191,17 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
 
       {/* ── Overlap identity card — logo + shop name + headline trust. */}
       <div className="max-w-6xl mx-auto px-5 -mt-16 relative z-10">
+        {/* Phase W.1: breadcrumbs sit above the overlap card. Uses
+            white text because the section sits on the cover image
+            gradient. Pulls double duty as SEO BreadcrumbList. */}
+        <Breadcrumbs
+          className="mb-2 text-white/90 [&_span[aria-current=page]]:text-white [&_a]:hover:text-amber-300"
+          items={[
+            { label: "Нүүр", href: "/" },
+            { label: "Дэлгүүр", href: "/shop" },
+            { label: shop.shopName },
+          ]}
+        />
         <div className="bg-white border border-gray-200 rounded-2xl shadow-xl shadow-blue-900/5 p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row gap-5 items-start">
             {/* Logo — fills with the shop image if uploaded, falls back

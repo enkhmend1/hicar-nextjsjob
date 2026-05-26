@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AIChatWidget from "./components/AIChatWidget";
 import SessionBoot from "./components/SessionBoot";
+import Toaster from "./components/Toaster";
 
 export const metadata: Metadata = {
   title: "HiCar MN — Автомашины сэлбэг",
@@ -15,6 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionBoot />
         {children}
         <AIChatWidget />
+        {/* Phase V.1: app-wide toast container. Any client component
+            can fire `toast.success("...")` and have it appear here. */}
+        <Toaster />
       </body>
     </html>
   );

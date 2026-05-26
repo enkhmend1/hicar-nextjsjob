@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { Product } from "@/app/types";
 import { ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package, Store, ChevronRight, Star as StarIcon } from "lucide-react";
 import Link from "next/link";
+import Breadcrumbs from "@/app/components/Breadcrumbs";
 
 const KNOWN_SOURCES: Record<string, { label: string; flag: string; color: string }> = {
   amayama:  { label: "Amayama Japan",    flag: "🇯🇵", color: "text-blue-600 bg-blue-50 border-blue-100" },
@@ -70,6 +71,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   return (
     <BuyerShell>
       <div className="max-w-2xl mx-auto px-5 py-5">
+        {/* Phase W.1: breadcrumbs (with JSON-LD for Google rich
+            snippets). Built from the product's category — falls back to
+            just Сэлбэгүүд when category is missing. */}
+        <Breadcrumbs
+          className="mb-3"
+          items={[
+            { label: "Нүүр", href: "/" },
+            { label: "Сэлбэгүүд", href: "/shop" },
+            ...(p.category
+              ? [{ label: p.category.replace(/_/g, " "), href: `/shop?cat=${p.category}` }]
+              : []),
+            { label: p.name },
+          ]}
+        />
         <button onClick={() => router.back()}
           className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-5 cursor-pointer bg-transparent border-none transition-colors">
           <ArrowLeft size={14} /> Буцах
