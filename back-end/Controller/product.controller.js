@@ -77,6 +77,31 @@ const buildFilter = (query) => {
     f.rating = { $gte: ratingFloor };
   }
 
+  // Phase X.1: exclude one or more product ids from the result.
+  // Used by the product-detail "More from this seller" + "Related
+  // products" sections so the current product itself doesn't appear
+  // in its own related list. Accepts:
+  //   excludeId=<id>           — single id
+  //   excludeId=<id>,<id>      — comma-separated CSV
+  // Ignored when the values aren't valid ObjectIds (avoids 500s on
+  // malformed URLs; just no-op filters the bad ones out).
+  const { excludeId } = query;
+  if (excludeId) {
+    const raw = Array.isArray(excludeId) ? excludeId.join(",") : String(excludeId);
+    const ids = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    if (ids.length > 0) {
+      // ObjectId() throws on malformed input — wrap each so a single
+      // bad id doesn't poison the whole array.
+      const valid = [];
+      for (const id of ids) {
+        if (/^[a-f0-9]{24}$/i.test(id)) valid.push(id);
+      }
+      if (valid.length > 0) {
+        f._id = { $nin: valid };
+      }
+    }
+  }
+
   return f;
 };
 

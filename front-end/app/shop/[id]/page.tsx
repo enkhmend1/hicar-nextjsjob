@@ -11,6 +11,7 @@ import { Product } from "@/app/types";
 import { ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package, Store, ChevronRight, Star as StarIcon } from "lucide-react";
 import Link from "next/link";
 import Breadcrumbs from "@/app/components/Breadcrumbs";
+import RelatedSections from "@/app/components/RelatedSections";
 
 const KNOWN_SOURCES: Record<string, { label: string; flag: string; color: string }> = {
   amayama:  { label: "Amayama Japan",    flag: "🇯🇵", color: "text-blue-600 bg-blue-50 border-blue-100" },
@@ -233,6 +234,26 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             />
           </div>
         </div>
+      </div>
+
+      {/* Phase X.2: "More from this seller" + "Related" sections.
+          Sits OUTSIDE the narrow max-w-2xl product container so the
+          4-up product grid has room to breathe at full page width. */}
+      <div className="max-w-6xl mx-auto px-5 pb-10">
+        <RelatedSections
+          currentId={(p._id ?? p.id) as string}
+          sellerId={
+            typeof p.seller === "string"
+              ? p.seller
+              : (p.seller && typeof p.seller === "object" ? p.seller._id : undefined)
+          }
+          sellerName={
+            typeof p.seller === "object" && p.seller
+              ? (p.seller.sellerProfile?.shopName || p.seller.name)
+              : undefined
+          }
+          category={p.category}
+        />
       </div>
     </BuyerShell>
   );
