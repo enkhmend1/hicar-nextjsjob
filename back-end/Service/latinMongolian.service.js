@@ -55,7 +55,7 @@ const CATEGORY = {
 const TERMS = [
   // ── BRAKE SYSTEM ──────────────────────────────────────────────────
   { mn: "тоормос",          en: "brake",         category: CATEGORY.BRAKE,
-    variants: ["tormos", "tormoz", "тормоз", "тоормос", "тормос", "brake"] },
+    variants: ["tormos", "tormoz", "toormos", "toormoz", "тормоз", "тоормос", "тормос", "brake"] },
   { mn: "наклад",           en: "brake pad",     category: CATEGORY.BRAKE,
     variants: ["naklad", "nakladka", "наклад", "колодка", "kolodka", "brake pad"] },
   { mn: "тоормосны диск",   en: "brake disc",    category: CATEGORY.BRAKE,
@@ -88,7 +88,8 @@ const TERMS = [
     variants: ["saloni filter", "salonii filter", "cabin filter",
                "салоны шүүлтүүр", "салонный фильтр", "салоны филтр"] },
   { mn: "тос",               en: "engine oil",   category: CATEGORY.ENGINE,
-    variants: ["maasl", "masla", "tos", "тос", "масл", "oil", "engine oil", "motor oil",
+    variants: ["maasl", "masla", "masel", "maslo", "tos", "тос", "масл", "масло",
+               "oil", "engine oil", "motor oil", "motor masla", "motor masel",
                "motoriin tos", "хөдөлгүүрийн тос", "масло двигателя"] },
   { mn: "форсунка",          en: "fuel injector", category: CATEGORY.ENGINE,
     variants: ["forsunka", "форсунка", "injector", "fuel injector"] },
@@ -127,7 +128,9 @@ const TERMS = [
     variants: ["starter", "стартер", "starter motor"] },
   { mn: "аккумулятор",       en: "battery",      category: CATEGORY.ELECTRIC,
     variants: ["akku", "akb", "akkumulyator", "akkumlyator", "akulyator",
-               "аккумулятор", "аккумлятор", "battery", "акку"] },
+               "akumlator", "akumlyator", "akumulator", "akumylator",
+               "аккумулятор", "аккумлятор", "акумулятор",
+               "battery", "акку"] },
   { mn: "катушка",           en: "ignition coil", category: CATEGORY.ELECTRIC,
     variants: ["katushka", "babine", "babin", "бабин", "катушка",
                "coil", "ignition coil", "асаах ороомог"] },
@@ -170,12 +173,24 @@ const TERMS = [
   { mn: "жолооны рейка",     en: "steering rack", category: CATEGORY.SUSPENSION,
     variants: ["reyka", "rejka", "рейка", "steering rack"] },
   { mn: "холхивч",           en: "bearing",      category: CATEGORY.SUSPENSION,
-    variants: ["podshipnik", "шарик", "подшипник", "bearing", "холхивч"] },
+    variants: ["podshipnik", "podshipnk", "шарик", "подшипник", "bearing", "холхивч", "holhivch"] },
   { mn: "цапны холхивч",     en: "wheel hub bearing", category: CATEGORY.SUSPENSION,
     variants: ["stupica", "stupits", "stupitsa", "ступица",
-               "wheel hub bearing", "цапны холхивч"] },
+               "wheel hub bearing", "wheel bearing", "hub bearing",
+               "цапны холхивч", "ступичный подшипник",
+               "duguin holhivch", "дугуйн холхивч"] },
+  // Mongolian colloquial — "бул" (literally "head/knot") and "толгой"
+  // both refer to the wheel hub assembly. The compound "тоормосны бул"
+  // is by far the most common buyer phrasing — many wouldn't say
+  // "wheel hub" or use the official term гулсуур. Multi-token forms
+  // are caught by the sliding-window scanner (MAX_WINDOW=3 above).
   { mn: "гулсуур",           en: "wheel hub",    category: CATEGORY.SUSPENSION,
-    variants: ["gulsuur", "hub", "wheel hub"] },
+    variants: [
+      "gulsuur", "hub", "wheel hub", "гулсуур",
+      "bul", "бул", "duguin bul", "дугуйн бул",
+      "толгой", "tolgoi", "duguin tolgoi", "дугуйн толгой",
+      "tormosni bul", "тоормосны бул",
+    ] },
 
   // ── BODY ─────────────────────────────────────────────────────────
   { mn: "бампер",            en: "bumper",       category: CATEGORY.BODY,

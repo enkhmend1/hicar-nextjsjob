@@ -63,7 +63,7 @@ export const oilsAttributesSchema = z.object({
   viscosity: z
     .string()
     .trim()
-    .regex(/^\d{1,2}W-?\d{2,3}$/i, "Зуурамтгайн зэрэг (жнь 5W-30) форматаар бичнэ үү"),
+    .regex(/^\d{1,2}W-?\d{2,3}$/i, "Зуурамтгайн зэрэг (жишээ 5W-30) форматаар бичнэ үү"),
   volume: z.coerce.number().min(0.1).max(200),
   oilType: z.enum(["synthetic", "semi-synthetic", "mineral", "racing"]),
   api: z.string().trim().max(20).optional().default(""),

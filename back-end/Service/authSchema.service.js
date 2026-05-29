@@ -90,6 +90,26 @@ export const resetPasswordSchema = z.object({
   password: passwordField,
 });
 
+// ── Phase Z.3: self-service profile editing ────────────────────────
+// Used by the buyer-side /profile page. Keeps the same atomic field
+// schemas (name + phone) so error wording matches what the user saw
+// during register. Both fields are required here — partial PATCH is
+// modelled at the controller level by only writing the fields the
+// caller actually sent.
+
+export const updateProfileSchema = z.object({
+  name:  nameField,
+  phone: phoneField,
+});
+
+// Change-password requires the CURRENT password before granting the
+// change — this is what stops a stolen-cookie-but-still-valid session
+// from being able to lock the legitimate owner out by rotating creds.
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Одоогийн нууц үг оруулна уу"),
+  newPassword:     passwordField,
+});
+
 // ────────────────────────────────────────────────────────────────────
 // Validator helpers — controllers call these instead of touching Zod
 // directly so the error shape stays consistent.

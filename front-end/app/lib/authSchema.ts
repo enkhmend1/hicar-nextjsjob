@@ -33,7 +33,7 @@ const nameField = z
   .string()
   .trim()
   .min(2,   "Нэр хамгийн багадаа 2 үсэг")
-  .max(80,  "Нэр хэт урт байна");
+  .max(40,  "Нэр хэт урт байна");
 
 const phoneField = z
   .string()
@@ -41,7 +41,7 @@ const phoneField = z
   .default("")
   .refine(
     (v) => v === "" || /^\d{8}$/.test(v.replace(/\D/g, "")),
-    "Утасны дугаар нь 8 оронтой тоо байх ёстой (жнь 9900 1122)",
+    "Утасны дугаар нь 8 оронтой тоо байх ёстой (жишээ 9900 1122)",
   )
   .transform((v) => v.replace(/\D/g, ""));
 

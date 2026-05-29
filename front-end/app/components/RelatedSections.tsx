@@ -65,6 +65,7 @@ export default function RelatedSections({
         .then((d) => { if (!cancelled) setFromSeller(d.items); })
         .catch(() =>  { if (!cancelled) setFromSeller([]); });
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFromSeller([]);
     }
 

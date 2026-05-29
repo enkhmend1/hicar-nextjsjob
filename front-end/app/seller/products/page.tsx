@@ -9,7 +9,7 @@ import TagInput from "@/app/components/ui/TagInput";
 import Link from "next/link";
 import {
   Plus, Pencil, Trash2, X, ImagePlus, Loader2,
-  CheckCircle2, Clock, XCircle, AlertTriangle, Tag, Settings2, Sparkles,
+  CheckCircle2, Clock, XCircle, AlertTriangle, Tag, Settings2, Sparkles, Boxes,
 } from "lucide-react";
 
 // ── Canonical categories (shown first in autocomplete) ───────────────
@@ -46,11 +46,15 @@ interface Facets {
   tags: string[];
 }
 
-const stockTone = (qty: number, threshold: number) => {
-  if (qty === 0) return "text-red-600";
-  if (qty <= threshold) return "text-red-600";
-  if (qty <= threshold * 2) return "text-amber-600";
-  return "text-gray-700";
+// Phase AT: stock badge meta — a colour-coded pill that doubles as a quick
+// edit shortcut so the seller can jump straight into the stock field. Three
+// tiers: out (red) · low ≤ threshold (amber) · healthy (emerald).
+const stockBadge = (qty: number, threshold: number, inStock: boolean) => {
+  if (qty === 0 || !inStock)
+    return { cls: "bg-red-50 text-red-600 border-red-200 hover:bg-red-100", note: "Дууссан" };
+  if (qty <= threshold)
+    return { cls: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100", note: "Бага" };
+  return { cls: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100", note: "" };
 };
 
 const categoryLabel = (id: string) =>
@@ -225,6 +229,7 @@ export default function SellerProductsPage() {
                 const StIcon = st.icon;
                 const threshold = p.lowStockThreshold && p.lowStockThreshold >= 0 ? p.lowStockThreshold : defaultThreshold;
                 const qty = p.stockQty ?? 0;
+                const sb = stockBadge(qty, threshold, p.inStock);
                 return (
                   <tr key={p._id ?? p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                     <td className="px-3 py-2">
@@ -244,11 +249,14 @@ export default function SellerProductsPage() {
                     <td className="px-4 py-2.5 text-gray-500 font-mono text-[12px]">{p.oem || "—"}</td>
                     <td className="px-4 py-2.5 text-gray-600">{categoryLabel(p.category)}</td>
                     <td className="px-4 py-2.5 text-right font-semibold text-blue-600">₮{p.price.toLocaleString()}</td>
-                    <td className={`px-4 py-2.5 text-right font-medium ${stockTone(qty, threshold)}`}>
-                      {qty}
-                      {qty <= threshold && (
-                        <div className="text-[9px] text-gray-400 font-normal">/{threshold}</div>
-                      )}
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        onClick={() => setEditing(p)}
+                        title={`Үлдэгдэл засах (анхааруулах босго: ${threshold})`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors ${sb.cls}`}>
+                        <Boxes size={11} /> {qty} ш
+                        {sb.note && <span className="font-normal opacity-80">· {sb.note}</span>}
+                      </button>
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium border ${st.color}`}>

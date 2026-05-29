@@ -151,8 +151,12 @@ export const pushRecentProduct = async (userId, product) => {
   const updated = [
     {
       productId: product.productId,
-      name:      product.name || "",
-      oem:       product.oem  || "",
+      name:      product.name  || "",
+      oem:       product.oem   || "",
+      // Phase AK: track price + brand so "the cheap one" follow-ups can
+      // be answered from memory without re-fetching the catalogue.
+      price:     Number(product.price)  || 0,
+      brand:     product.brand || "",
       at:        new Date(),
     },
     ...prev,
@@ -225,9 +229,21 @@ export const summarizeMemoryForPrompt = (memory, locale = "mn") => {
   const searches = (memory.recentSearches || []).slice(0, 3).map((s) => s.query);
   if (searches.length) lines.push(`  • Recent searches: ${searches.join(", ")}`);
 
-  const products = (memory.recentProducts || []).slice(0, 3).filter((p) => p.oem || p.name);
+  // Phase AK: include the LAST shown products in detail so follow-up
+  // turns ("хямд нь юу вэ?", "Aisin-ийг сонгох уу?") can be answered
+  // without re-running search_products. We list the top 5 most recent
+  // with name + brand + price so the LLM can pick by attribute.
+  const products = (memory.recentProducts || []).slice(0, 5).filter((p) => p.oem || p.name);
   if (products.length) {
-    lines.push(`  • Recent products: ${products.map((p) => p.oem || p.name).join(", ")}`);
+    const tag = locale === "en" ? "Last shown products" : "Сүүлд харуулсан бараа";
+    lines.push(`  • ${tag} (reference these for follow-ups like "the cheap one" / "хямд нь"):`);
+    for (const p of products) {
+      const bits = [p.name || p.oem];
+      if (p.brand) bits.push(p.brand);
+      if (p.oem && p.oem !== p.name) bits.push(p.oem);
+      if (p.price) bits.push(`₮${Number(p.price).toLocaleString()}`);
+      lines.push(`      - ${bits.join(" · ")}`);
+    }
   }
 
   const dx = memory.diagnosticState;

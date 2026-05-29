@@ -28,8 +28,8 @@ import { useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/store";
-import { useCartDrawer, closeCartDrawer } from "@/app/lib/cartDrawer";
-import { DELIVERY_PRICE } from "@/lib/data";
+import { useCartDrawer } from "@/app/lib/cartDrawer";
+import { deliveryPriceFor } from "@/app/lib/delivery";
 import { CartItem, Product } from "@/app/types";
 import {
   X, ShoppingCart, Store, Plus, Minus, Trash2, ArrowRight, Package,
@@ -88,7 +88,7 @@ export default function CartDrawer() {
   const groups = useMemo(() => groupBySeller(items), [items]);
   const itemCount   = items.reduce((s, i) => s + i.quantity, 0);
   const sellerCount = groups.length;
-  const deliveryTotal = items.reduce((s, i) => s + DELIVERY_PRICE[i.deliveryType], 0);
+  const deliveryTotal = items.reduce((s, i) => s + deliveryPriceFor(i.product.seller, i.deliveryType), 0);
 
   // Don't render the DOM when closed — saves the body-scroll listeners.
   if (!open) return null;

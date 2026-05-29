@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useAuthStore, useCarStore, type ActiveVehicle } from "@/store";
 import { useLocale } from "@/lib/i18n";
-import { Product, Order, User } from "@/app/types";
+import { Product, Order } from "@/app/types";
 import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
@@ -28,6 +28,8 @@ interface Message {
   imageUrl?: string;
   products?: ProductCard[];
   crossRefs?: CrossRef[];
+  /** Phase AL — bundle suggestions ("Хамт ихэвчлэн авдаг"). */
+  related?: ProductCard[];
   lowStock?: ProductCard[];
   excelHint?: { filename: string };
   /** Seller-table renderer payload from layout="seller_table". */
@@ -183,10 +185,14 @@ export default function HiCarAIChat() {
       const car = `${activeVehicle.manufacturer} ${activeVehicle.model}${activeVehicle.generation ? ` [${activeVehicle.generation}]` : ""}`;
       greet = locale === "en"
         ? `Hi 👋 Your car is ${car}. What part are you looking for?`
-        : `Сайн уу 👋 Таны ${car}-ын ямар сэлбэг хайя?`;
+        : `Сайн уу 👋 Таны ${car}-ын ямар сэлбэгийг хайя?`;
     } else {
       greet = locale === "en" ? USER_GREETING_EN : USER_GREETING_MN;
     }
+    // Greet message reset — legitimate sync setState in effect (locale or
+    // surface change → swap opening bubble). React 19's compiler lint is
+    // overly aggressive on this canonical pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages([{ id: 1, role: "ai", text: greet }]);
   }, [isAdminPath, isSellerPath, locale, activeVehicle?.manufacturer, activeVehicle?.model, activeVehicle?.generation]);
 
@@ -200,6 +206,14 @@ export default function HiCarAIChat() {
     if (isOpen) void agent.hydrateMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user?.id]);
+
+  // `pushAi` нь дараах useCallback-ууд дотроос дуудагдах учир ЭХЛЭЭД
+  // зарлах ёстой — JS-ийн const/let нь hoist хийгддэггүй (TDZ). Closure-
+  // ийн lookup нь runtime-д явдаг учир хуучин код практик дээр ажилладаг
+  // байсан ч ESLint react-compiler болон strict-mode хоёр анхааруулдаг.
+  const pushAi = useCallback((m: Omit<Message, "id" | "role">) => {
+    setMessages(prev => [...prev, { id: idRef.current++, role: "ai", ...m }]);
+  }, []);
 
   /** Pick a recent vehicle → switch + close dropdown. */
   const switchToVehicleId = useCallback(async (id: string) => {
@@ -219,15 +233,12 @@ export default function HiCarAIChat() {
           : `Машин солигдсон: ${r.vehicle.manufacturer} ${r.vehicle.model}. Ямар сэлбэг хайя?`,
       });
     }
-  }, [agent, locale]);
+  }, [agent, locale, pushAi]);
 
   const clearVehicle = useCallback(async () => {
     await agent.clearVehicle();
     setSwitcherOpen(false);
   }, [agent]);
-
-  const pushAi = (m: Omit<Message, "id" | "role">) =>
-    setMessages(prev => [...prev, { id: idRef.current++, role: "ai", ...m }]);
 
   // ── Admin Excel commands handled client-side (browser download) ──
   const handleClientExcelCommand = async (text: string): Promise<boolean> => {
@@ -514,6 +525,35 @@ export default function HiCarAIChat() {
                       </div>
                     </Link>
                   ))}
+                </div>
+              )}
+
+              {/* Phase AL — "Хамт ихэвчлэн авдаг" bundle strip. Renders
+                  ONLY when both main products AND related items are
+                  present (related without main = stale UX). Horizontal-
+                  scroll layout to avoid pushing the next assistant bubble
+                  off-screen — Amazon's mobile pattern. */}
+              {m.related && m.related.length > 0 && m.products && m.products.length > 0 && (
+                <div className="mt-2.5 pt-2 border-t border-gray-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    ＋ Хамт ихэвчлэн авдаг
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5 scrollbar-none">
+                    {m.related.map((p) => (
+                      <Link
+                        key={p.id}
+                        href={`/shop/${p.id}`}
+                        className="shrink-0 w-[130px] bg-blue-50/60 hover:bg-blue-100/80 border border-blue-100 hover:border-blue-300 rounded-lg p-2 transition-colors"
+                      >
+                        <div className="text-[11px] font-semibold text-gray-900 line-clamp-2 mb-1 min-h-[2.4em]">
+                          {p.name}
+                        </div>
+                        <div className="text-[11px] font-bold text-blue-700">
+                          ₮{p.price.toLocaleString()}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1042,6 +1082,9 @@ function layoutToMessage(resp: AIResponse): Omit<Message, "id" | "role"> {
     case "user_cards":
       if (p.items?.length)     msg.products  = p.items;
       if (p.crossRefs?.length) msg.crossRefs = p.crossRefs;
+      // Phase AL — bundle/cross-sell suggestions surface as a separate
+      // strip below the main result cards.
+      if (p.related?.length)   msg.related   = p.related;
       break;
     case "seller_table":
       if (p.columns && p.rows) {

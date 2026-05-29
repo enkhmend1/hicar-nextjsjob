@@ -6,6 +6,7 @@ import PasswordResetToken from "../Model/passwordResetToken.model.js";
 import { sendMail } from "../Service/notification.service.js";
 import {
   registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema,
+  updateProfileSchema, changePasswordSchema,
   validateAuth, AUTH_ERROR_CODES as ERR,
 } from "../Service/authSchema.service.js";
 
@@ -229,6 +230,132 @@ export const me = async (req, res) => {
   return res.json({ user: req.user });
 };
 
+/**
+ * PATCH /api/auth/me  — Phase Z.3 self-service profile editor.
+ *
+ * Body: { name?, phone? }    (both optional individually but at least one required)
+ *
+ * Why a dedicated endpoint instead of reusing the admin user.controller:
+ *   • The admin endpoint accepts ANY field (role, sellerStatus, trust, …).
+ *     A buyer must never be able to escalate themselves to admin/seller by
+ *     PATCHing `/api/users/:id`. This handler whitelists name + phone only.
+ *   • Validation errors come back in the same { code, fields } envelope
+ *     the register form already understands, so the /profile page can
+ *     reuse the same RHF + zodResolver wiring.
+ *
+ * NOT allowed via this endpoint:
+ *   email   — would need re-verification flow (out of scope v1)
+ *   role    — privilege escalation surface
+ *   sellerStatus / sellerProfile.* — sellers edit those via /api/seller/profile
+ */
+export const updateMe = async (req, res) => {
+  const v = validateAuth(updateProfileSchema, req.body);
+  if (!v.success) {
+    return res.status(400).json({
+      code: v.code, message: v.message, fields: v.fields,
+    });
+  }
+  const { name, phone } = v.data;
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { name, phone } },
+      { returnDocument: "after", runValidators: true },
+    );
+    if (!user) {
+      return res.status(404).json({
+        code: ERR.USER_NOT_FOUND, message: "Хэрэглэгч олдсонгүй",
+      });
+    }
+    return res.json({ user });
+  } catch (err) {
+    return respondSafeError(res, err);
+  }
+};
+
+/**
+ * POST /api/auth/change-password — Phase Z.3.
+ *
+ * Body: { currentPassword, newPassword }
+ *
+ * Requires the current password as a re-authentication gate. This is the
+ * defence against a stolen access token: an attacker holding only the JWT
+ * cannot rotate creds (and thereby lock the legitimate user out) without
+ * also knowing the password.
+ *
+ * On success we keep the existing refresh cookie alive — the user stays
+ * logged in on the device they just rotated from. Other devices keep
+ * their existing access tokens until expiry; for now that's an accepted
+ * tradeoff (true "log out everywhere" requires a refresh-token version
+ * column on the User, which is a bigger change).
+ */
+export const changePassword = async (req, res) => {
+  const v = validateAuth(changePasswordSchema, req.body);
+  if (!v.success) {
+    return res.status(400).json({
+      code: v.code, message: v.message, fields: v.fields,
+    });
+  }
+  const { currentPassword, newPassword } = v.data;
+
+  if (currentPassword === newPassword) {
+    return res.status(400).json({
+      code: ERR.VALIDATION_FAILED,
+      message: "Шинэ нууц үг хуучнаасаа өөр байх ёстой",
+      fields: [{ path: "newPassword", message: "Хуучин нууц үгтэй ижил байна" }],
+    });
+  }
+
+  try {
+    // Re-fetch with the password column (it's select: false by default).
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) {
+      return res.status(404).json({
+        code: ERR.USER_NOT_FOUND, message: "Хэрэглэгч олдсонгүй",
+      });
+    }
+
+    const ok = await user.verifyPassword(currentPassword);
+    if (!ok) {
+      // 401 not 400 — wrong CURRENT password is an auth failure, not a
+      // schema failure. Frontend can highlight the currentPassword field
+      // via the fields[] array regardless.
+      return res.status(401).json({
+        code: ERR.INVALID_CREDS,
+        message: "Одоогийн нууц үг буруу байна",
+        fields: [{ path: "currentPassword", message: "Одоогийн нууц үг буруу" }],
+      });
+    }
+
+    user.password = newPassword;   // pre('save') re-hashes via argon2
+    await user.save();
+
+    // Fire-and-forget notification — same anomaly-visibility principle
+    // as the reset-password flow.
+    sendMail({
+      to: user.email,
+      subject: "HiCar — Нууц үг шинэчлэгдсэн",
+      text:
+`Сайн байна уу ${user.name},
+
+Таны HiCar нууц үг амжилттай шинэчлэгдлээ.
+
+Хэрэв ЭНЭ үйлдлийг ТА ХИЙГЭЭГҮЙ бол шууд бидэнтэй холбоо барина уу — таны акаунт эрсдэлд орсон байж магадгүй.
+
+— HiCar баг`,
+    }).catch(() => {});
+
+    console.log(chalk.yellow(
+      `[audit] password-changed-self  user=${user._id}  email=${user.email}  ip=${req.ip}`,
+    ));
+
+    return res.json({ ok: true, message: "Нууц үг амжилттай шинэчлэгдлээ" });
+  } catch (err) {
+    return respondSafeError(res, err);
+  }
+};
+
 // ──────────────────────────────────────────────────────────────────
 // Password recovery (self-serve)
 // ──────────────────────────────────────────────────────────────────
@@ -346,10 +473,14 @@ export const checkResetToken = async (req, res) => {
 
   const doc = await PasswordResetToken.findOne({ tokenHash: sha256(raw) });
   if (!doc) return res.status(410).json({ message: "Token буруу", code: "TOKEN_INVALID" });
-  if (doc.usedAt) return res.status(410).json({ message: "Token аль хэдийн ашиглагдсан", code: "TOKEN_USED" });
+  // Check expiry BEFORE usedAt: an expired token reveals nothing useful to
+  // an attacker (they couldn't use it regardless), but distinguishing
+  // "used" from "expired" via different error codes leaks that the token
+  // was once valid. Return a uniform expiry message for both states.
   if (doc.expiresAt.getTime() < Date.now()) {
     return res.status(410).json({ message: "Token хугацаа дууссан", code: "TOKEN_EXPIRED" });
   }
+  if (doc.usedAt) return res.status(410).json({ message: "Token аль хэдийн ашиглагдсан", code: "TOKEN_USED" });
 
   const user = await User.findById(doc.user).select("email name");
   if (!user) return res.status(410).json({ message: "Хэрэглэгч олдсонгүй", code: "TOKEN_INVALID" });

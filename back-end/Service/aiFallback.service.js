@@ -61,10 +61,18 @@ import { aiConfig } from "../Config/openai.js";
  *   • HTTP 503 (provider overloaded)
  *   • HTTP 502 / 504 (gateway / timeout)
  *   • Network errors (ETIMEDOUT / ECONNRESET / ECONNREFUSED)
+ *   • HTTP 400 with "tool call validation failed" or "tool_use_failed"
+ *     in the body — this is Groq's check that catches malformed
+ *     tool-call output from the LLM (e.g. function name with args
+ *     concatenated: `'search_products {"query":"..."}'`). The error
+ *     is TRANSIENT (next round / different model usually works). We
+ *     used to misclassify it as a request-shape bug and not retry —
+ *     buyers saw "Дотоод алдаа гарлаа" when 70b had a bad sampling
+ *     moment. (Phase AJ.)
  *
- * No for 4xx other than 413 (request shape problem — a smaller / bigger
- * model won't fix malformed JSON) or 5xx other than 503 (provider bug —
- * a different model is unlikely to help).
+ * No for OTHER 4xx (legit request-shape problem — a smaller / bigger
+ * model won't fix malformed JSON we sent) or 5xx other than 503
+ * (provider bug — a different model is unlikely to help).
  */
 export const isFallbackableError = (err) => {
   const status = Number(err?.status || err?.response?.status || 0);
@@ -73,6 +81,28 @@ export const isFallbackableError = (err) => {
   if (status === 502 || status === 504) return true;          // gateway / timeout
   const code = String(err?.code || "").toUpperCase();
   if (code === "ETIMEDOUT" || code === "ECONNRESET" || code === "ECONNREFUSED") return true;
+
+  // Groq-specific: 400 with malformed tool-call output from the LLM.
+  // Observed wording variants on llama-3.3-70b-versatile (May 2026):
+  //
+  //   "tool call validation failed: attempted to call tool 'X' which was
+  //    not in request.tools"
+  //   "Failed to call a function. Please adjust your prompt. See
+  //    'failed_generation' for more details."
+  //   "tool_use_failed"
+  //
+  // All three mean the LLM emitted malformed tool-call JSON — TRANSIENT
+  // (next round / different model usually works). We used to misclassify
+  // them as request-shape bugs and not retry; buyers saw "Дотоод алдаа
+  // гарлаа". Now they fall through to the next chain entry. (Phase AJ.)
+  if (status === 400) {
+    const msg = String(err?.message || "").toLowerCase();
+    if (msg.includes("tool call validation failed")) return true;
+    if (msg.includes("tool_use_failed")) return true;
+    if (msg.includes("not in request.tools")) return true;
+    if (msg.includes("failed to call a function")) return true;
+    if (msg.includes("failed_generation")) return true;
+  }
   return false;
 };
 
@@ -155,6 +185,45 @@ export const buildTextFallbackChain = ({
  *                                       so walltime budget still wins.
  * @returns {Promise<{ response, usedEntry, attempts }>}
  */
+/**
+ * Rough token estimator — char-count / 3.5 is empirically close for
+ * mixed Mongolian+English+JSON content. Used ONLY as a pre-flight check
+ * to decide whether a small-context model (e.g. Groq 8b free tier with
+ * 6K TPM) is even worth trying. Off-by-200 is fine; we use a 5500 cap.
+ */
+const estimateBodyTokens = (body) => {
+  try {
+    const j = JSON.stringify(body || {});
+    return Math.ceil(j.length / 3.5);
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * Per-entry token cap. If the body is larger than this, the chain
+ * walker skips the entry rather than incurring a guaranteed 413.
+ * Keyed by model substring so renames don't break the guard.
+ */
+// Cap is INTENTIONALLY low (4000) because:
+// (a) Groq counts tool-schema tokens differently than naive JSON.stringify
+//     — the gap is ~900-1500 tokens for our 10-tool schema.
+// (b) The free-tier limit is 6000 tokens-per-minute, so even if a single
+//     request fits, two back-to-back ones will 429.
+// Setting the cap at 4000 means: only TINY follow-ups (e.g. "хэр хүлээх вэ?"
+// after an item is already selected) reach 8B. Cold-start chats with full
+// system prompt skip straight to Gemini, which has 1M TPM headroom.
+const ENTRY_TOKEN_CAP = [
+  { match: /8b/i,           cap: 3000 },   // Groq llama-3.1-8b-instant free tier
+  { match: /llama-3\.1-8b/, cap: 3000 },
+];
+
+const capForEntry = (entry) => {
+  const m = entry?.model || "";
+  for (const r of ENTRY_TOKEN_CAP) if (r.match.test(m)) return r.cap;
+  return Infinity;
+};
+
 export const chatWithFallback = async ({ chain, body, signal }) => {
   if (!Array.isArray(chain) || chain.length === 0) {
     throw new Error("aiFallback: empty chain — no AI provider configured");
@@ -162,6 +231,7 @@ export const chatWithFallback = async ({ chain, body, signal }) => {
 
   const attempts = [];
   let lastErr = null;
+  const estTokens = estimateBodyTokens(body);
 
   for (let i = 0; i < chain.length; i++) {
     const entry = chain[i];
@@ -170,6 +240,21 @@ export const chatWithFallback = async ({ chain, body, signal }) => {
       const e = new Error("walltime_exceeded");
       e.aborted = true;
       throw e;
+    }
+
+    // Phase AP: pre-flight token guard. Skip entries whose model can't
+    // fit the prompt — saves a guaranteed-413 round-trip and lets the
+    // chain walker reach the next viable provider faster.
+    const cap = capForEntry(entry);
+    if (estTokens > cap) {
+      attempts.push({
+        label: entry.label, model: entry.model, ok: false,
+        skipped: "token-cap", estTokens, cap,
+      });
+      console.warn(chalk.dim(
+        `[aiFallback] skipping ${entry.label} (${entry.model}) — ~${estTokens}t exceeds ${cap}t cap`,
+      ));
+      continue;
     }
 
     const callBody = { ...body, model: entry.model };

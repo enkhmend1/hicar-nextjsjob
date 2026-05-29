@@ -124,6 +124,21 @@ const orderSchema = new mongoose.Schema(
     paidAt:            { type: Date },
     deliveredAt:       { type: Date },
     /**
+     * Phase AQ — courier tracking number set by the seller when they
+     * mark the order as `shipped`. Optional (some local hand-deliveries
+     * have no tracking). Free-form string so the same field works for
+     * GoGo / DHL / TNTL / hand-written notes.
+     */
+    trackingNumber:    { type: String, default: "" },
+    /**
+     * Phase AQ — set when the BUYER confirms delivery on /orders.
+     * Distinct from `deliveredAt` (which can be admin-set or buyer-set)
+     * because the escrow release worker uses this as the ground truth:
+     * only release when the buyer themselves acknowledged receipt OR
+     * the auto-release deadline elapsed with no complaint.
+     */
+    buyerConfirmedDeliveryAt: { type: Date },
+    /**
      * When the escrow-release worker is scheduled to fire. Set when the
      * order transitions to "delivered". Cleared if a dispute opens — the
      * worker checks for an open dispute before releasing.

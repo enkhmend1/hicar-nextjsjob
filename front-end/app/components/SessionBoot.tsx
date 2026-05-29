@@ -12,8 +12,6 @@ import { api } from "@/lib/api";
  */
 export default function SessionBoot() {
   const { user, _hasHydrated, setSession } = useAuthStore();
-  const loadWishlist = useWishlistStore(s => s.load);
-  const clearWishlist = useWishlistStore(s => s.clear);
 
   // Refresh the session on boot
   useEffect(() => {
@@ -30,12 +28,16 @@ export default function SessionBoot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_hasHydrated]);
 
-  // Sync wishlist with user state
+  // Sync wishlist with user state. Access store via getState() so we don't
+  // subscribe to function identity — Zustand selectors via `useWishlistStore(s => s.fn)`
+  // produce stable references when using create() directly, but reading via
+  // getState() is the explicit, safe pattern for effects that don't need reactivity.
   useEffect(() => {
     if (!_hasHydrated) return;
-    if (user) loadWishlist();
-    else clearWishlist();
-  }, [user, _hasHydrated, loadWishlist, clearWishlist]);
+    const { load, clear } = useWishlistStore.getState();
+    if (user) load();
+    else clear();
+  }, [user, _hasHydrated]);
 
   return null;
 }

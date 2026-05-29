@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { Brain, Search, Plus, Pencil, Trash2, X, RefreshCw, MessageCircle, Sparkles } from "lucide-react";
+import { Brain, Search, Plus, Pencil, Trash2, X, RefreshCw, Sparkles } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────
 interface SearchLog {

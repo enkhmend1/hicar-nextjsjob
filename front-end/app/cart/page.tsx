@@ -39,11 +39,14 @@ import {
   Trash2, Plus, Minus, ShoppingCart, ArrowRight, AlertTriangle, Store,
   ChevronRight, Package,
 } from "lucide-react";
-import { DELIVERY_PRICE } from "@/lib/data";
+import { deliveryPriceFor, resolveDeliveryOptions, enabledTiers } from "@/app/lib/delivery";
 import { api } from "@/lib/api";
 import { Product, CartItem } from "@/app/types";
 
 const DEL_LABELS = { fast: "Яаралтай", normal: "Энгийн", cheap: "Хямд" };
+/** Compact price for the narrow cart tier buttons: "Үнэгүй" / "₮15K" / "₮5,500". */
+const compactDeliveryPrice = (n: number) =>
+  n === 0 ? "Үнэгүй" : n % 1000 === 0 ? `₮${n / 1000}K` : `₮${n.toLocaleString()}`;
 const pid = (p: Product) => (p._id ?? p.id ?? "") as string;
 
 // ─────────────────────────────────────────────────────────────────
@@ -84,7 +87,7 @@ const groupBySeller = (items: CartItem[]): SellerGroup[] => {
   for (const it of items) {
     const meta = sellerOf(it);
     const itemSubtotal = (it.product.price ?? 0) * it.quantity;
-    const itemDelivery = DELIVERY_PRICE[it.deliveryType] || 0;
+    const itemDelivery = deliveryPriceFor(it.product.seller, it.deliveryType);
     const existing = map.get(meta.id);
     if (existing) {
       existing.items.push(it);
@@ -154,7 +157,7 @@ export default function CartPage() {
 
   const groups = useMemo(() => groupBySeller(items), [items]);
   const sellerCount = groups.length;
-  const deliveryTotal = items.reduce((s, i) => s + DELIVERY_PRICE[i.deliveryType], 0);
+  const deliveryTotal = items.reduce((s, i) => s + deliveryPriceFor(i.product.seller, i.deliveryType), 0);
 
   // ── EMPTY STATE ──────────────────────────────────────────────────
   if (items.length === 0) {
@@ -337,6 +340,14 @@ interface RowProps {
 }
 function CartItemRow({ item, onRemove, onQty, onDelivery }: RowProps) {
   const id = pid(item.product);
+  // Phase AV: tiers + prices come from THIS item's seller config. Show only
+  // the tiers the seller offers, but always keep the current selection
+  // visible (in case the seller disabled it after the item was added).
+  const opts = resolveDeliveryOptions(item.product.seller);
+  const offered = enabledTiers(opts);
+  const shownTiers = offered.includes(item.deliveryType)
+    ? offered
+    : [item.deliveryType, ...offered];
   return (
     <div className="p-4">
       <div className="flex gap-4 mb-3">
@@ -367,8 +378,8 @@ function CartItemRow({ item, onRemove, onQty, onDelivery }: RowProps) {
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-1">
-          {(["fast", "normal", "cheap"] as const).map((d) => (
+        <div className="flex gap-1 flex-wrap">
+          {shownTiers.map((d) => (
             <button key={d} onClick={() => onDelivery(id, d)}
               className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer border-2 transition-all font-sans ${
                 item.deliveryType === d
@@ -376,9 +387,7 @@ function CartItemRow({ item, onRemove, onQty, onDelivery }: RowProps) {
                   : "border-gray-200 text-gray-400 hover:border-blue-300"
               }`}>
               {DEL_LABELS[d]}
-              <span className="ml-1 opacity-60">
-                {DELIVERY_PRICE[d] === 0 ? "Free" : `₮${(DELIVERY_PRICE[d] / 1000).toFixed(0)}K`}
-              </span>
+              <span className="ml-1 opacity-60">{compactDeliveryPrice(opts[d].price)}</span>
             </button>
           ))}
         </div>

@@ -34,7 +34,8 @@ export default function AdminOrdersPage() {
 
   // queueMicrotask defers reload()'s setLoading(true) past the effect
   // commit — React 19 warns on sync setState in effect bodies.
-  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [filter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [filter]);
 
   const updateStatus = async (id: string, status: string) => {
     await api.patch(`/orders/${id}/status`, { status });

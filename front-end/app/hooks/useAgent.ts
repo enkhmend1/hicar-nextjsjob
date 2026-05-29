@@ -110,8 +110,13 @@ export function useAgent(): UseAgentReturn {
   //                       a SECOND 429 doesn't schedule a THIRD attempt
   //                       (we cap automatic retries at one per failure).
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number>(0);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_tick, setTick] = useState(0);
+  // `now` state нь зөвхөн countdown цаг бичигч. Render бүрт `Date.now()`-г
+  // шууд унших нь impure (React compiler / strict-mode дургүйцнэ) — оронд
+  // нь setInterval-ээр өөрчлөгддөг state-руу хадгална. Тиймээс render нь
+  // deterministic болж, countdown UI нэг секундэд нэг удаа шинэчилнэ.
+  const [now, setNow] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : Date.now(),
+  );
   const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inAutoRetry    = useRef<boolean>(false);
 
@@ -119,14 +124,14 @@ export function useAgent(): UseAgentReturn {
   // `secondsUntilRetry` see a live countdown. Tear down the interval
   // when cooldown is cleared OR the component unmounts.
   useEffect(() => {
-    if (rateLimitedUntil <= Date.now()) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    if (rateLimitedUntil <= now) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [rateLimitedUntil]);
+  }, [rateLimitedUntil, now]);
 
   // Derived: live countdown the UI shows in the input affordance.
-  const secondsUntilRetry = rateLimitedUntil > Date.now()
-    ? Math.ceil((rateLimitedUntil - Date.now()) / 1000)
+  const secondsUntilRetry = rateLimitedUntil > now
+    ? Math.ceil((rateLimitedUntil - now) / 1000)
     : 0;
 
   // Cancel auto-retry on unmount so we don't fire a request into a dead
@@ -243,11 +248,18 @@ export function useAgent(): UseAgentReturn {
             ? "Image search needs an AI provider. Try text search instead."
             : "Зургийн хайлт AI шаардана. Текстээр хайна уу.";
           break;
-        case "AI_INTERNAL_ERROR":
+        case "AI_INTERNAL_ERROR": {
+          // Phase AB: the server attaches a requestId so a user reporting
+          // "the chat broke" can quote the code back and ops can grep the
+          // matching stack trace in seconds. We show it inline only when
+          // present (defensive — older backends may not return it).
+          const ref = ae.data?.requestId ? ` (код: ${String(ae.data.requestId)})` : "";
+          const refEn = ae.data?.requestId ? ` (ref: ${String(ae.data.requestId)})` : "";
           msg = locale === "en"
-            ? "Something broke internally. We've logged it — please retry."
-            : "Дотоод алдаа гарлаа. Бид бүртгэсэн — дахин оролдоно уу.";
+            ? `Something broke internally${refEn}. We've logged it — please retry.`
+            : `Дотоод алдаа гарлаа${ref}. Бид бүртгэсэн — дахин оролдоно уу.`;
           break;
+        }
         default:
           // Use the server's message if it looks human-readable, otherwise
           // fall back to the generic.

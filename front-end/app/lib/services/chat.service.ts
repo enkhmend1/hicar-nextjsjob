@@ -60,6 +60,8 @@ export interface AIResponse {
   payload: {
     items?:     ProductCardDTO[];
     crossRefs?: CrossRefDTO[];
+    /** Phase AL — "Frequently bought together" suggestions. */
+    related?:   ProductCardDTO[];
     meta?: {
       query?: string; category?: string; count?: number;
       plan?: unknown; oemBag?: string[]; primaryOem?: string;

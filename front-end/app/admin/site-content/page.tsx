@@ -479,7 +479,7 @@ function AttributeSchemaEditor({
 
       {attrs.length === 0 && (
         <div className="text-[11px] text-gray-400 bg-white border border-dashed border-gray-200 rounded-lg px-3 py-3 text-center">
-          Энэ категорид нэмэлт талбар алга. Шинэ шинж чанар нэмбэл seller-ийн "Шинэ бараа" форм автоматаар харуулна.
+          Энэ категорид нэмэлт талбар алга. Шинэ шинж чанар нэмбэл seller-ийн &ldquo;Шинэ бараа&rdquo; форм автоматаар харуулна.
         </div>
       )}
 

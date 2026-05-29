@@ -1,10 +1,10 @@
 import express from "express";
 import {
-  register, login, me, refresh, logout,
+  register, login, me, updateMe, changePassword, refresh, logout,
   forgotPassword, checkResetToken, resetPassword,
 } from "../Controller/auth.controller.js";
 import { protect } from "../Middleware/auth.middleware.js";
-import { ipLimit, rateLimit } from "../Middleware/rateLimit.middleware.js";
+import { ipLimit, rateLimit, userLimit } from "../Middleware/rateLimit.middleware.js";
 
 const router = express.Router();
 
@@ -26,6 +26,20 @@ router.post("/login",    loginByIp, loginByEmail, login);
 router.post("/refresh",  refresh);
 router.post("/logout",   logout);
 router.get ("/me",       protect, me);
+
+// ── Phase Z.3: buyer-side self-service profile editing ────────────
+// PATCH /me — name + phone. Cheap, but rate-limited per user so a
+// hijacked session can't bulk-flip values to spam the audit log.
+// POST /change-password — requires currentPassword as re-auth gate.
+//     Tight rate limit (5/hour/user) since each call argon2-verifies +
+//     hashes, and bursting it is a meaningful CPU/timing attack surface.
+router.patch("/me", protect, userLimit(20, 60 * 10), updateMe);
+router.post(
+  "/change-password",
+  protect,
+  userLimit(5, 60 * 60),
+  changePassword,
+);
 
 // ── Password recovery (self-serve) ────────────────────────────────────
 // Rate limits below are crucial: forgot-password is an unauthenticated

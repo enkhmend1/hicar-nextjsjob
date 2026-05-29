@@ -6,7 +6,7 @@ import BuyerShell from "@/app/components/BuyerShell";
 import { useCartStore, useAuthStore } from "@/store";
 import { api, ApiError } from "@/lib/api";
 import { Order } from "@/app/types";
-import { DELIVERY_PRICE } from "@/lib/data";
+import { deliveryPriceFor } from "@/app/lib/delivery";
 import { CheckCircle, QrCode, CreditCard, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -56,7 +56,7 @@ const FakeQR = ({ seed }: { seed: number }) => {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, total, clearCart, removeItem } = useCartStore();
+  const { items, total, clearCart, removeItem, _hasHydrated: cartHydrated } = useCartStore();
   const { user } = useAuthStore();
 
   const [step, setStep] = useState<Step>("info");
@@ -79,6 +79,18 @@ export default function CheckoutPage() {
 
   const orderTotal = total();
 
+  // Wait for Zustand to rehydrate from localStorage before showing the
+  // empty-cart state — without this guard, SSR renders "хоосон сагс"
+  // (empty cart) and the client immediately replaces it with cart contents,
+  // causing a hydration mismatch warning and a visible flash.
+  if (!cartHydrated) return (
+    <BuyerShell>
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    </BuyerShell>
+  );
+
   if (items.length === 0) return (
     <BuyerShell>
       <div className="min-h-[70vh] flex items-center justify-center">
@@ -90,8 +102,20 @@ export default function CheckoutPage() {
     </BuyerShell>
   );
 
+  // Mongolian mobile numbers: 8 digits, starting with 6/7/8/9.
+  const MN_PHONE_RE = /^[6-9]\d{7}$/;
+
+  const [formErrors, setFormErrors] = useState<{ address?: string; phone?: string }>({});
+
   const submitInfo = (e: React.FormEvent) => {
     e.preventDefault();
+    const errs: { address?: string; phone?: string } = {};
+    if (!address.trim()) errs.address = "Хаяг оруулна уу";
+    if (!MN_PHONE_RE.test(phone.replace(/\s/g, ""))) {
+      errs.phone = "Монгол утасны дугаар 8 оронтой байх ёстой (жнь: 99001122)";
+    }
+    if (Object.keys(errs).length) { setFormErrors(errs); return; }
+    setFormErrors({});
     setStep("payment");
   };
 
@@ -216,7 +240,7 @@ export default function CheckoutPage() {
           ))}
           <div className="flex justify-between text-[13px] text-gray-500 mt-1 pt-1 border-t border-blue-100">
             <span>Хүргэлт</span>
-            <span>₮{items.reduce((s, i) => s + DELIVERY_PRICE[i.deliveryType], 0).toLocaleString()}</span>
+            <span>₮{items.reduce((s, i) => s + deliveryPriceFor(i.product.seller, i.deliveryType), 0).toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-[16px] font-bold text-blue-700 mt-2 pt-2 border-t border-blue-200">
             <span>Нийт</span>
@@ -229,21 +253,23 @@ export default function CheckoutPage() {
         )}
 
         {step === "info" && (
-          <form onSubmit={submitInfo}>
+          <form onSubmit={submitInfo} noValidate>
             <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
               <h2 className="text-[16px] font-semibold text-gray-900 mb-4">Хүргэлтийн мэдээлэл</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Хүлээн авах хаяг</label>
-                  <textarea value={address} onChange={e => setAddress(e.target.value)} required
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white transition-colors resize-none h-20 font-sans"
+                  <textarea value={address} onChange={e => { setAddress(e.target.value); setFormErrors(p => ({ ...p, address: undefined })); }}
+                    className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[14px] focus:bg-white transition-colors resize-none h-20 font-sans outline-none ${formErrors.address ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-500"}`}
                     placeholder="Дүүрэг, хороо, байр, орц, тоот..." />
+                  {formErrors.address && <p className="text-[11px] text-red-500 mt-1">{formErrors.address}</p>}
                 </div>
                 <div>
                   <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Утасны дугаар</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white transition-colors"
-                    placeholder="9900 1122" />
+                  <input type="tel" value={phone} onChange={e => { setPhone(e.target.value); setFormErrors(p => ({ ...p, phone: undefined })); }}
+                    className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[14px] focus:bg-white transition-colors outline-none ${formErrors.phone ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-500"}`}
+                    placeholder="99001122" />
+                  {formErrors.phone && <p className="text-[11px] text-red-500 mt-1">{formErrors.phone}</p>}
                 </div>
               </div>
               <button type="submit"

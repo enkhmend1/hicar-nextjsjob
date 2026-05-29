@@ -4,6 +4,7 @@ import {
   dashboard, analytics, analyticsExport, myOrders,
   publicStorefront,
 } from "../Controller/seller.controller.js";
+import { sellerUpdateOrderStatus } from "../Controller/order.controller.js";
 import { protect, approvedSeller } from "../Middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -25,5 +26,7 @@ router.get("/analytics", approvedSeller, analytics);
 router.get("/analytics/export", approvedSeller, analyticsExport);
 
 router.get("/orders", approvedSeller, myOrders);
+// Phase AQ.1: seller marks own orders processing/shipped (+ tracking).
+router.patch("/orders/:id/status", approvedSeller, sellerUpdateOrderStatus);
 
 export default router;

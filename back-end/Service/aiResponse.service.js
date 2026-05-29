@@ -45,9 +45,12 @@
  * Each card carries the redacted USER-safe fields only (caller's job
  * to have run sanitizeProduct).
  */
-export const userCards = ({ items = [], crossRefs = [], meta = {} }) => ({
+export const userCards = ({ items = [], crossRefs = [], related = [], meta = {} }) => ({
   layout: "user_cards",
-  payload: { items, crossRefs, meta },
+  // Phase AL: `related` is a small horizontal strip of "frequently
+  // bought together" suggestions the frontend renders BELOW the main
+  // items. Empty array when no bundle mapping exists for the category.
+  payload: { items, crossRefs, related, meta },
 });
 
 /**
@@ -288,6 +291,10 @@ export const inferLayoutFromTools = (toolCalls, role) => {
       return userCards({
         items:     result.items     || [],
         crossRefs: result.crossRefs || [],
+        // Phase AL: pass bundle suggestions through (search_products
+        // returns these when the anchor product's category has a
+        // RELATED_CATEGORIES entry).
+        related:   result.related   || [],
         meta: {
           query:    result.query,
           category: result.category,

@@ -75,7 +75,8 @@ export default function SellerDisputesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [filter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [filter]);
 
   const selected = useMemo(
     () => disputes.find((d) => d._id === selectedId) || null,

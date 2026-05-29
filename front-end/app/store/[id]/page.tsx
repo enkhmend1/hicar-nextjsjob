@@ -102,6 +102,7 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true); setNotFound(false);
     api.get<StorefrontResponse>(`/seller/store/${id}`)
       .then((r) => { if (!cancelled) setData(r); })

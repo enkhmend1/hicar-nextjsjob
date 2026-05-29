@@ -172,7 +172,9 @@ export const getProduct = async (req, res) => {
     const item = await Product.findById(req.params.id)
       // Phase R.1: include sellerProfile.logo so the cart + product
       // detail can render the seller avatar without a second round-trip.
-      .populate("seller", "name sellerProfile.shopName sellerProfile.logo sellerProfile.rating sellerProfile.ratingCount");
+      // Phase AU: include sellerProfile.deliveryOptions so the detail
+      // page shows the seller's OWN delivery durations (hours/days).
+      .populate("seller", "name sellerProfile.shopName sellerProfile.logo sellerProfile.rating sellerProfile.ratingCount sellerProfile.deliveryOptions");
     if (!item) return res.status(404).json({ message: "Бараа олдсонгүй" });
     // Hide unapproved products from non-owner non-admin
     if (item.status !== "approved") {

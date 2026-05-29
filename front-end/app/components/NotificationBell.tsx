@@ -60,12 +60,19 @@ export default function NotificationBell() {
     } catch { /* ignore */ }
   };
 
-  // Poll every 30s when user is logged in
+  // Poll every 30s when user is logged in.
   useEffect(() => {
-    if (!user) { setItems([]); setUnread(0); return; }
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setItems([]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUnread(0);
+      return;
+    }
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Click outside to close

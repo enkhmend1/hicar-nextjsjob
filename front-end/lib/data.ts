@@ -1,13 +1,20 @@
 import { Car, Product } from "@/app/types";
 
+/**
+ * @deprecated Phase AV — delivery prices are now per-seller. Don't read this
+ * for pricing; use `deliveryPriceFor(seller, tier)` / `resolveDeliveryOptions`
+ * from `@/app/lib/delivery` (display) — the order total is computed
+ * server-side from the seller's config. Kept only as the platform-default
+ * mirror (it equals DEFAULT_DELIVERY_OPTIONS prices).
+ */
 export const DELIVERY_PRICE = { fast: 15000, normal: 8000, cheap: 0 };
 
 export const CAR_DB: Record<string, Car> = {
-  "УБ 1234 АА": { id:"c1", plate:"УБ 1234 АА", make:"Toyota", model:"Prius", year:2018, engine:"1.8L Hybrid", chassis:"ZVW50" },
-  "УБ 5678 БА": { id:"c2", plate:"УБ 5678 БА", make:"Nissan", model:"X-Trail", year:2020, engine:"2.0L", chassis:"T32" },
-  "ДА 4321 ВА": { id:"c3", plate:"ДА 4321 ВА", make:"Toyota", model:"Land Cruiser 200", year:2018, engine:"4.5L Diesel", chassis:"URJ202" },
-  "УБ 9999 ГА": { id:"c4", plate:"УБ 9999 ГА", make:"Honda", model:"Fit", year:2017, engine:"1.3L", chassis:"GK3" },
-  "ДА 1111 АА": { id:"c5", plate:"ДА 1111 АА", make:"Mitsubishi", model:"Outlander", year:2019, engine:"2.4L", chassis:"GF7W" },
+  "1234 ААА": { id:"c1", plate:"1234 ААА", make:"Toyota", model:"Prius", year:2018, engine:"1.8L Hybrid", chassis:"ZVW50" },
+  "5678 БАА": { id:"c2", plate:"5678 БАА", make:"Nissan", model:"X-Trail", year:2020, engine:"2.0L", chassis:"T32" },
+  "4321 ВАА": { id:"c3", plate:"4321 ВАА", make:"Toyota", model:"Land Cruiser 200", year:2018, engine:"4.5L Diesel", chassis:"URJ202" },
+  "9999 ГАА": { id:"c4", plate:"9999 ГАА", make:"Honda", model:"Fit", year:2017, engine:"1.3L", chassis:"GK3" },
+  "1111 ААА": { id:"c5", plate:"1111 ААА", make:"Mitsubishi", model:"Outlander", year:2019, engine:"2.4L", chassis:"GF7W" },
 };
 
 const D1 = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-12.5c-2.49 0-4.5 2.01-4.5 4.5S9.51 16.5 12 16.5s4.5-2.01 4.5-4.5S14.49 7.5 12 7.5z";

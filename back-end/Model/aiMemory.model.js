@@ -59,6 +59,12 @@ const recentProductSchema = new mongoose.Schema(
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
     name:      { type: String, default: "" },
     oem:       { type: String, default: "" },
+    // Phase AK: price + brand persisted so follow-up turns like "хямд нь
+    // юу вэ?" / "Aisin-ийг харуул" can be answered from memory without
+    // re-hitting the catalogue. Price is ₮ (whole-number tugrik). Both
+    // fields default to 0 / "" so older recents render correctly.
+    price:     { type: Number, default: 0 },
+    brand:     { type: String, default: "" },
     at:        { type: Date,   default: Date.now },
   },
   { _id: false },

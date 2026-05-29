@@ -79,8 +79,9 @@ export default function Combobox({
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  // Keep highlight in bounds
+  // Keep highlight in bounds — reset cursor when query or visibility flips.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlight(0);
   }, [query, open]);
 

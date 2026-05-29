@@ -158,7 +158,11 @@ export default function ProductCard({ p }: { p: Product }) {
           </div>
         )}
 
-        {/* Image / icon / empty state. */}
+        {/* Image / icon / empty state.
+            Phase AS: when there are no images AND no iconPath, show a
+            cleaner placeholder using the first letter of the product
+            name. Reads better in grids than a generic "Зураггүй" card —
+            users can scan by initial while inventory photos are loaded. */}
         {p.images && p.images.length > 0 ? (
           <Image
             src={p.images[0]}
@@ -170,9 +174,15 @@ export default function ProductCard({ p }: { p: Product }) {
         ) : p.iconPath ? (
           <svg className="w-14 h-14 fill-blue-300/80 group-hover:fill-blue-400 transition-colors" viewBox="0 0 24 24"><path d={p.iconPath}/></svg>
         ) : (
-          <div className="flex flex-col items-center gap-1.5 border-2 border-dashed border-blue-200 rounded-xl px-5 py-3 bg-white/40">
-            <Package className="w-9 h-9 text-blue-300/80" strokeWidth={1.5} />
-            <span className="text-[10px] text-gray-400 font-medium">Зураггүй</span>
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="w-14 h-14 rounded-2xl bg-white/90 border border-blue-100 shadow-sm flex items-center justify-center">
+              <span className="text-2xl font-bold text-blue-300/80 group-hover:text-blue-400 transition-colors">
+                {(p.name || "?").trim().charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="inline-flex items-center gap-1 text-[9px] text-gray-400 bg-white/70 backdrop-blur border border-gray-200 px-1.5 py-0.5 rounded-full">
+              <Package size={8} /> Зураггүй
+            </div>
           </div>
         )}
 

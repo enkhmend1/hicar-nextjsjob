@@ -50,6 +50,37 @@ const RAW = [
   { surface: /\bp50\b|\bzvw50\b/iu,                  make: "Toyota", model: "Prius",     generation: "ZVW50" },
   { surface: /\bp60\b|\bzvw60\b/iu,                  make: "Toyota", model: "Prius",     generation: "ZVW60" },
   { surface: /\bprius\s*c\b|\baqua\b/iu,             make: "Toyota", model: "Aqua",      generation: "NHP10" },
+  // Bare "Prius" fallback — only fires AFTER the chassis-specific
+  // patterns above, because CHASSIS_DICT is sorted longest-pattern
+  // first. So "Prius P30" still wins as ZVW30, but a bare "Prius"
+  // input gets the model recognised (generation left blank).
+  { surface: /\bprius\b|\bприус\b/iu,                 make: "Toyota", model: "Prius",     generation: "" },
+
+  // Toyota Blade — referenced in the AI prompt examples but was
+  // missing from the chassis dict. AZE156 (2.4L) + AZE154 (2.4L
+  // AWD) + GRE156 (3.5L V6) cover the three production variants.
+  { surface: /\baze156\b/iu,                          make: "Toyota", model: "Blade",     generation: "AZE156" },
+  { surface: /\baze154\b/iu,                          make: "Toyota", model: "Blade",     generation: "AZE154" },
+  { surface: /\bgre156\b/iu,                          make: "Toyota", model: "Blade",     generation: "GRE156" },
+  { surface: /\bblade\b|\bблэйд\b|\bблэйж\b/iu,       make: "Toyota", model: "Blade",     generation: "" },
+
+  // Vitz / Yaris — common Mongolian compact, often referenced bare
+  { surface: /\bksp130\b|\bnsp130\b/iu,               make: "Toyota", model: "Vitz",      generation: "P130" },
+  { surface: /\bvitz\b|\bвитз\b|\byaris\b|\bяарис\b/iu, make: "Toyota", model: "Vitz",   generation: "" },
+
+  // Alphard / Vellfire MPVs — very common in Mongolia
+  { surface: /\bgg[hw]20\b|\banh20\b/iu,              make: "Toyota", model: "Alphard",   generation: "20" },
+  { surface: /\bgg[hw]30\b|\bayh30\b/iu,              make: "Toyota", model: "Alphard",   generation: "30" },
+  { surface: /\balphard\b|\bалфард\b/iu,              make: "Toyota", model: "Alphard",   generation: "" },
+  { surface: /\bvellfire\b|\bвэллфайр\b/iu,           make: "Toyota", model: "Vellfire",  generation: "" },
+
+  // Estima — older but still common second-hand
+  { surface: /\bahr20\b|\bgsr5[05]\b/iu,              make: "Toyota", model: "Estima",    generation: "" },
+  { surface: /\bestima\b|\bэстима\b/iu,               make: "Toyota", model: "Estima",    generation: "" },
+
+  // Mark X / Mark II — bare names
+  { surface: /\bmark\s*x\b|\bgrx12[0-9]\b/iu,         make: "Toyota", model: "Mark X",    generation: "" },
+  { surface: /\bmark\s*ii\b|\bjzx110\b/iu,            make: "Toyota", model: "Mark II",   generation: "" },
 
   // Crown trims (the trim hint matters in Mongolia)
   { surface: /\bcrown\s*athlete\b/iu,                make: "Toyota", model: "Crown Athlete",  generation: "" },

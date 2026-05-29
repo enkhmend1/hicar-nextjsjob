@@ -217,9 +217,9 @@ export default function Home() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { icon: <Shield size={20} />, title: "OEM Баталгаа", desc: "Оригинал бараа OEM" },
-            { icon: <Truck size={20} />, title: "Хурдан хүргэлт", desc: " Хурдан хүргэлт" },
-            { icon: <Clock size={20} />, title: "7/24 Дэмжлэг", desc: "Техникийн асуудлаар манай багт хандана уу" },
+            { icon: <Shield size={20} />, title: "OEM баталгаа", desc: "Япон үйлдвэрлэгчийн жинхэнэ эх сурвалжтай" },
+            { icon: <Truck size={20} />,  title: "Хурдан хүргэлт", desc: "Хурдан хүргэлт" },
+            { icon: <Clock size={20} />,  title: "7/24 дэмжлэг", desc: "Техникийн асуудлаар бидэнтэй чөлөөтэй холбогдоно уу" },
           ].map(({ icon, title, desc }) => (
             <div key={title} className="bg-white border border-gray-200 rounded-xl p-4 flex gap-3 items-start">
               <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 text-blue-600">{icon}</div>

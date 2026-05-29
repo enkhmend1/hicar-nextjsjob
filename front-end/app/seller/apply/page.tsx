@@ -19,8 +19,10 @@ export default function SellerApplyPage() {
     if (!user) router.replace("/auth/login");
   }, [user, _hasHydrated, router]);
 
+  // Pre-fill form from existing sellerProfile snapshot on auth hydrate.
   useEffect(() => {
     if (user?.sellerProfile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         shopName: user.sellerProfile.shopName ?? "",
         description: user.sellerProfile.description ?? "",

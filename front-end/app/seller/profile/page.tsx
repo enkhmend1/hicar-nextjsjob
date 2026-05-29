@@ -37,14 +37,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuthStore } from "@/store";
 import { api } from "@/lib/api";
-import { User } from "@/app/types";
+import { User, DeliveryOptions, DeliveryTierKey, DeliveryUnit } from "@/app/types";
+import {
+  mergeDeliveryOptions, DELIVERY_TIER_ORDER, DELIVERY_TIER_META,
+  MAX_ETA_BY_UNIT, MAX_DELIVERY_PRICE, formatEta, formatDeliveryPrice,
+} from "@/app/lib/delivery";
 import {
   Save, ImagePlus, Loader2, Bell, Package,
   Store, ExternalLink, Copy, Check, Image as ImageIcon, Trash2,
-  Award, Star, ShoppingBag, Shield,
+  Award, Star, ShoppingBag, Shield, Truck, Clock,
 } from "lucide-react";
 
-type Tab = "branding" | "payouts" | "inventory";
+type Tab = "branding" | "payouts" | "inventory" | "delivery";
 
 export default function SellerProfilePage() {
   const { user, setUser } = useAuthStore();
@@ -63,6 +67,9 @@ export default function SellerProfilePage() {
     defaultLowStockThreshold: 5,
     emailAlertsEnabled: true,
   });
+  // Phase AU — seller-defined delivery DURATIONS (per tier, hours|days).
+  // Starts from platform defaults; hydrated from sellerProfile below.
+  const [deliveryCfg, setDeliveryCfg] = useState<DeliveryOptions>(() => mergeDeliveryOptions());
 
   // UX state
   const [busy, setBusy]             = useState(false);
@@ -79,6 +86,7 @@ export default function SellerProfilePage() {
   useEffect(() => {
     const sp = user?.sellerProfile;
     if (!sp) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBranding({
       shopName:    sp.shopName    ?? "",
       description: sp.description ?? "",
@@ -90,6 +98,7 @@ export default function SellerProfilePage() {
       defaultLowStockThreshold: sp.defaultLowStockThreshold ?? 5,
       emailAlertsEnabled:       sp.emailAlertsEnabled !== false,
     });
+    setDeliveryCfg(mergeDeliveryOptions(sp.deliveryOptions));
   }, [user]);
 
   // ── Persistence helpers ──────────────────────────────────────────
@@ -115,6 +124,14 @@ export default function SellerProfilePage() {
       defaultLowStockThreshold: Number(inventory.defaultLowStockThreshold),
       emailAlertsEnabled:       inventory.emailAlertsEnabled,
     });
+  };
+
+  // Patch one delivery tier in place (enabled / value / unit).
+  const setTier = (tier: DeliveryTierKey, patch: Partial<DeliveryOptions[DeliveryTierKey]>) =>
+    setDeliveryCfg((p) => ({ ...p, [tier]: { ...p[tier], ...patch } }));
+  const saveDelivery = (e: React.FormEvent) => {
+    e.preventDefault();
+    persist("/seller/settings", { deliveryOptions: deliveryCfg });
   };
 
   // ── Image uploads ─────────────────────────────────────────────────
@@ -192,6 +209,7 @@ export default function SellerProfilePage() {
           { id: "branding",  label: "Брэндинг",         icon: ImageIcon },
           { id: "payouts",   label: "Төлбөр",           icon: ShoppingBag },
           { id: "inventory", label: "Бараа тохиргоо",   icon: Package },
+          { id: "delivery",  label: "Хүргэлт",          icon: Truck },
         ] as const).map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -350,6 +368,92 @@ export default function SellerProfilePage() {
               <SaveButton busy={busy} />
             </form>
           )}
+
+          {tab === "delivery" && (
+            <form onSubmit={saveDelivery} className="space-y-5">
+              <Card
+                title="Хүргэлтийн тохиргоо"
+                hint="Хүргэлтийн төрөл бүрийн ХУГАЦАА (цаг/хоног) ба ҮНИЙГ та өөрөө тохируулна. Худалдан авагч таны барааг үзэхэд эдгээр утга харагдана.">
+                {DELIVERY_TIER_ORDER.map((tier) => {
+                  const opt  = deliveryCfg[tier];
+                  const meta = DELIVERY_TIER_META[tier];
+                  return (
+                    <div key={tier}
+                      className={`rounded-xl border p-3.5 transition-colors ${
+                        opt.enabled ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50/60"
+                      }`}>
+                      <div className="flex items-start justify-between gap-3">
+                        {/* enabled toggle + tier identity */}
+                        <label className="flex items-start gap-2.5 cursor-pointer min-w-0">
+                          <input type="checkbox"
+                            checked={opt.enabled}
+                            onChange={(e) => setTier(tier, { enabled: e.target.checked })}
+                            className="accent-blue-600 w-4 h-4 mt-0.5 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-semibold text-gray-900">{meta.label}</div>
+                            <div className="text-[11px] text-gray-500">{meta.desc}</div>
+                          </div>
+                        </label>
+                        {/* live preview — ETA · price */}
+                        <div className="text-[12px] font-semibold text-blue-700 shrink-0 inline-flex items-center gap-1 text-right">
+                          {opt.enabled ? (
+                            <><Clock size={12} /> {formatEta(opt.value, opt.unit)} · {formatDeliveryPrice(opt.price)}</>
+                          ) : "Идэвхгүй"}
+                        </div>
+                      </div>
+
+                      {/* duration + price controls */}
+                      <div className="mt-3 pl-[26px] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* DURATION */}
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-wider mb-1">Хугацаа</label>
+                          <div className="flex items-center gap-2">
+                            <input type="number" min={0} max={MAX_ETA_BY_UNIT[opt.unit]}
+                              value={opt.value}
+                              disabled={!opt.enabled}
+                              onChange={(e) => setTier(tier, { value: Number(e.target.value) })}
+                              className="w-20 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50" />
+                            <select
+                              value={opt.unit}
+                              disabled={!opt.enabled}
+                              onChange={(e) => {
+                                const unit = e.target.value as DeliveryUnit;
+                                setTier(tier, { unit, value: Math.min(opt.value, MAX_ETA_BY_UNIT[unit]) });
+                              }}
+                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50 cursor-pointer font-sans">
+                              <option value="hour">Цаг</option>
+                              <option value="day">Хоног</option>
+                            </select>
+                          </div>
+                        </div>
+                        {/* PRICE */}
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-wider mb-1">Үнэ</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[13px] pointer-events-none">₮</span>
+                            <input type="number" min={0} max={MAX_DELIVERY_PRICE} step={500}
+                              value={opt.price}
+                              disabled={!opt.enabled}
+                              onChange={(e) => setTier(tier, { price: Number(e.target.value) })}
+                              placeholder="0"
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-7 pr-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="mt-1 bg-blue-50/40 border border-blue-100 rounded-xl p-3 text-[11px] text-blue-900 leading-relaxed">
+                  <strong>Жич:</strong> Үнийг <strong>0</strong> болговол тухайн төрөл &ldquo;Үнэгүй&rdquo; болно.
+                  Дор хаяж нэг төрлийг идэвхтэй үлдээнэ — бүгдийг унтраавал &ldquo;Энгийн&rdquo; автоматаар идэвхждэг.
+                  Захиалгын нийт дүн серверт энэ үнээр дахин баталгаажна.
+                </div>
+              </Card>
+
+              <SaveButton busy={busy} />
+            </form>
+          )}
         </div>
 
         {/* ─── RIGHT: sticky live preview (desktop only) ──────────── */}
@@ -369,7 +473,7 @@ export default function SellerProfilePage() {
               totalSales={user.sellerProfile?.totalSales ?? 0}
             />
             <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
-              Хадгалаагүй өөрчлөлтүүдийг урьдчилан харуулж байна. Бодит дэлгүүрт зөвхөн "Хадгалах" дарсны дараа гарна.
+              Хадгалаагүй өөрчлөлтүүдийг урьдчилан харуулж байна. Бодит дэлгүүрт зөвхөн &ldquo;Хадгалах&rdquo; дарсны дараа гарна.
             </p>
           </div>
         </aside>

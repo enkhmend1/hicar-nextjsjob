@@ -169,11 +169,57 @@ export const updateProfile = async (req, res) => {
   }
 };
 
-// ── Settings (inventory + notification preferences) ──────────────
+// ── Delivery option sanitiser (Phase AU/AV) ──────────────────────
+const DELIVERY_TIERS = ["fast", "normal", "cheap"];
+// Platform fallbacks — mirror order.controller's DELIVERY_PRICE for `price`.
+const DELIVERY_DEFAULTS = {
+  fast:   { enabled: true, value: 7,  unit: "day", price: 15000 },
+  normal: { enabled: true, value: 14, unit: "day", price: 8000 },
+  cheap:  { enabled: true, value: 21, unit: "day", price: 0 },
+};
+// ₮10M ceiling on a delivery fee — generous but blocks typo/overflow values.
+const MAX_DELIVERY_PRICE = 10_000_000;
+
+/**
+ * Validate + clamp a client-supplied deliveryOptions blob into the exact
+ * 3-tier shape the schema expects. Tolerant by design: a missing or
+ * malformed tier falls back to its platform default rather than 400-ing,
+ * so a partial payload can never wipe a seller's existing config into an
+ * invalid state. Returns null when the whole body is unusable.
+ */
+const sanitiseDeliveryOptions = (raw, existing = {}) => {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  let anyEnabled = false;
+  for (const tier of DELIVERY_TIERS) {
+    const base = existing[tier] || DELIVERY_DEFAULTS[tier];
+    const r = raw[tier] || {};
+    const unit = r.unit === "hour" ? "hour" : (r.unit === "day" ? "day" : base.unit || "day");
+    // Per-unit sane ceiling: 720h (30d) for hours, 365d for days.
+    const cap = unit === "hour" ? 720 : 365;
+    let value = Number(r.value);
+    if (!Number.isFinite(value)) value = base.value ?? DELIVERY_DEFAULTS[tier].value;
+    value = Math.max(0, Math.min(cap, Math.round(value)));
+    // Phase AV: seller-set delivery fee (MNT). Clamp 0..MAX, fall back to
+    // the seller's existing price, then the platform default.
+    let price = Number(r.price);
+    if (!Number.isFinite(price)) price = base.price ?? DELIVERY_DEFAULTS[tier].price;
+    price = Math.max(0, Math.min(MAX_DELIVERY_PRICE, Math.round(price)));
+    const enabled = r.enabled === undefined ? (base.enabled !== false) : Boolean(r.enabled);
+    if (enabled) anyEnabled = true;
+    out[tier] = { enabled, value, unit, price };
+  }
+  // Guard against a seller disabling every tier — that would leave the
+  // product page with an empty delivery selector. Re-enable "normal".
+  if (!anyEnabled) out.normal.enabled = true;
+  return out;
+};
+
+// ── Settings (inventory + notification + delivery preferences) ───
 export const updateSettings = async (req, res) => {
   try {
     const sp = req.user.sellerProfile || {};
-    const { defaultLowStockThreshold, emailAlertsEnabled } = req.body;
+    const { defaultLowStockThreshold, emailAlertsEnabled, deliveryOptions } = req.body;
     if (defaultLowStockThreshold !== undefined) {
       const n = Number(defaultLowStockThreshold);
       if (!Number.isFinite(n) || n < 0 || n > 1000) {
@@ -183,6 +229,13 @@ export const updateSettings = async (req, res) => {
     }
     if (emailAlertsEnabled !== undefined) {
       sp.emailAlertsEnabled = Boolean(emailAlertsEnabled);
+    }
+    if (deliveryOptions !== undefined) {
+      const clean = sanitiseDeliveryOptions(deliveryOptions, sp.deliveryOptions);
+      if (!clean) {
+        return res.status(400).json({ message: "Хүргэлтийн тохиргоо буруу байна" });
+      }
+      sp.deliveryOptions = clean;
     }
     req.user.sellerProfile = sp;
     req.user.markModified("sellerProfile");

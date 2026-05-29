@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { Product } from "@/app/types";
-import { Plus, Pencil, Trash2, Search, X, Upload, ImagePlus, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, ImagePlus, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 const CATEGORIES = [
   { id: "brake", name: "Тоормос" },
@@ -52,7 +52,8 @@ export default function AdminProductsPage() {
 
   // queueMicrotask defers reload()'s setLoading(true) past the effect
   // commit — React 19 warns on sync setState in effect bodies.
-  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [statusFilter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [statusFilter]);
 
   const moderate = async (p: Product, action: "approve" | "reject") => {
     const id = p._id ?? p.id;

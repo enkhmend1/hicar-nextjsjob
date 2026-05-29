@@ -15,14 +15,14 @@
  *                  /api/seller/import/commit  →  Product docs (status=pending)
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import {
   Upload, FileSpreadsheet, ScanLine, ArrowLeft, ArrowRight, Loader2,
-  CheckCircle2, AlertTriangle, Pencil, Trash2, Plus, X, Sparkles, ImagePlus,
+  CheckCircle2, AlertTriangle, Trash2, Plus, X, Sparkles,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────

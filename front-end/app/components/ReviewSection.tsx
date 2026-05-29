@@ -37,7 +37,8 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
 
   // queueMicrotask defers reload()'s setLoading(true) past the effect
   // commit — React 19 warns on sync setState in effect bodies.
-  useEffect(() => { queueMicrotask(reload); /* eslint-disable-next-line */ }, [productId, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [productId, user]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,7 +133,24 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
 
       {/* All reviews */}
       {loading ? (
-        <div className="text-center py-6 text-gray-400 text-[13px]">Уншиж байна...</div>
+        <div className="space-y-2" aria-busy="true" aria-label="Уншиж байна">
+          {[1, 2, 3].map(n => (
+            <div key={n} className="bg-white border border-gray-200 rounded-xl p-3 animate-pulse">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-full bg-gray-200" />
+                <div className="h-3 w-24 bg-gray-200 rounded" />
+                <div className="h-3 w-16 bg-gray-100 rounded ml-auto" />
+              </div>
+              <div className="flex gap-0.5 mb-2">
+                {[1,2,3,4,5].map(s => <div key={s} className="w-3 h-3 bg-gray-200 rounded" />)}
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-3 bg-gray-100 rounded w-full" />
+                <div className="h-3 bg-gray-100 rounded w-3/4" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : reviews.length === 0 ? (
         <div className="text-center py-6 text-gray-400 text-[13px]">Хараахан сэтгэгдэл алга</div>
       ) : (

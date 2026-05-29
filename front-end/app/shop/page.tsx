@@ -40,12 +40,23 @@
 
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
-import { CATEGORIES } from "@/lib/data";
 import { api } from "@/lib/api";
 import { Product } from "@/app/types";
 import { useT } from "@/lib/i18n";
+import { useCategories, type SiteCategoryWithCount } from "@/app/lib/useCategories";
+import { useCarStore, type ActiveVehicle } from "@/store";
+import { Car as CarIcon } from "lucide-react";
+
+// Phase AF: dynamic category list — sourced from /api/site-content/categories,
+// editable in /admin/site-content. Backend currently seeds 29+ categories
+// (tires, oils, filters, battery, A/C, exhaust, fuel system, etc.). Bound
+// to "Бүгд" as the first entry so the existing filter UI still works.
+const ALL_CATEGORY: SiteCategoryWithCount = {
+  id: "all", name: "Бүгд", iconPath: "", count: 0,
+};
 import {
   Search, SlidersHorizontal, X, Star, Check, Package2, Filter as FilterIcon,
   ChevronDown,
@@ -65,11 +76,20 @@ interface ShopFilters {
   priceMax:   string;
   minRating:  number;          // 0 | 1 | 2 | 3 | 4 | 5
   inStock:    boolean;
+  /**
+   * Phase AG: vehicle-aware filter. When true and the user has an
+   * activeVehicle, the data source switches from `/api/products` →
+   * `/api/vehicle/compatible` so the grid shows ONLY parts whose
+   * OEM/fitment data matches the buyer's car. Defaults to OFF so
+   * fresh visits still see the full catalogue.
+   */
+  vehicleOnly: boolean;
 }
 
 const DEFAULTS: ShopFilters = {
   cat: "all", q: "", sort: "default", source: "all", brand: "",
   priceMin: "", priceMax: "", minRating: 0, inStock: false,
+  vehicleOnly: false,
 };
 
 const SORT_OPTIONS = [
@@ -102,27 +122,96 @@ function ShopInner() {
   const [loading, setLoading] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  // ── Build query + fetch ─────────────────────────────────────────
+  // Debounce the text search — avoids a new API round-trip on EVERY keystroke.
+  // Other filters (cat, sort, brand, price) are discrete clicks so no debounce needed.
+  const [debouncedQ, setDebouncedQ] = useState(filters.q);
   useEffect(() => {
-    setLoading(true);
-    const usp = new URLSearchParams();
-    if (filters.cat !== "all")    usp.set("category", filters.cat);
-    if (filters.source !== "all") usp.set("source", filters.source);
-    if (filters.q)                usp.set("q", filters.q);
-    if (filters.sort !== "default") usp.set("sort", filters.sort);
-    if (filters.brand)            usp.set("brand", filters.brand);
-    if (filters.priceMin)         usp.set("priceMin", filters.priceMin);
-    if (filters.priceMax)         usp.set("priceMax", filters.priceMax);
-    if (filters.minRating > 0)    usp.set("minRating", String(filters.minRating));
-    if (filters.inStock)          usp.set("inStock", "true");
+    const t = setTimeout(() => setDebouncedQ(filters.q), 250);
+    return () => clearTimeout(t);
+  }, [filters.q]);
 
+  // Phase AF: dynamic category list. The hook is module-cached so all
+  // shop visits share one fetch. Prepend "Бүгд" so the "all" filter
+  // stays the first option. Empty list (cold cache / API down) still
+  // renders cleanly — just the "Бүгд" entry.
+  const { categories: liveCategories } = useCategories();
+  const categories = useMemo<SiteCategoryWithCount[]>(
+    () => [ALL_CATEGORY, ...liveCategories],
+    [liveCategories],
+  );
+
+  // Phase AG: active vehicle context for the "only-fits-my-car" filter.
+  // Hydration-gated so the SSR shell doesn't try to read localStorage.
+  const activeVehicle = useCarStore((s) => s.activeVehicle);
+  const carHydrated   = useCarStore((s) => s._hasHydrated);
+
+  // ── Build query + fetch ─────────────────────────────────────────
+  // Phase AG: two branches.
+  //   1. vehicleOnly=true + activeVehicle present → POST /vehicle/compatible
+  //      so the catalogue is filtered by OEM/fitment ranking. Other
+  //      client-side filters (price, brand, rating) still apply via the
+  //      post-fetch filter pass below.
+  //   2. Otherwise → /products?... as before.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
     const ctrl = new AbortController();
-    api.get<{ items: Product[] }>(`/products?${usp.toString()}`)
-      .then((d) => setItems(d.items))
+
+    const useVehicleEndpoint = filters.vehicleOnly && !!activeVehicle?.id;
+
+    const promise = useVehicleEndpoint
+      ? api.post<{ items: Product[] }>("/vehicle/compatible", {
+          vehicleId: activeVehicle!.id,
+          category:  filters.cat !== "all" ? filters.cat : undefined,
+          limit:     60,
+        })
+      : (() => {
+          const usp = new URLSearchParams();
+          if (filters.cat !== "all")      usp.set("category", filters.cat);
+          if (filters.source !== "all")   usp.set("source", filters.source);
+          if (debouncedQ)                 usp.set("q", debouncedQ);  // use debounced value
+          if (filters.sort !== "default") usp.set("sort", filters.sort);
+          if (filters.brand)              usp.set("brand", filters.brand);
+          if (filters.priceMin)           usp.set("priceMin", filters.priceMin);
+          if (filters.priceMax)           usp.set("priceMax", filters.priceMax);
+          if (filters.minRating > 0)      usp.set("minRating", String(filters.minRating));
+          if (filters.inStock)            usp.set("inStock", "true");
+          return api.get<{ items: Product[] }>(`/products?${usp.toString()}`);
+        })();
+
+    promise
+      .then((d) => {
+        // Vehicle-compatible endpoint doesn't take all the same query
+        // params, so apply the rest CLIENT-SIDE on the returned items.
+        // This keeps the OEM-fitment ranking AS-IS but still honours
+        // price/brand/rating/in-stock filters the user picked.
+        let arr = d.items;
+        if (useVehicleEndpoint) {
+          if (filters.q) {
+            const rx = new RegExp(filters.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            arr = arr.filter((p) =>
+              rx.test(p.name) || rx.test(p.oem || "") || rx.test(p.brand || ""),
+            );
+          }
+          if (filters.brand)         arr = arr.filter((p) => p.brand === filters.brand);
+          if (filters.source !== "all") arr = arr.filter((p) => p.source === filters.source);
+          if (filters.priceMin)      arr = arr.filter((p) => p.price >= Number(filters.priceMin));
+          if (filters.priceMax)      arr = arr.filter((p) => p.price <= Number(filters.priceMax));
+          if (filters.minRating > 0) arr = arr.filter((p) => (p.rating || 0) >= filters.minRating);
+          if (filters.inStock)       arr = arr.filter((p) => p.inStock !== false);
+        }
+        setItems(arr);
+      })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
     return () => ctrl.abort();
-  }, [filters]);
+  // debouncedQ replaces filters.q so typing doesn't fire a new API call
+  // on every keystroke. All other filter fields (cat, sort…) are discrete
+  // clicks, so they trigger immediately via the rest of the filters object.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.cat, filters.sort, filters.source, filters.brand, filters.priceMin,
+      filters.priceMax, filters.minRating, filters.inStock, filters.vehicleOnly,
+      debouncedQ, activeVehicle]);
 
   // ── Derived: brand list (from current results) ──────────────────
   // We don't have a /brands endpoint, so we surface whatever's in the
@@ -144,8 +233,15 @@ function ShopInner() {
     const chips: { key: keyof ShopFilters; label: string; clear: () => void }[] = [];
     const update = (patch: Partial<ShopFilters>) => setFilters((p) => ({ ...p, ...patch }));
     if (filters.cat !== "all") {
-      const cat = CATEGORIES.find((c) => c.id === filters.cat);
+      const cat = categories.find((c) => c.id === filters.cat);
       chips.push({ key: "cat", label: cat?.name || filters.cat, clear: () => update({ cat: "all" }) });
+    }
+    if (filters.vehicleOnly && activeVehicle) {
+      chips.push({
+        key: "vehicleOnly",
+        label: `🚗 ${activeVehicle.manufacturer} ${activeVehicle.model}`,
+        clear: () => update({ vehicleOnly: false }),
+      });
     }
     if (filters.source !== "all") {
       const s = SOURCE_OPTIONS.find((o) => o.id === filters.source);
@@ -168,6 +264,8 @@ function ShopInner() {
       filters={filters}
       onChange={setFilters}
       brandOptions={brandOptions}
+      categories={categories}
+      activeVehicle={carHydrated ? activeVehicle : null}
     />
   );
 
@@ -177,7 +275,7 @@ function ShopInner() {
         {/* Page header */}
         <h1 className="text-[22px] font-semibold text-gray-900 mb-1">{t("shop.title")}</h1>
         <p className="text-[13px] text-gray-500 mb-4">
-          Манай {CATEGORIES.length - 1}+ ангилалаас сэлбэг хайж олоорой
+          Манай {Math.max(0, categories.length - 1)}+ ангилалаас сэлбэг хайж олоорой
         </p>
 
         {/* ── TOP BAR: search + sort + mobile filter toggle ─────── */}
@@ -309,24 +407,108 @@ interface FilterContentProps {
   filters: ShopFilters;
   onChange: (next: ShopFilters | ((p: ShopFilters) => ShopFilters)) => void;
   brandOptions: { brand: string; count: number }[];
+  /** Phase AF: dynamic category list (29+ entries from admin). */
+  categories: SiteCategoryWithCount[];
+  /** Phase AG: hydration-gated active vehicle (null if user hasn't picked). */
+  activeVehicle: ActiveVehicle | null;
 }
-function FilterContent({ filters, onChange, brandOptions }: FilterContentProps) {
+function FilterContent({
+  filters, onChange, brandOptions, categories, activeVehicle,
+}: FilterContentProps) {
   const update = (patch: Partial<ShopFilters>) =>
     onChange((p) => ({ ...p, ...patch }));
 
   return (
     <div className="space-y-4">
-      {/* CATEGORY */}
+      {/* ── Phase AG: VEHICLE FILTER ──────────────────────────────
+          Top-of-sidebar position so it's the FIRST thing a buyer sees.
+          Three states:
+            1. No active vehicle: gentle nudge to /lookup
+            2. Active vehicle + toggle OFF: chip + "Зөвхөн энэ машинд" button
+            3. Active vehicle + toggle ON: blue active card + "Болих" X
+          Tap toggles `vehicleOnly` which switches the data source from
+          /api/products → /api/vehicle/compatible (OEM-fitment ranking). */}
+      <FilterSection title="Машинаар шүүх">
+        {!activeVehicle ? (
+          <Link
+            href="/lookup"
+            className="block bg-gray-50 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg p-3 text-center transition-colors"
+          >
+            <CarIcon size={18} className="mx-auto text-gray-400 mb-1" />
+            <div className="text-[12px] text-gray-700 font-medium">
+              Машинаа сонгох
+            </div>
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              Plate дугаараар хайх →
+            </div>
+          </Link>
+        ) : filters.vehicleOnly ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+            <div className="flex items-start gap-2">
+              <div className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center shrink-0">
+                <CarIcon size={13} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] text-blue-700 font-semibold">
+                  Зөвхөн энэ машинд тааралттай
+                </div>
+                <div className="text-[12px] font-semibold text-gray-900 truncate">
+                  {activeVehicle.manufacturer} {activeVehicle.model}
+                  {activeVehicle.generation && (
+                    <span className="text-gray-400 font-normal"> · {activeVehicle.generation}</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-gray-500 font-mono">{activeVehicle.plate}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => update({ vehicleOnly: false })}
+              className="w-full mt-2 text-[11px] text-blue-700 hover:text-blue-900 bg-white border border-blue-200 hover:border-blue-300 rounded-md py-1.5 cursor-pointer font-sans transition-colors"
+            >
+              Шүүлтийг арилгах
+            </button>
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+            <div className="flex items-start gap-2 mb-2">
+              <div className="w-7 h-7 rounded-md bg-gray-200 text-gray-600 flex items-center justify-center shrink-0">
+                <CarIcon size={13} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-semibold text-gray-900 truncate">
+                  {activeVehicle.manufacturer} {activeVehicle.model}
+                </div>
+                <div className="text-[10px] text-gray-500 font-mono truncate">
+                  {activeVehicle.plate}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => update({ vehicleOnly: true })}
+              className="w-full text-[11px] bg-blue-600 hover:bg-blue-700 text-white rounded-md py-1.5 cursor-pointer border-none font-semibold font-sans transition-colors"
+            >
+              Зөвхөн энэ машинд тааруулах
+            </button>
+          </div>
+        )}
+      </FilterSection>
+
+      {/* CATEGORY — scrollable since the dynamic list can grow */}
       <FilterSection title="Ангилал">
         <div className="space-y-0.5 max-h-72 overflow-y-auto pr-1 -mr-1">
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button key={c.id} onClick={() => update({ cat: c.id })}
-              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[12.5px] cursor-pointer border-none font-sans transition-colors ${
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[12.5px] cursor-pointer border-none font-sans transition-colors flex items-center justify-between gap-2 ${
                 filters.cat === c.id
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "bg-transparent text-gray-600 hover:bg-gray-50"
               }`}>
-              {c.name}
+              <span className="truncate">{c.name}</span>
+              {c.id !== "all" && c.count > 0 && (
+                <span className="shrink-0 text-[10px] text-gray-400 font-mono">
+                  {c.count}
+                </span>
+              )}
             </button>
           ))}
         </div>

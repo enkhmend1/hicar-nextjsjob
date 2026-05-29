@@ -32,8 +32,6 @@ import { useCategories, type AttributeDefinition } from "@/app/lib/useCategories
 import { tOption } from "@/app/lib/optionLabels";
 import {
   productCreateSchema,
-  step1BasicsSchema,
-  step2FitmentSchema,
   step3PricingSchema,
   CATEGORY_LABELS,
   type ProductCreateInput,
@@ -312,7 +310,7 @@ function Step2Fitment({
 
         {fields.length === 0 && (
           <div className="text-[12px] text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl p-3 text-center">
-            Универсал бараа бол хоосон үлдээж болно. Тодорхой машинд тохирох бол "Мөр нэмэх".
+            Универсал бараа бол хоосон үлдээж болно. Тодорхой машинд тохирох бол &ldquo;Мөр нэмэх&rdquo;.
           </div>
         )}
 
