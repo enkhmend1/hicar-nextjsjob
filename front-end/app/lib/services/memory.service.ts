@@ -29,6 +29,9 @@ export interface ServerVehicle {
   generation?:  string;
   engineCode?:  string;
   engineType?:  string;
+  /** Phase AE: snapshot extras useful for /garage prefill + display. */
+  displacement?: string;
+  carname?:      string;
 }
 
 export interface ServerMemory {
@@ -49,6 +52,8 @@ export const toActiveVehicle = (v: ServerVehicle): ActiveVehicle => ({
   generation:   v.generation,
   engineCode:   v.engineCode,
   engineType:   v.engineType,
+  displacement: v.displacement,
+  carname:      v.carname,
 });
 
 // ────────────────────────────────────────────────────────────────────

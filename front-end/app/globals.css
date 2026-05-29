@@ -1,8 +1,41 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
-body { font-family: "DM Sans", sans-serif; }
-.hero-bg { background: linear-gradient(160deg,#f5f3ff 0%,#fff 55%); }
-.scrollbar-none::-webkit-scrollbar { display:none; }
-.scrollbar-none { scrollbar-width:none; }
-input,select,textarea { font-family: inherit; }
+body { font-family: "DM Sans", sans-serif; color: #0f172a; }
+
+/* Phase N — automotive palette: deep blue primary, amber accent.
+   #eff6ff = blue-50 (Tailwind), matches the bg-blue-50 class used
+   across the rest of the UI so the hero blends with section chrome. */
+.hero-bg {
+  background: linear-gradient(160deg, #eff6ff 0%, #fff 55%);
+}
+
+/* Subtle dot grid for hero — gives visual texture without being noisy.
+   Used as an additional ::before layer on the hero so it stacks under
+   the gradient. Toggled via the .hero-bg class. */
+.hero-bg {
+  position: relative;
+  overflow: hidden;
+}
+.hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(30, 58, 138, 0.08) 1px, transparent 0);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+}
+.hero-bg > * { position: relative; z-index: 1; }
+
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; }
+input, select, textarea { font-family: inherit; }
+
+/* Phase N — kill the inline `style={{textDecoration:"none"}}` repeated
+   on every <Link>. Anchor underlines look messy on chip/button-shaped
+   links; default to no underline and add it back per-component only
+   where we genuinely want a text link affordance. */
+a { text-decoration: none; color: inherit; }
+a.link-underline { text-decoration: underline; }

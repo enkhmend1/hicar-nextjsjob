@@ -32,8 +32,6 @@ import { useCategories, type AttributeDefinition } from "@/app/lib/useCategories
 import { tOption } from "@/app/lib/optionLabels";
 import {
   productCreateSchema,
-  step1BasicsSchema,
-  step2FitmentSchema,
   step3PricingSchema,
   CATEGORY_LABELS,
   type ProductCreateInput,
@@ -159,13 +157,13 @@ export default function NewProductPage() {
               <div className="flex items-center gap-2 shrink-0">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold border transition-colors ${
                   done   ? "bg-emerald-500 text-white border-emerald-500"
-                  : active ? "bg-violet-600 text-white border-violet-600"
+                  : active ? "bg-blue-600 text-white border-blue-600"
                   :          "bg-white text-gray-400 border-gray-300"
                 }`}>
                   {done ? <CheckCircle2 size={14} /> : i + 1}
                 </div>
                 <span className={`text-[12px] font-medium whitespace-nowrap ${
-                  active ? "text-violet-700" : done ? "text-emerald-700" : "text-gray-500"
+                  active ? "text-blue-700" : done ? "text-emerald-700" : "text-gray-500"
                 }`}>{s.title}</span>
               </div>
               {i < STEPS.length - 1 && (
@@ -205,7 +203,7 @@ export default function NewProductPage() {
 
           {stepIndex < STEPS.length - 1 ? (
             <button type="button" onClick={goNext}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-[13px] font-semibold text-white cursor-pointer border-none transition-colors font-sans">
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-[13px] font-semibold text-white cursor-pointer border-none transition-colors font-sans">
               Дараах <ChevronRight size={14} />
             </button>
           ) : (
@@ -237,19 +235,19 @@ function Step1Basics({ form }: { form: ProductForm }) {
     <div className="space-y-4">
       <Field label="Нэр" hint="Каталоги дээр харагдах гарчиг" error={errors.name?.message}>
         <input {...register("name")}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans"
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans"
           placeholder="Жнь: Toyota Crown 2010 бамперын фар" />
       </Field>
 
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Брэнд" error={errors.brand?.message}>
           <input {...register("brand")}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans"
             placeholder="Toyota OEM, Bosch, …" />
         </Field>
         <Field label="OEM код" hint="Заавал биш — гадна жагсаалттай байх ёсгүй" error={errors.oem?.message}>
           <input {...register("oem")}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-mono"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-mono"
             placeholder="04465-0E010" />
         </Field>
       </div>
@@ -261,7 +259,7 @@ function Step1Basics({ form }: { form: ProductForm }) {
           : "Зэрэгцээ талбарууд категорийн дагуу хувирна. Жагсаалт admin → Сайтын контент-аас удирдагдана."}
         error={errors.category?.message}>
         <select {...register("category")} disabled={catsLoading}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans disabled:opacity-60">
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans disabled:opacity-60">
           <option value="">— Сонгох —</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
@@ -305,14 +303,14 @@ function Step2Fitment({
           <h2 className="text-[14px] font-semibold text-gray-900">Машины тохироо (Fitment)</h2>
           <button type="button"
             onClick={() => append({ make: "", model: "", generation: "", yearStart: undefined, yearEnd: undefined })}
-            className="inline-flex items-center gap-1 text-[12px] text-violet-700 hover:text-violet-800 bg-transparent border-none cursor-pointer font-semibold font-sans">
+            className="inline-flex items-center gap-1 text-[12px] text-blue-700 hover:text-blue-800 bg-transparent border-none cursor-pointer font-semibold font-sans">
             <Plus size={13} /> Мөр нэмэх
           </button>
         </div>
 
         {fields.length === 0 && (
           <div className="text-[12px] text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl p-3 text-center">
-            Универсал бараа бол хоосон үлдээж болно. Тодорхой машинд тохирох бол "Мөр нэмэх".
+            Универсал бараа бол хоосон үлдээж болно. Тодорхой машинд тохирох бол &ldquo;Мөр нэмэх&rdquo;.
           </div>
         )}
 
@@ -323,19 +321,19 @@ function Step2Fitment({
               <div key={field.id} className="grid grid-cols-[1fr_1fr_1fr_80px_80px_28px] gap-1.5 items-start">
                 <input {...register(`fitments.${idx}.make`)}
                   placeholder="Make"
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-violet-500 outline-none font-sans" />
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-blue-500 outline-none font-sans" />
                 <input {...register(`fitments.${idx}.model`)}
                   placeholder="Model"
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-violet-500 outline-none font-sans" />
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-blue-500 outline-none font-sans" />
                 <input {...register(`fitments.${idx}.generation`)}
                   placeholder="Generation (заавал биш)"
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-violet-500 outline-none font-sans" />
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-blue-500 outline-none font-sans" />
                 <input type="number" {...register(`fitments.${idx}.yearStart`, { valueAsNumber: true })}
                   placeholder="2010"
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-violet-500 outline-none font-sans" />
+                  className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:border-blue-500 outline-none font-sans" />
                 <input type="number" {...register(`fitments.${idx}.yearEnd`, { valueAsNumber: true })}
                   placeholder="2015"
-                  className={`bg-gray-50 border rounded-lg px-2.5 py-2 text-[12px] focus:border-violet-500 outline-none font-sans ${
+                  className={`bg-gray-50 border rounded-lg px-2.5 py-2 text-[12px] focus:border-blue-500 outline-none font-sans ${
                     rowErr?.yearEnd ? "border-red-300" : "border-gray-200"
                   }`} />
                 <button type="button" onClick={() => remove(idx)}
@@ -400,21 +398,21 @@ function Step3Pricing({ form }: { form: ProductForm }) {
       <div className="grid sm:grid-cols-3 gap-4">
         <Field label="Үнэ (₮)" error={errors.price?.message}>
           <input type="number" {...register("price", { valueAsNumber: true })} min={0}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
         </Field>
         <Field label="Хямдралын өмнөх үнэ (₮)" hint="Заавал биш" error={errors.originalPrice?.message}>
           <input type="number" {...register("originalPrice", { valueAsNumber: true, setValueAs: (v) => v === "" || v == null ? undefined : Number(v) })} min={0}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
         </Field>
         <Field label="Нөөц (ширхэг)" error={errors.stockQty?.message}>
           <input type="number" {...register("stockQty", { valueAsNumber: true })} min={0}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
         </Field>
       </div>
 
       <Field label="Тайлбар" hint="Дэлгэрэнгүй техникийн мэдээлэл, нөхцөл, баталгаа" error={errors.description?.message}>
         <textarea {...register("description")} rows={4}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans resize-none" />
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans resize-none" />
       </Field>
 
       <div>
@@ -432,12 +430,12 @@ function Step3Pricing({ form }: { form: ProductForm }) {
           ))}
           {images.length < 10 && (
             <label className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${
-              uploading ? "border-violet-300 bg-violet-50" : "border-gray-300 hover:border-violet-400"
+              uploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400"
             }`}>
               <input type="file" accept="image/*" multiple className="hidden"
                 onChange={(e) => onFiles(e.target.files)} disabled={uploading} />
               {uploading
-                ? <Loader2 size={16} className="animate-spin text-violet-500" />
+                ? <Loader2 size={16} className="animate-spin text-blue-500" />
                 : <Upload size={16} className="text-gray-400" />}
               <span className="text-[10px] text-gray-400 mt-1">{uploading ? "Хадгалж…" : "Нэмэх"}</span>
             </label>
@@ -599,7 +597,7 @@ function AttributesFor({
         const path = `attributes.${f.key}` as const;
         const err = attrErrors[f.key]?.message;
         const label = f.label + (f.required ? " *" : "");
-        const cls = `w-full bg-gray-50 border rounded-xl px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white outline-none transition-colors font-sans ${
+        const cls = `w-full bg-gray-50 border rounded-xl px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans ${
           err ? "border-red-300" : "border-gray-200"
         }`;
 

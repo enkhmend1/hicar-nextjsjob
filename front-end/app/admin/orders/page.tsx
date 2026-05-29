@@ -12,7 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
   paid: "bg-blue-50 text-blue-700 border-blue-200",
-  processing: "bg-violet-50 text-violet-700 border-violet-200",
+  processing: "bg-blue-50 text-blue-700 border-blue-200",
   shipped: "bg-indigo-50 text-indigo-700 border-indigo-200",
   delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
@@ -32,7 +32,10 @@ export default function AdminOrdersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [filter]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [filter]);
 
   const updateStatus = async (id: string, status: string) => {
     await api.patch(`/orders/${id}/status`, { status });
@@ -50,7 +53,7 @@ export default function AdminOrdersPage() {
         {(["all", ...STATUSES] as const).map(s => (
           <button key={s} onClick={() => setFilter(s)}
             className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === s ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-200 hover:border-violet-400"
+              filter === s ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
             }`}>
             {s === "all" ? "Бүгд" : STATUS_LABEL[s]}
           </button>
@@ -85,7 +88,7 @@ export default function AdminOrdersPage() {
                         {new Date(o.createdAt).toLocaleString("mn-MN")} · {o.paymentMethod.toUpperCase()} · {o.items.length} бараа
                       </div>
                     </div>
-                    <div className="text-[14px] font-bold text-violet-600 shrink-0">₮{o.total.toLocaleString()}</div>
+                    <div className="text-[14px] font-bold text-blue-600 shrink-0">₮{o.total.toLocaleString()}</div>
                     <select value={o.status} onChange={e => updateStatus(id, e.target.value)}
                       className={`text-[11px] font-medium px-2 py-1 rounded-lg border cursor-pointer outline-none ${STATUS_COLOR[o.status]}`}>
                       {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}

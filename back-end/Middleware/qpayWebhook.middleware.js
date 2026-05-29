@@ -61,10 +61,19 @@ export const verifyQpayCallback = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid callback signature" });
     }
   } else {
-    // No secret configured — log loudly so production deploys don't ship
-    // with an unauthenticated callback by accident.
+    // No secret configured. In production this is a security hole — anyone
+    // who knows the callback URL can trigger settlement attempts. Reject the
+    // request with a 503 so QPay retries later (after the secret is set in
+    // env). In non-production environments, skip the check and log loudly.
+    const isProd = process.env.NODE_ENV === "production";
+    if (isProd) {
+      console.error(
+        "[qpay.callback] FATAL: QPAY_CALLBACK_SECRET is not set in production — rejecting callback",
+      );
+      return res.status(503).json({ message: "Payment callback misconfigured — contact admin" });
+    }
     console.warn(
-      "[qpay.callback] WARNING: QPAY_CALLBACK_SECRET is not set — callback is unauthenticated",
+      "[qpay.callback] WARNING: QPAY_CALLBACK_SECRET is not set — callback is unauthenticated (dev only)",
     );
   }
 

@@ -57,6 +57,10 @@ const PATTERNS = [
       /дугуй\s+(?:тог|чичир)/iu,
       /\bknock(?:ing)?\b/i,
       /\bclunk(?:ing)?\b/i,
+      // Phase M.2.3: Latin transliteration ("tog tog", "klak klak").
+      /\btog\s+tog\b/i,
+      /\bklak\s+klak\b/i,
+      /\bnudger\b/i,
     ],
     candidates: [
       { name: "Дугуйн холхивч (wheel bearing)",     likelihood: 0.30, location: "Урд / хойд тэнхлэг", urgency: "high",   oem_hints: "wheel bearing холхивч" },
@@ -81,6 +85,9 @@ const PATTERNS = [
       /\bsqueal(?:ing)?\b/i,
       /\bscreech(?:ing)?\b/i,
       /\bbrake(?:s)?\s+squeal/i,
+      // Latin transliteration
+      /\bpiishg(?:en|elj)\b/i,
+      /\btsikleg(?:leh)?\b/i,
     ],
     candidates: [
       { name: "Тоормосны бул (brake pad)",        likelihood: 0.45, location: "Урд / хойд тэнхлэг",       urgency: "high",   oem_hints: "brake pad тоормосны бул" },
@@ -105,6 +112,10 @@ const PATTERNS = [
       /\bvibrat(?:ion|ing)\b/i,
       /\bshak(?:ing|e)\b/i,
       /хөдөлгүүр\s+чичир/iu,
+      // Latin transliteration
+      /\bchichir(?:eh|ne|eed)\b/i,
+      /\bhudlu(?:h|ud)\b/i,
+      /\bmotor\s+chichir/i,
     ],
     candidates: [
       { name: "Хөдөлгүүрийн тулгуур (engine mount)",       likelihood: 0.30, location: "Хөдөлгүүр",         urgency: "medium", oem_hints: "engine mount хөдөлгүүрийн тулгуур" },
@@ -131,6 +142,11 @@ const PATTERNS = [
       /\bwon'?t\s+start\b/i,
       /\bno\s+power\b/i,
       /\bcrank(?:ing)?\b/i,
+      // Latin transliteration ("asahgu", "asahgui", "huchdelgui")
+      /\basahgu(?:i)?\b/i,
+      /\basaahgu(?:i)?\b/i,
+      /\bhuchdelgui\b/i,
+      /\bstarterdehgu(?:i)?\b/i,
     ],
     candidates: [
       { name: "Аккумулятор / Батарей",          likelihood: 0.40, location: "Хөдөлгүүр", urgency: "high",   oem_hints: "battery аккум" },
@@ -155,6 +171,10 @@ const PATTERNS = [
       /температур\s+өндөр/iu,
       /\boverheat(?:ing)?\b/i,
       /\btemp\s+gauge\s+high\b/i,
+      // Latin transliteration
+      /\bhet\s+halaa/i,
+      /\bhalaa(?:lt|san|dag)\b/i,
+      /\btemperatur\s+(?:undur|ondor)\b/i,
     ],
     candidates: [
       { name: "Термостат (thermostat)",          likelihood: 0.30, location: "Хөдөлгүүр",         urgency: "high",  oem_hints: "thermostat термостат" },
@@ -178,6 +198,9 @@ const PATTERNS = [
       /утаа\s+(?:гарах|гарна|гардаг)/iu,
       /\bsmoke\b/i,
       /\bexhaust\s+smoke\b/i,
+      // Latin transliteration ("huh utaa", "tsagaan utaa", "har utaa")
+      /\b(?:huh|tsagaan|har)\s+utaa\b/i,
+      /\butaa\s+gar(?:ah|na|dag)\b/i,
     ],
     candidates: [
       { name: "Толгойн прокладка (head gasket)",          likelihood: 0.25, location: "Толгой",            urgency: "high",   oem_hints: "head gasket толгойн прокладка" },
@@ -202,6 +225,10 @@ const PATTERNS = [
       /\bbrake\s+pedal\s+soft\b/i,
       /\bbrake(?:s)?\s+(?:spongy|low|sinks)/i,
       /тоормос\s+(?:зөөлөн|унаж|алга)/iu,
+      // Latin transliteration ("tormos pedal", "zoolon tormos")
+      /\btormos(?:nii)?\s+pedal\b/i,
+      /\btoormos(?:nii)?\s+pedal\b/i,
+      /\bzoolon\s+(?:tormos|toormos)\b/i,
     ],
     candidates: [
       { name: "Тоормосны шингэн алдалт (fluid leak)", likelihood: 0.30, location: "Гуурс / суппорт",        urgency: "high", oem_hints: "brake fluid hose тоормосны шингэн гуурс" },
@@ -226,6 +253,10 @@ const PATTERNS = [
       /фьюз/iu,
       /\belectric(?:al)?\s+(?:problem|fault)\b/i,
       /\bfuse\b/i,
+      // Latin transliteration
+      /\btsahilgaan\s+(?:asuudal|alga|ajillahgu)/i,
+      /\bgerel\s+asahgu(?:i)?\b/i,
+      /\bfyuz\b/i,
     ],
     candidates: [
       { name: "Фьюз (fuse)",                       likelihood: 0.30, location: "Фьюз хайрцаг", urgency: "low",    oem_hints: "fuse фьюз" },
@@ -238,6 +269,52 @@ const PATTERNS = [
     clarify: [
       "Аль электроник ажиллахгүй байна вэ — гэрэл, хаалга, шил, эсвэл өөр зүйл?",
       "Үе үе ажилладаг уу, бүрэн зогссон уу?",
+    ],
+  },
+
+  // ───── WEIRD NOISE — generic catch-all (Phase M.2.3) ──────────
+  // The previous patterns target SPECIFIC sounds (knocking, squealing,
+  // smoke). When a user says "хачин дуу", "motor hachin dugaraad", or
+  // "weird noise" we want to still recognise it as symptom-shaped so
+  // the agent calls diagnose_symptom instead of jumping to product
+  // search. Listed LAST so concrete patterns above always win on hits.
+  //
+  // Candidates here lean toward engine-related causes since that's
+  // the most-common "unidentified noise" complaint; the clarifying
+  // questions force a narrow-down on the next turn.
+  {
+    id: "weird_noise",
+    match: [
+      // Cyrillic
+      /хачин\s+(?:дуу|чимээ)/iu,
+      /хачин\s+дуугар/iu,
+      /чимээ\s+гар(?:ах|на|даг)/iu,
+      /(?:дугуй|мотор|хөдөлгүүр)\s+дуугар/iu,
+      // Latin transliteration
+      /\bhachin\s+(?:duu|chimee)\b/i,
+      /\bhachin\s+dugar/i,
+      /\b(?:motor|hudulguur|dugui)\s+dugar/i,
+      /\bdugaraad\s+baina\b/i,
+      /\bchimee\s+gar(?:ah|na|dag)\b/i,
+      // English
+      /\bweird\s+(?:noise|sound)\b/i,
+      /\bstrange\s+(?:noise|sound)\b/i,
+      /\bmaking\s+(?:a\s+)?(?:weird|strange|odd)\s+(?:noise|sound)\b/i,
+    ],
+    candidates: [
+      { name: "Хөдөлгүүрийн ороомог (ignition coil)",  likelihood: 0.18, location: "Хөдөлгүүр",     urgency: "medium", oem_hints: "ignition coil ороомог" },
+      { name: "Лаа (spark plug)",                       likelihood: 0.15, location: "Хөдөлгүүр",     urgency: "low",    oem_hints: "spark plug лаа" },
+      { name: "Хөдөлгүүрийн тулгуур (engine mount)",    likelihood: 0.15, location: "Хөдөлгүүр",     urgency: "medium", oem_hints: "engine mount тулгуур" },
+      { name: "Дугуйн холхивч (wheel bearing)",         likelihood: 0.15, location: "Тэнхлэг",       urgency: "high",   oem_hints: "wheel bearing холхивч" },
+      { name: "Сэдрэгч бүс (serpentine belt)",          likelihood: 0.12, location: "Хөдөлгүүрийн урд", urgency: "low",  oem_hints: "serpentine belt сэдрэгч бүс" },
+      { name: "Утааны систем (exhaust leak)",            likelihood: 0.10, location: "Утаа",           urgency: "medium", oem_hints: "exhaust gasket утааны" },
+      { name: "Дамжуулга / араа (transmission)",         likelihood: 0.10, location: "Дамжуулга",     urgency: "high",   oem_hints: "transmission дамжуулга" },
+      { name: "Бусад — нэмэлт оношилгоо хэрэгтэй",      likelihood: 0.05, location: "Мэдэгдэхгүй",   urgency: "medium", oem_hints: "" },
+    ],
+    clarify: [
+      "Дуу нь хаанаас гарч байна вэ — хөдөлгүүр, тэнхлэг, эсвэл доороос?",
+      "Зогсож байхад л гарах уу, явж байхад л гарах уу, эсвэл хоёуланд нь?",
+      "Дуу ямар маягтай вэ — нүдгэр, шиглэх, чимээтэй унтрах, эсвэл өөр?",
     ],
   },
 ];

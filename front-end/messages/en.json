@@ -1,6 +1,6 @@
 {
   "nav": {
-    "shop": "Shop",
+    "shop": "Parts",
     "orders": "Orders",
     "help": "Help",
     "admin": "Admin",
@@ -13,12 +13,12 @@
   },
   "home": {
     "badge": "AI POWERED SEARCH",
-    "title1": "Find the exact part",
-    "title2": "for your car with",
+    "title1": "Find the exact original parts for your car with",
+    "title2": "",
     "titleAi": "AI",
-    "title3": "",
-    "title4": "in seconds.",
-    "subtitle": "Identify your car by license plate — order Japan OEM parts directly from suppliers.",
+    "title3": ".",
+    "title4": "",
+    "subtitle": "Smart-identify your car and order in-stock parts from the country's top suppliers — all in one place.",
     "btnRegister": "Sign up",
     "btnShop": "Browse shop",
     "trust1": "Japan OEM guaranteed",
@@ -65,7 +65,7 @@
     "language": "Language"
   },
   "shop": {
-    "title": "Shop",
+    "title": "All parts",
     "searchPlaceholder": "Search parts... (name, OEM, brand)",
     "sortLabel": "Sort",
     "sortPriceAsc": "Price: low to high",

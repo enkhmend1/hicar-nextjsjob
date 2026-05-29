@@ -102,14 +102,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 to-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center px-4">
       <div className="w-full max-w-[380px]">
-        <Link href="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-violet-600 mb-6 transition-colors" style={{ textDecoration: "none" }}>
+        <Link href="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-6 transition-colors">
           <ArrowLeft size={14} /> {t("auth.backHome")}
         </Link>
 
         <div className="text-center mb-7">
-          <span className="text-[26px] font-semibold"><em className="text-violet-600 not-italic">Hi</em>car</span>
+          <span className="text-[26px] font-semibold"><em className="text-blue-600 not-italic">Hi</em>car</span>
           <h1 className="text-[20px] font-semibold text-gray-900 mt-4 mb-1">{t("auth.loginTitle")}</h1>
           <p className="text-[13px] text-gray-500">{t("auth.loginSubtitle")}</p>
         </div>
@@ -171,8 +171,8 @@ export default function LoginPage() {
 
             <div className="flex justify-end">
               <Link href="/auth/forgot"
-                className="text-[12px] text-violet-600 hover:text-violet-700 font-medium"
-                style={{ textDecoration: "none" }}>
+                className="text-[12px] text-blue-600 hover:text-blue-700 font-medium"
+               >
                 Нууц үг мартсан уу?
               </Link>
             </div>
@@ -180,7 +180,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3 text-[14px] font-semibold transition-colors cursor-pointer font-sans flex items-center justify-center gap-2">
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl py-3 text-[14px] font-semibold transition-colors cursor-pointer font-sans flex items-center justify-center gap-2">
               {isSubmitting && <Loader2 size={14} className="animate-spin" />}
               {isSubmitting ? t("auth.loggingIn") : t("auth.loginTitle")}
             </button>
@@ -196,7 +196,7 @@ export default function LoginPage() {
 
           <div className="mt-3 text-center text-[13px] text-gray-500">
             {t("auth.noAccount")}{" "}
-            <Link href="/auth/register" className="text-violet-600 font-semibold" style={{ textDecoration: "none" }}>
+            <Link href="/auth/register" className="text-blue-600 font-semibold">
               {t("auth.registerTitle")}
             </Link>
           </div>
@@ -244,5 +244,5 @@ const inputCls = (invalid: boolean, extra = "") =>
   `w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[14px] focus:bg-white outline-none transition-colors ${
     invalid
       ? "border-red-300 focus:border-red-500"
-      : "border-gray-200 focus:border-violet-500"
+      : "border-gray-200 focus:border-blue-500"
   } ${extra}`;

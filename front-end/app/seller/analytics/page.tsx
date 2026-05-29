@@ -33,7 +33,7 @@ interface Analytics {
 const STATUS_COLOR: Record<string, string> = {
   pending:    "bg-amber-100 text-amber-700",
   paid:       "bg-blue-100 text-blue-700",
-  processing: "bg-violet-100 text-violet-700",
+  processing: "bg-blue-100 text-blue-700",
   shipped:    "bg-indigo-100 text-indigo-700",
   delivered:  "bg-emerald-100 text-emerald-700",
   cancelled:  "bg-red-100 text-red-700",
@@ -65,7 +65,9 @@ export default function SellerAnalyticsPage() {
     }
   }, [range]);
 
-  useEffect(() => { load(); }, [load]);
+  // queueMicrotask defers load()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const download = async (format: "xlsx" | "csv" | "pdf") => {
     if (!range.from || !range.to) return;
@@ -107,7 +109,7 @@ export default function SellerAnalyticsPage() {
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <BarChart3 size={20} className="text-fuchsia-500" /> Аналитик
+            <BarChart3 size={20} className="text-amber-500" /> Аналитик
           </h1>
           <p className="text-[13px] text-gray-500 mt-0.5">
             Орлого, ашиг, бараа материал, борлуулалтын тайлан
@@ -125,9 +127,9 @@ export default function SellerAnalyticsPage() {
       )}
 
       {/* Export bar */}
-      <div className="bg-gradient-to-r from-violet-50 to-fuchsia-50 border border-violet-100 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-gradient-to-r from-blue-50 to-amber-50 border border-blue-100 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 text-[12px] text-gray-700">
-          <FileDown size={14} className="text-violet-600" />
+          <FileDown size={14} className="text-blue-600" />
           Энэ хугацааны тайланг татах:
         </div>
         <div className="flex gap-2">
@@ -148,9 +150,9 @@ export default function SellerAnalyticsPage() {
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi label="Орлого" value={`₮${data.totals.revenue.toLocaleString()}`} sub={`${data.totals.orders} захиалга`} icon={Coins} tone="violet" />
+            <Kpi label="Орлого" value={`₮${data.totals.revenue.toLocaleString()}`} sub={`${data.totals.orders} захиалга`} icon={Coins} tone="blue" />
             <Kpi label="Цэвэр ашиг" value={`₮${data.totals.profit.toLocaleString()}`} sub={`Хураамж ${data.platformFeePercent}% (₮${data.totals.commission.toLocaleString()})`} icon={TrendingUp} tone="emerald" />
-            <Kpi label="Дундаж захиалга" value={`₮${data.totals.avgOrderValue.toLocaleString()}`} sub={`${data.totals.units} ширхэг`} icon={ShoppingBag} tone="fuchsia" />
+            <Kpi label="Дундаж захиалга" value={`₮${data.totals.avgOrderValue.toLocaleString()}`} sub={`${data.totals.units} ширхэг`} icon={ShoppingBag} tone="amber" />
             <Kpi label="Нөөц" value={`₮${data.inventory.stockValue.toLocaleString()}`} sub={`${data.inventory.totalStock} ширхэг`} icon={Package} tone="indigo" />
           </div>
 
@@ -168,7 +170,7 @@ export default function SellerAnalyticsPage() {
                       <div key={d.date}
                         title={`${d.date}: ₮${d.revenue.toLocaleString()} (${d.orderCount} order, ${d.units} ширх.)`}
                         className="flex-1 min-w-[8px] relative group cursor-help">
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-violet-600 to-fuchsia-400 rounded-t-sm transition-all"
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-blue-600 to-amber-400 rounded-t-sm transition-all"
                           style={{ height: `${h}%` }} />
                       </div>
                     );
@@ -229,7 +231,7 @@ export default function SellerAnalyticsPage() {
                           {p.oem && <div className="text-[10px] text-gray-400 font-mono">{p.oem}</div>}
                         </td>
                         <td className="py-1.5 text-right tabular-nums text-gray-700">{p.units}</td>
-                        <td className="py-1.5 text-right font-semibold tabular-nums text-violet-600">₮{p.revenue.toLocaleString()}</td>
+                        <td className="py-1.5 text-right font-semibold tabular-nums text-blue-600">₮{p.revenue.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -257,7 +259,7 @@ export default function SellerAnalyticsPage() {
                       <td className="py-1.5 font-medium text-gray-700">{m.month}</td>
                       <td className="py-1.5 text-right tabular-nums">{m.orderCount}</td>
                       <td className="py-1.5 text-right tabular-nums">{m.units}</td>
-                      <td className="py-1.5 text-right font-semibold tabular-nums text-violet-600">₮{m.revenue.toLocaleString()}</td>
+                      <td className="py-1.5 text-right font-semibold tabular-nums text-blue-600">₮{m.revenue.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -291,12 +293,12 @@ export default function SellerAnalyticsPage() {
 // ── Reusable bits ───────────────────────────────────────────────────
 function Kpi({ label, value, sub, icon: Icon, tone }: {
   label: string; value: string | number; sub?: string;
-  icon: typeof Coins; tone: "violet" | "emerald" | "fuchsia" | "indigo";
+  icon: typeof Coins; tone: "blue" | "emerald" | "amber" | "indigo";
 }) {
   const toneClass = {
-    violet:  "bg-violet-50 text-violet-600",
+    blue:  "bg-blue-50 text-blue-600",
     emerald: "bg-emerald-50 text-emerald-600",
-    fuchsia: "bg-fuchsia-50 text-fuchsia-600",
+    amber: "bg-amber-50 text-amber-600",
     indigo:  "bg-indigo-50 text-indigo-600",
   }[tone];
   return (

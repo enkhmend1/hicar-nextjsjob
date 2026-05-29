@@ -28,7 +28,10 @@ export default function AdminUsersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); }, []);
+  // queueMicrotask — defer reload() past the effect commit so the
+  // setLoading(true) inside it doesn't fire synchronously and trigger
+  // React 19's cascading-render warning.
+  useEffect(() => { queueMicrotask(reload); }, []);
 
   const toggleRole = async (u: User) => {
     const nextRole = u.role === "admin" ? "user" : "admin";
@@ -90,7 +93,7 @@ export default function AdminUsersPage() {
       </div>
 
       <input value={q} onChange={(e) => setQ(e.target.value)}
-        className="w-full max-w-sm bg-white border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+        className="w-full max-w-sm bg-white border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
         placeholder="Нэр эсвэл имэйлээр хайх..." />
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
@@ -118,14 +121,14 @@ export default function AdminUsersPage() {
                   <tr key={id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-2.5 font-medium text-gray-900">
                       {u.name}
-                      {isMe && <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Та</span>}
+                      {isMe && <span className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Та</span>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
                     <td className="px-4 py-2.5 text-gray-500">{u.phone || "—"}</td>
                     <td className="px-4 py-2.5 text-center">
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                        u.role === "admin"  ? "bg-violet-50 text-violet-700"
-                        : u.role === "seller" ? "bg-fuchsia-50 text-fuchsia-700"
+                        u.role === "admin"  ? "bg-blue-50 text-blue-700"
+                        : u.role === "seller" ? "bg-amber-50 text-amber-700"
                         : "bg-gray-100 text-gray-600"
                       }`}>
                         {u.role === "admin" ? "Admin" : u.role === "seller" ? "Seller" : "User"}
@@ -135,7 +138,7 @@ export default function AdminUsersPage() {
                       <ActionBtn onClick={() => resetPassword(u)} title="Нууц үг шинэчлэх" color="amber" disabled={isMe || busy}>
                         <KeyRound size={13} />
                       </ActionBtn>
-                      <ActionBtn onClick={() => toggleRole(u)} title="Эрх солих" color="violet" disabled={isMe}>
+                      <ActionBtn onClick={() => toggleRole(u)} title="Эрх солих" color="blue" disabled={isMe}>
                         {u.role === "admin" ? <ShieldOff size={13} /> : <Shield size={13} />}
                       </ActionBtn>
                       <ActionBtn onClick={() => remove(u)} title="Устгах" color="red" disabled={isMe}>
@@ -184,14 +187,14 @@ export default function AdminUsersPage() {
               <div>
                 <label className="block text-[11px] text-gray-500 mb-1">Шинэ нууц үг</label>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-violet-50 border-2 border-violet-200 rounded-lg px-3 py-2.5 text-[16px] font-mono font-semibold text-violet-800 tracking-wider select-all">
+                  <code className="flex-1 bg-blue-50 border-2 border-blue-200 rounded-lg px-3 py-2.5 text-[16px] font-mono font-semibold text-blue-800 tracking-wider select-all">
                     {resetResult.tempPassword}
                   </code>
                   <button onClick={copyPassword}
                     className={`shrink-0 inline-flex items-center gap-1 px-3 py-2.5 rounded-lg text-[12px] font-semibold cursor-pointer border transition-colors font-sans ${
                       copied
                         ? "bg-emerald-600 text-white border-emerald-600"
-                        : "bg-white text-violet-700 border-violet-300 hover:bg-violet-50"
+                        : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50"
                     }`}>
                     {copied ? <><Check size={12} /> Хуулсан</> : <><Copy size={12} /> Хуулах</>}
                   </button>
@@ -219,13 +222,13 @@ export default function AdminUsersPage() {
 
 function ActionBtn({ onClick, title, color, disabled, children }: {
   onClick: () => void; title: string;
-  color: "emerald" | "amber" | "violet" | "red";
+  color: "emerald" | "amber" | "blue" | "red";
   disabled?: boolean; children: React.ReactNode;
 }) {
   const cls = {
     emerald: "hover:text-emerald-600 hover:bg-emerald-50",
     amber:   "hover:text-amber-600 hover:bg-amber-50",
-    violet:  "hover:text-violet-600 hover:bg-violet-50",
+    blue:  "hover:text-blue-600 hover:bg-blue-50",
     red:     "hover:text-red-500 hover:bg-red-50",
   }[color];
   return (

@@ -45,7 +45,7 @@ interface SmartResponse {
 
 const TIER_BADGE: Record<number, { label: string; color: string }> = {
   100: { label: "OEM",     color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  80:  { label: "Engine",  color: "bg-violet-100 text-violet-700 border-violet-200" },
+  80:  { label: "Engine",  color: "bg-blue-100 text-blue-700 border-blue-200" },
   60:  { label: "Model",   color: "bg-blue-100 text-blue-700 border-blue-200" },
   40:  { label: "Mfr",     color: "bg-amber-100 text-amber-700 border-amber-200" },
 };
@@ -96,7 +96,7 @@ export default function SmartPartSearch({ vehicleId, plate, initialQuery = "" }:
     <section className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
       <header className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-          <Sparkles size={15} className="text-violet-500" /> Тодорхой сэлбэг хайх
+          <Sparkles size={15} className="text-blue-500" /> Тодорхой сэлбэг хайх
         </h2>
         <span className="text-[11px] text-gray-400">
           Жнь: <em>«урд наклад»</em>, <em>«2GR-FSE свеч»</em>
@@ -104,7 +104,7 @@ export default function SmartPartSearch({ vehicleId, plate, initialQuery = "" }:
       </header>
 
       <form onSubmit={(e) => { e.preventDefault(); run(); }}
-        className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl pl-3 focus-within:border-violet-500 focus-within:bg-white transition-colors">
+        className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl pl-3 focus-within:border-blue-500 focus-within:bg-white transition-colors">
         <Search size={14} className="text-gray-400 shrink-0" />
         <input
           value={query}
@@ -113,7 +113,7 @@ export default function SmartPartSearch({ vehicleId, plate, initialQuery = "" }:
           placeholder="Сэлбэгийн нэр Монголоор бичнэ үү…"
           className="flex-1 bg-transparent text-[13px] outline-none py-2.5 font-sans" />
         <button type="submit" disabled={busy || !query.trim()}
-          className="bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg px-3.5 py-1.5 m-1 text-[12px] font-semibold cursor-pointer border-none flex items-center gap-1.5 transition-colors shrink-0">
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg px-3.5 py-1.5 m-1 text-[12px] font-semibold cursor-pointer border-none flex items-center gap-1.5 transition-colors shrink-0">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
           {busy ? "..." : "Хайх"}
         </button>
@@ -122,7 +122,7 @@ export default function SmartPartSearch({ vehicleId, plate, initialQuery = "" }:
       <div className="mt-2 flex flex-wrap gap-1.5">
         {SUGGESTIONS.map((s) => (
           <button key={s} onClick={() => { setQuery(s); run(s); }} disabled={busy}
-            className="text-[11px] border border-gray-200 rounded-full px-2.5 py-0.5 text-gray-600 hover:border-violet-400 hover:text-violet-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+            className="text-[11px] border border-gray-200 rounded-full px-2.5 py-0.5 text-gray-600 hover:border-blue-400 hover:text-blue-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
             {s}
           </button>
         ))}
@@ -155,7 +155,7 @@ export default function SmartPartSearch({ vehicleId, plate, initialQuery = "" }:
                   Текст хайлтаар ч олдсонгүй: {data.fallbackSearch.keywords.join(", ")}
                 </p>
               )}
-              <Link href="/shop" className="inline-block mt-3 text-[12px] text-violet-600 underline" style={{ textDecoration: "underline" }}>
+              <Link href="/shop" className="inline-block mt-3 text-[12px] text-blue-600 underline" style={{ textDecoration: "underline" }}>
                 Бүх дэлгүүрийг үзэх →
               </Link>
             </div>
@@ -190,7 +190,7 @@ function PlanSummary({ data, expanded, onToggle }: { data: SmartResponse; expand
         <AiIcon size={10} /> {aiBadge.label} ({data.ai.tookMs}ms)
       </span>
       {data.ai.plan.api_english_name && (
-        <span className="bg-violet-50 text-violet-700 border border-violet-100 px-2 py-0.5 rounded-full font-medium">
+        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-medium">
           → {data.ai.plan.api_english_name}
         </span>
       )}
@@ -206,7 +206,7 @@ function PlanSummary({ data, expanded, onToggle }: { data: SmartResponse; expand
         {data.items.length} бараа
       </span>
       <button onClick={onToggle}
-        className="ml-auto inline-flex items-center gap-0.5 text-gray-500 hover:text-violet-600 cursor-pointer bg-transparent border-none font-sans">
+        className="ml-auto inline-flex items-center gap-0.5 text-gray-500 hover:text-blue-600 cursor-pointer bg-transparent border-none font-sans">
         Дэлгэрэнгүй {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
       </button>
     </div>

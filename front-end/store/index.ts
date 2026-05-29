@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem, Product, User } from "@/app/types";
-import { DELIVERY_PRICE } from "@/lib/data";
+import { deliveryPriceFor } from "@/app/lib/delivery";
 import { setToken, onAuthExpired, api } from "@/lib/api";
 
 const pid = (p: Product) => (p._id ?? p.id) as string;
@@ -10,7 +10,12 @@ const pid = (p: Product) => (p._id ?? p.id) as string;
 /* ── Cart ─────────────────────────────────────────────────────── */
 interface CartStore {
   items: CartItem[];
-  addItem: (product: Product, dt?: CartItem["deliveryType"]) => void;
+  // Phase O.4: `_hasHydrated` lets SSR-aware components gate any UI
+  // that depends on persisted cart contents (e.g. the navbar count
+  // badge). Without it, server renders count=0 (empty store) and the
+  // client renders count=N after rehydration → hydration mismatch.
+  _hasHydrated: boolean;
+  addItem: (product: Product, dt?: CartItem["deliveryType"], qty?: number) => void;
   removeItem: (id: string) => void;
   updateQty: (id: string, qty: number) => void;
   updateDelivery: (id: string, dt: CartItem["deliveryType"]) => void;
@@ -21,12 +26,17 @@ interface CartStore {
 export const useCartStore = create<CartStore>()(
   persist((set, get) => ({
     items: [],
-    addItem: (product, dt = "normal") =>
+    _hasHydrated: false,
+    addItem: (product, dt = "normal", qty = 1) =>
       set(s => {
         const k = pid(product);
         const ex = s.items.find(i => pid(i.product) === k);
-        if (ex) return { items: s.items.map(i => pid(i.product) === k ? { ...i, quantity: i.quantity + 1 } : i) };
-        return { items: [...s.items, { product, quantity: 1, deliveryType: dt }] };
+        const safeQty = Math.max(1, Math.floor(qty));
+        // Phase AS: respect explicit quantity. If item already in cart,
+        // INCREMENT by safeQty (matches user mental model: "Add 3" = add 3
+        // more, not "set to 3").
+        if (ex) return { items: s.items.map(i => pid(i.product) === k ? { ...i, quantity: i.quantity + safeQty } : i) };
+        return { items: [...s.items, { product, quantity: safeQty, deliveryType: dt }] };
       }),
     removeItem: id => set(s => ({ items: s.items.filter(i => pid(i.product) !== id) })),
     updateQty: (id, qty) =>
@@ -34,9 +44,22 @@ export const useCartStore = create<CartStore>()(
     updateDelivery: (id, dt) =>
       set(s => ({ items: s.items.map(i => pid(i.product) === id ? { ...i, deliveryType: dt } : i) })),
     clearCart: () => set({ items: [] }),
-    total: () => get().items.reduce((s, i) => s + i.product.price * i.quantity + DELIVERY_PRICE[i.deliveryType], 0),
+    // Delivery fee resolves from each item's seller config (Phase AV) — the
+    // server re-derives the authoritative total at checkout regardless.
+    // Price is coerced with ?? 0 so a corrupt/null product.price never
+    // produces NaN that propagates through all display totals.
+    total: () => get().items.reduce((s, i) => s + (i.product.price ?? 0) * i.quantity + deliveryPriceFor(i.product.seller, i.deliveryType), 0),
     count: () => get().items.reduce((s, i) => s + i.quantity, 0),
-  }), { name: "hicar-cart" })
+  }), {
+    name: "hicar-cart",
+    // Only persist the items themselves — `_hasHydrated` is derived
+    // state and must reset to false on every fresh mount so the gating
+    // logic gives SSR a turn to render the empty-cart shell first.
+    partialize: (s) => ({ items: s.items }),
+    onRehydrateStorage: () => () => {
+      queueMicrotask(() => useCartStore.setState({ _hasHydrated: true }));
+    },
+  })
 );
 
 /* ── Auth ─────────────────────────────────────────────────────── */
@@ -98,13 +121,27 @@ export interface ActiveVehicle {
   manufacturer: string;
   model: string;
   generation?: string;
+  /** Motor model code from Garage.mn — "2GR-FSE", "4A-FE", "K20A".
+   *  This is what mechanics + parts catalogues use as the engine identifier. */
   engineCode?: string;
+  /** Fuel/motor type — "gasoline" / "diesel" / "hybrid" / "ev".
+   *  NOT a substitute for engineCode — different concept. */
   engineType?: string;
+  /** Engine displacement string — "2500cc" / "1.8L". Used for display. */
+  displacement?: string;
+  /** Raw Mongolian carname snapshot — "TOYOTA CROWN 2.5 HYBRID". */
+  carname?: string;
 }
 
 interface CarStore {
   selectedCar: import("@/app/types").Car | null;   // legacy display obj
   activeVehicle: ActiveVehicle | null;             // canonical id-based context
+  /**
+   * Phase V.2: hydration flag (same Phase O.4 pattern as auth/cart
+   * stores). Needed so the Navbar vehicle badge doesn't pop in from
+   * nowhere after client rehydration → SSR mismatch warning.
+   */
+  _hasHydrated: boolean;
   /**
    * Phase G — last-N vehicles the user has interacted with (LRU,
    * move-to-front). Powers the chat header switcher dropdown so the
@@ -119,6 +156,10 @@ interface CarStore {
   pushRecentVehicle: (v: ActiveVehicle) => void;
   /** Used when /api/ai/memory hydrate returns the server's truth. */
   hydrateRecentVehicles: (list: ActiveVehicle[]) => void;
+  /** Drop a single recent vehicle (user removed it from the Navbar dropdown). */
+  removeRecentVehicle: (id: string) => void;
+  /** Drop ALL recents — used by "Clear history" affordance. */
+  clearRecentVehicles: () => void;
   clearActiveVehicle: () => void;
 }
 
@@ -128,6 +169,7 @@ export const useCarStore = create<CarStore>()(
   persist((set, get) => ({
     selectedCar: null,
     activeVehicle: null,
+    _hasHydrated: false,
     recentVehicles: [],
     setCar: (car) => set({ selectedCar: car }),
     setActiveVehicle: (v) => {
@@ -160,6 +202,30 @@ export const useCarStore = create<CarStore>()(
       }
       set({ recentVehicles: merged });
     },
+    removeRecentVehicle: (id) => {
+      const next = get().recentVehicles.filter((x) => x.id !== id);
+      // If the removed one was ALSO the active vehicle, clear it too —
+      // otherwise the Navbar badge would point at a vehicle the user
+      // just told us to forget.
+      const wasActive = get().activeVehicle?.id === id;
+      set({
+        recentVehicles: next,
+        ...(wasActive ? { activeVehicle: null } : {}),
+      });
+    },
+    clearRecentVehicles: () => set({ recentVehicles: [] }),
     clearActiveVehicle: () => set({ activeVehicle: null }),
-  }), { name: "hicar-car" })
+  }), {
+    name: "hicar-car",
+    // Phase V.2: don't persist the hydration flag — it must reset to
+    // false on every fresh mount so the gate fires.
+    partialize: (s) => ({
+      selectedCar:    s.selectedCar,
+      activeVehicle:  s.activeVehicle,
+      recentVehicles: s.recentVehicles,
+    }),
+    onRehydrateStorage: () => () => {
+      queueMicrotask(() => useCarStore.setState({ _hasHydrated: true }));
+    },
+  })
 );

@@ -8,12 +8,12 @@ import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useAuthStore, useCarStore, type ActiveVehicle } from "@/store";
 import { useLocale } from "@/lib/i18n";
-import { Product, Order, User } from "@/app/types";
+import { Product, Order } from "@/app/types";
 import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
 import type { AIResponse } from "@/app/lib/services/chat.service";
-import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Search as SearchIcon } from "lucide-react";
+import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Search as SearchIcon, Clock } from "lucide-react";
 
 /** /car or /changecar — both open the switcher dropdown without sending. */
 const SLASH_CAR_RX = /^\/(?:car|changecar)\b/i;
@@ -28,6 +28,8 @@ interface Message {
   imageUrl?: string;
   products?: ProductCard[];
   crossRefs?: CrossRef[];
+  /** Phase AL — bundle suggestions ("Хамт ихэвчлэн авдаг"). */
+  related?: ProductCard[];
   lowStock?: ProductCard[];
   excelHint?: { filename: string };
   /** Seller-table renderer payload from layout="seller_table". */
@@ -155,7 +157,11 @@ export default function HiCarAIChat() {
     return detectMongolianPlate(input);
   }, [input, activeVehicle?.plate]);
   // Aliases for legacy ref points below (kept short to minimise diff).
-  const busy      = agent.busy || agent.plateBusy;
+  // Phase M.1: during the rate-limit cooldown the input is also disabled
+  // — the auto-retry will fire when the timer expires, and we don't want
+  // the user to fire a duplicate request that just adds to the queue.
+  const inCooldown = agent.secondsUntilRetry > 0;
+  const busy      = agent.busy || agent.plateBusy || inCooldown;
   const plateBusy = agent.plateBusy;
   const plateErr  = agent.plateError;
   const idRef = useRef(10);
@@ -179,10 +185,14 @@ export default function HiCarAIChat() {
       const car = `${activeVehicle.manufacturer} ${activeVehicle.model}${activeVehicle.generation ? ` [${activeVehicle.generation}]` : ""}`;
       greet = locale === "en"
         ? `Hi 👋 Your car is ${car}. What part are you looking for?`
-        : `Сайн уу 👋 Таны ${car}-ын ямар сэлбэг хайя?`;
+        : `Сайн уу 👋 Таны ${car}-ын ямар сэлбэгийг хайя?`;
     } else {
       greet = locale === "en" ? USER_GREETING_EN : USER_GREETING_MN;
     }
+    // Greet message reset — legitimate sync setState in effect (locale or
+    // surface change → swap opening bubble). React 19's compiler lint is
+    // overly aggressive on this canonical pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages([{ id: 1, role: "ai", text: greet }]);
   }, [isAdminPath, isSellerPath, locale, activeVehicle?.manufacturer, activeVehicle?.model, activeVehicle?.generation]);
 
@@ -196,6 +206,14 @@ export default function HiCarAIChat() {
     if (isOpen) void agent.hydrateMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user?.id]);
+
+  // `pushAi` нь дараах useCallback-ууд дотроос дуудагдах учир ЭХЛЭЭД
+  // зарлах ёстой — JS-ийн const/let нь hoist хийгддэггүй (TDZ). Closure-
+  // ийн lookup нь runtime-д явдаг учир хуучин код практик дээр ажилладаг
+  // байсан ч ESLint react-compiler болон strict-mode хоёр анхааруулдаг.
+  const pushAi = useCallback((m: Omit<Message, "id" | "role">) => {
+    setMessages(prev => [...prev, { id: idRef.current++, role: "ai", ...m }]);
+  }, []);
 
   /** Pick a recent vehicle → switch + close dropdown. */
   const switchToVehicleId = useCallback(async (id: string) => {
@@ -215,15 +233,12 @@ export default function HiCarAIChat() {
           : `Машин солигдсон: ${r.vehicle.manufacturer} ${r.vehicle.model}. Ямар сэлбэг хайя?`,
       });
     }
-  }, [agent, locale]);
+  }, [agent, locale, pushAi]);
 
   const clearVehicle = useCallback(async () => {
     await agent.clearVehicle();
     setSwitcherOpen(false);
   }, [agent]);
-
-  const pushAi = (m: Omit<Message, "id" | "role">) =>
-    setMessages(prev => [...prev, { id: idRef.current++, role: "ai", ...m }]);
 
   // ── Admin Excel commands handled client-side (browser download) ──
   const handleClientExcelCommand = async (text: string): Promise<boolean> => {
@@ -328,16 +343,17 @@ export default function HiCarAIChat() {
         return { role: m.role === "ai" ? "assistant" as const : "user" as const, content: m.text! };
       });
 
-    const resp = await agent.sendChat(history);
-    if (!resp) {
-      // Hook already populated chatError; surface it in the chat thread
-      // so the user sees what happened.
-      pushAi({ text: agent.chatError || "Алдаа гарлаа", error: true });
+    const result = await agent.sendChat(history);
+    if (!result.ok) {
+      // Phase M.2.2: errorMessage comes back in-band so we don't read a
+      // stale `agent.chatError` from a closure that captured the value
+      // BEFORE setState had a chance to flush.
+      pushAi({ text: result.errorMessage, error: true });
       return;
     }
 
     // Dispatch on layout — pure UI logic stays in the widget.
-    pushAi(layoutToMessage(resp));
+    pushAi(layoutToMessage(result.response));
   }, [input, busy, isAdminPath, messages, agent, pushAi]);
 
   // ── Voice input ────────────────────────────────────────────────
@@ -393,7 +409,7 @@ export default function HiCarAIChat() {
   if (!isOpen || isMinimized) {
     return (
       <button onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white rounded-full shadow-lg shadow-violet-300 px-4 h-12 cursor-pointer border-none transition-all font-sans"
+        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer border-none transition-all font-sans"
         aria-label="AI chat">
         {isAdminPath ? <Bot size={18} /> : isSellerPath ? <FileSpreadsheet size={18} /> : <MessageCircle size={18} />}
         <span className="text-[13px] font-semibold">
@@ -407,7 +423,7 @@ export default function HiCarAIChat() {
 
   return (
     <div className="fixed bottom-5 right-5 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-2rem)] bg-white border border-gray-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-      <div className={`flex items-center justify-between px-4 py-3 ${isAdminPath ? "bg-gradient-to-r from-violet-700 to-indigo-700" : "bg-gradient-to-r from-violet-600 to-fuchsia-500"} text-white`}>
+      <div className={`flex items-center justify-between px-4 py-3 ${isAdminPath ? "bg-gradient-to-r from-blue-700 to-indigo-700" : "bg-gradient-to-r from-blue-600 to-amber-500"} text-white`}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
             {isAdminPath ? <Bot size={16} /> : <Sparkles size={15} />}
@@ -481,7 +497,7 @@ export default function HiCarAIChat() {
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-[13px] whitespace-pre-line ${
               m.role === "user"
-                ? "bg-violet-600 text-white rounded-br-sm"
+                ? "bg-blue-600 text-white rounded-br-sm"
                 : m.error
                   ? "bg-red-50 border border-red-200 text-red-700 rounded-bl-sm"
                   : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm"
@@ -496,11 +512,11 @@ export default function HiCarAIChat() {
               {m.products && m.products.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {m.products.map(p => (
-                    <Link key={p.id} href={`/shop/${p.id}`} className="block bg-gray-50 hover:bg-violet-50 border border-gray-200 hover:border-violet-300 rounded-lg p-2 transition-colors" style={{ textDecoration: "none" }}>
+                    <Link key={p.id} href={`/shop/${p.id}`} className="block bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg p-2 transition-colors">
                       <div className="text-[12px] font-semibold text-gray-900 line-clamp-1">{p.name}</div>
                       <div className="text-[10px] text-gray-400 font-mono">{p.oem}{p.brand ? ` · ${p.brand}` : ""}</div>
                       <div className="flex items-center justify-between mt-1">
-                        <span className="text-[12px] font-bold text-violet-600">₮{p.price.toLocaleString()}</span>
+                        <span className="text-[12px] font-bold text-blue-600">₮{p.price.toLocaleString()}</span>
                         {p.inStock !== undefined && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${p.inStock ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                             {p.inStock ? "Stock" : "Out"}
@@ -509,6 +525,35 @@ export default function HiCarAIChat() {
                       </div>
                     </Link>
                   ))}
+                </div>
+              )}
+
+              {/* Phase AL — "Хамт ихэвчлэн авдаг" bundle strip. Renders
+                  ONLY when both main products AND related items are
+                  present (related without main = stale UX). Horizontal-
+                  scroll layout to avoid pushing the next assistant bubble
+                  off-screen — Amazon's mobile pattern. */}
+              {m.related && m.related.length > 0 && m.products && m.products.length > 0 && (
+                <div className="mt-2.5 pt-2 border-t border-gray-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    ＋ Хамт ихэвчлэн авдаг
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5 scrollbar-none">
+                    {m.related.map((p) => (
+                      <Link
+                        key={p.id}
+                        href={`/shop/${p.id}`}
+                        className="shrink-0 w-[130px] bg-blue-50/60 hover:bg-blue-100/80 border border-blue-100 hover:border-blue-300 rounded-lg p-2 transition-colors"
+                      >
+                        <div className="text-[11px] font-semibold text-gray-900 line-clamp-2 mb-1 min-h-[2.4em]">
+                          {p.name}
+                        </div>
+                        <div className="text-[11px] font-bold text-blue-700">
+                          ₮{p.price.toLocaleString()}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -540,16 +585,16 @@ export default function HiCarAIChat() {
 
               {/* Cross-reference table — aftermarket equivalents for the user's OEM. */}
               {m.crossRefs && m.crossRefs.length > 0 && (
-                <div className="mt-2 border border-violet-200 rounded-lg overflow-hidden text-[11px]">
-                  <div className="bg-violet-50 px-2 py-1 font-semibold text-violet-700">
+                <div className="mt-2 border border-blue-200 rounded-lg overflow-hidden text-[11px]">
+                  <div className="bg-blue-50 px-2 py-1 font-semibold text-blue-700">
                     {locale === "en" ? "Cross-references" : "Сонголтууд"}
                   </div>
-                  <div className="divide-y divide-violet-100">
+                  <div className="divide-y divide-blue-100">
                     {m.crossRefs.map((cr, i) => (
                       <div key={`${cr.oem}-${i}`} className="px-2 py-1.5 flex items-center justify-between gap-2">
                         <span className="font-mono text-gray-700 truncate">{cr.oem}</span>
                         <span className="text-gray-500 truncate">{cr.brand}</span>
-                        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${cr.role === "oem" ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${cr.role === "oem" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
                           {cr.role === "oem" ? "OEM" : "ALT"}
                         </span>
                       </div>
@@ -572,8 +617,8 @@ export default function HiCarAIChat() {
                             <td key={ci} className="px-2 py-1.5 align-top text-gray-700">
                               {typeof cell === "object" && cell !== null && "kind" in cell ? (
                                 cell.kind === "link" && cell.href
-                                  ? <Link href={cell.href} className="text-violet-600 underline">{cell.label}</Link>
-                                  : <button className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded border border-violet-200 text-[10px]">{cell.label}</button>
+                                  ? <Link href={cell.href} className="text-blue-600 underline">{cell.label}</Link>
+                                  : <button className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-[10px]">{cell.label}</button>
                               ) : String(cell)}
                             </td>
                           ))}
@@ -640,12 +685,32 @@ export default function HiCarAIChat() {
             </div>
           </div>
         ))}
-        {busy && (
+        {/* Phase M.1: separate visual for "actively waiting on AI" vs
+            "cooling down before auto-retry". The cooldown chip shows a
+            live countdown + cancel affordance so the user knows
+            EXACTLY what's happening and can bail out if they want. */}
+        {busy && !inCooldown && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3 py-2 text-[13px] text-gray-400 shadow-sm flex gap-1 items-center">
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
+        )}
+        {inCooldown && (
+          <div className="flex justify-start">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl rounded-bl-sm px-3 py-2 text-[12px] text-amber-800 shadow-sm flex items-center gap-2">
+              <Clock size={12} className="animate-pulse" />
+              <span>
+                {locale === "en"
+                  ? `Auto-retrying in ${agent.secondsUntilRetry}s…`
+                  : `${agent.secondsUntilRetry}с дараа автоматаар…`}
+              </span>
+              <button onClick={agent.cancelRateLimit}
+                className="text-amber-700 hover:text-amber-900 underline cursor-pointer bg-transparent border-none text-[11px] p-0">
+                {locale === "en" ? "Cancel" : "Болих"}
+              </button>
             </div>
           </div>
         )}
@@ -682,7 +747,7 @@ export default function HiCarAIChat() {
       <div className="px-3 py-2 border-t border-gray-100 bg-white flex gap-1.5 overflow-x-auto scrollbar-none">
         {suggestions.map(s => (
           <button key={s.cmd} onClick={() => send(s.cmd)} disabled={busy}
-            className="shrink-0 text-[11px] border border-gray-200 rounded-full px-2.5 py-1 text-gray-600 hover:border-violet-400 hover:text-violet-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+            className="shrink-0 text-[11px] border border-gray-200 rounded-full px-2.5 py-1 text-gray-600 hover:border-blue-400 hover:text-blue-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
             {s.label}
           </button>
         ))}
@@ -693,7 +758,7 @@ export default function HiCarAIChat() {
           <>
             <button onClick={() => fileInputRef.current?.click()} disabled={busy || uploadingImg}
               title="Зураг ачаалах"
-              className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-violet-600 hover:bg-violet-50 cursor-pointer bg-transparent border border-gray-200 transition-colors shrink-0 disabled:opacity-50">
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border border-gray-200 transition-colors shrink-0 disabled:opacity-50">
               {uploadingImg ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" hidden
@@ -706,7 +771,7 @@ export default function HiCarAIChat() {
             className={`w-9 h-9 flex items-center justify-center rounded-xl cursor-pointer border transition-colors shrink-0 disabled:opacity-50 ${
               listening
                 ? "text-white bg-red-500 border-red-500 hover:bg-red-600 animate-pulse"
-                : "text-gray-400 hover:text-violet-600 hover:bg-violet-50 bg-transparent border-gray-200"
+                : "text-gray-400 hover:text-blue-600 hover:bg-blue-50 bg-transparent border-gray-200"
             }`}>
             {listening ? <MicOff size={14} /> : <Mic size={14} />}
           </button>
@@ -714,10 +779,18 @@ export default function HiCarAIChat() {
         <input value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && send()}
           disabled={busy}
-          placeholder={listening ? (locale === "en" ? "Listening..." : "Хүлээж байна...") : placeholder}
-          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white transition-colors outline-none" />
+          placeholder={
+            inCooldown
+              ? (locale === "en"
+                  ? `Auto-retrying in ${agent.secondsUntilRetry}s…`
+                  : `${agent.secondsUntilRetry}с дараа автоматаар…`)
+              : listening
+                ? (locale === "en" ? "Listening..." : "Хүлээж байна...")
+                : placeholder
+          }
+          className={`flex-1 ${inCooldown ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"} border rounded-xl px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white transition-colors outline-none`} />
         <button onClick={() => send()} disabled={busy || !input.trim()}
-          className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:from-violet-300 disabled:to-fuchsia-300 text-white rounded-xl cursor-pointer border-none transition-colors shrink-0">
+          className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-blue-300 disabled:to-amber-300 text-white rounded-xl cursor-pointer border-none transition-colors shrink-0">
           <Send size={14} />
         </button>
       </div>
@@ -922,7 +995,7 @@ function DiagnosticCard({
             <button
               key={i}
               onClick={() => onQuickAnswer(q)}
-              className="w-full text-left text-[11px] px-2 py-1.5 bg-white hover:bg-violet-50 border border-gray-200 hover:border-violet-300 rounded cursor-pointer transition-colors font-sans text-gray-700">
+              className="w-full text-left text-[11px] px-2 py-1.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded cursor-pointer transition-colors font-sans text-gray-700">
               ❓ {q}
             </button>
           ))}
@@ -982,7 +1055,7 @@ function ConfidenceEscalation({
       <Link
         href={data.suggestedAction.href}
         className="inline-block text-[11px] px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-semibold transition-colors"
-        style={{ textDecoration: "none" }}>
+       >
         {locale === "en" ? "Contact operator →" : "Оператортой холбогдох →"}
       </Link>
     </div>
@@ -1009,6 +1082,9 @@ function layoutToMessage(resp: AIResponse): Omit<Message, "id" | "role"> {
     case "user_cards":
       if (p.items?.length)     msg.products  = p.items;
       if (p.crossRefs?.length) msg.crossRefs = p.crossRefs;
+      // Phase AL — bundle/cross-sell suggestions surface as a separate
+      // strip below the main result cards.
+      if (p.related?.length)   msg.related   = p.related;
       break;
     case "seller_table":
       if (p.columns && p.rows) {
@@ -1086,7 +1162,7 @@ function VehicleSwitcher({
     <div className="border-b border-gray-200 bg-white px-3 py-2.5 text-[12px] space-y-2">
       {/* Active vehicle row */}
       <div className="flex items-center gap-2">
-        <Car size={13} className="text-violet-600 shrink-0" />
+        <Car size={13} className="text-blue-600 shrink-0" />
         <div className="flex-1 min-w-0">
           {activeVehicle ? (
             <>
@@ -1131,7 +1207,7 @@ function VehicleSwitcher({
                 key={v.id}
                 onClick={() => onPickRecent(v.id)}
                 disabled={plateBusy}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-violet-50 cursor-pointer bg-transparent border-none transition-colors disabled:opacity-50 font-sans">
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors disabled:opacity-50 font-sans">
                 <Car size={11} className="text-gray-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] text-gray-800 truncate">
@@ -1157,14 +1233,14 @@ function VehicleSwitcher({
             onChange={(e) => onPlateInputChange(e.target.value.toUpperCase())}
             onKeyDown={(e) => e.key === "Enter" && !plateBusy && onLookupPlate()}
             placeholder="1234УБА"
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] font-mono focus:border-violet-500 focus:bg-white outline-none transition-colors"
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] font-mono focus:border-blue-500 focus:bg-white outline-none transition-colors"
             autoCapitalize="characters"
             spellCheck={false}
           />
           <button
             onClick={onLookupPlate}
             disabled={plateBusy || !plateInput.trim()}
-            className="shrink-0 inline-flex items-center gap-1 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg px-2.5 py-1.5 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans">
+            className="shrink-0 inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg px-2.5 py-1.5 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans">
             {plateBusy
               ? <Loader2 size={11} className="animate-spin" />
               : <SearchIcon size={11} />}
@@ -1248,7 +1324,7 @@ function BarChartView({ d }: { d: Record<string, unknown> }) {
           <div key={`${label}-${i}`} className="flex items-center gap-2">
             <div className="w-24 text-[10px] text-gray-700 truncate font-mono shrink-0" title={label}>{label}</div>
             <div className="flex-1 h-3 bg-white rounded overflow-hidden border border-indigo-100">
-              <div className="h-full bg-gradient-to-r from-indigo-400 to-fuchsia-500" style={{ width: `${pct}%` }} />
+              <div className="h-full bg-gradient-to-r from-indigo-400 to-amber-500" style={{ width: `${pct}%` }} />
             </div>
             <div className="w-12 text-right text-[10px] font-mono text-indigo-700 shrink-0">{v.toLocaleString()}</div>
           </div>
@@ -1300,7 +1376,7 @@ function PieLegendView({ d }: { d: Record<string, unknown> }) {
     return <div className="text-[11px] text-indigo-700 italic">Хуваарилалт алга.</div>;
   }
   const total = slices.reduce((s, sl) => s + (Number(sl.value) || 0), 0) || 1;
-  const palette = ["bg-indigo-500", "bg-fuchsia-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500", "bg-violet-500"];
+  const palette = ["bg-indigo-500", "bg-amber-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500", "bg-blue-500"];
   return (
     <div className="space-y-1">
       {slices.map((sl, i) => {

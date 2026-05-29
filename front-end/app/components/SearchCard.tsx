@@ -67,12 +67,12 @@ export default function SearchCard() {
   const tabs = ["Улсын дугаараар", "Загвараар", "Зургаар"];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-md shadow-violet-100/40">
+    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-md shadow-blue-100/40">
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
         {tabs.map((t, i) => (
           <button key={t} onClick={() => { setTab(i as Tab); resetState(); }}
             className={`flex-1 py-2 text-[13px] rounded-[9px] border-none cursor-pointer font-sans transition-all ${
-              tab === i ? "bg-white text-violet-600 font-semibold shadow" : "text-gray-400 bg-transparent hover:text-gray-600"
+              tab === i ? "bg-white text-blue-600 font-semibold shadow" : "text-gray-400 bg-transparent hover:text-gray-600"
             }`}>{t}</button>
         ))}
       </div>
@@ -84,10 +84,10 @@ export default function SearchCard() {
               onChange={(e) => { setPlate(e.target.value); resetState(); }}
               onKeyDown={(e) => e.key === "Enter" && searchByPlate()}
               disabled={busy}
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] tracking-wider focus:border-violet-500 focus:bg-white transition-colors outline-none"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] tracking-wider focus:border-blue-500 focus:bg-white transition-colors outline-none"
               placeholder="Жнь: 8083СЭН" />
             <button onClick={searchByPlate} disabled={busy || !plate.trim()}
-              className="bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none flex items-center gap-1.5 transition-colors shrink-0">
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none flex items-center gap-1.5 transition-colors shrink-0">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               {busy ? "Хайж байна..." : "Хайх"}
             </button>
@@ -95,8 +95,8 @@ export default function SearchCard() {
           <p className="text-[11px] text-gray-400 mt-2">Улсын дугаараа оруулаад машиныхаа бүх мэдээллийг хараарай</p>
 
           {found && (
-            <div className="mt-3 bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center shrink-0 text-white">
+            <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-amber-500 rounded-lg flex items-center justify-center shrink-0 text-white">
                 <Car size={16} />
               </div>
               <div className="flex-1 min-w-0">
@@ -109,7 +109,7 @@ export default function SearchCard() {
                 </div>
               </div>
               <button onClick={openCompatible}
-                className="flex items-center gap-1 bg-violet-600 hover:bg-violet-700 text-white text-[12px] font-medium rounded-lg px-3 py-1.5 cursor-pointer border-none transition-colors shrink-0">
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-medium rounded-lg px-3 py-1.5 cursor-pointer border-none transition-colors shrink-0">
                 Сэлбэг <ChevronRight size={12} />
               </button>
             </div>
@@ -138,7 +138,7 @@ export default function SearchCard() {
               { v: year,  sv: setYear,  p: "Он",       o: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016"] },
             ].map(({ v, sv, p, o }) => (
               <select key={p} value={v} onChange={(e) => sv(e.target.value)}
-                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-700 cursor-pointer focus:border-violet-500 font-sans">
+                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-700 cursor-pointer focus:border-blue-500 font-sans">
                 <option value="">{p}</option>
                 {o.map((x) => <option key={x}>{x}</option>)}
               </select>
@@ -146,10 +146,10 @@ export default function SearchCard() {
           </div>
           <div className="flex gap-2">
             <input value={partQ} onChange={(e) => setPartQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && goShopSearch(partQ)}
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-violet-500 focus:bg-white transition-colors"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white transition-colors"
               placeholder="Сэлбэгийн нэр эсвэл OEM дугаар..." />
             <button onClick={() => goShopSearch(partQ)}
-              className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors shrink-0">
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors shrink-0">
               Хайх
             </button>
           </div>
@@ -157,10 +157,10 @@ export default function SearchCard() {
       )}
 
       {tab === 2 && (
-        <label className="block border-2 border-dashed border-violet-200 rounded-xl p-8 text-center cursor-pointer bg-violet-50 hover:bg-violet-100 transition-colors">
+        <label className="block border-2 border-dashed border-blue-200 rounded-xl p-8 text-center cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
           <input type="file" accept="image/*" className="hidden" />
-          <div className="w-12 h-12 bg-white border border-violet-200 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Upload size={18} className="text-violet-500" />
+          <div className="w-12 h-12 bg-white border border-blue-200 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Upload size={18} className="text-blue-500" />
           </div>
           <p className="text-[14px] font-medium text-gray-800 mb-1">Сэлбэгийн зураг оруулна уу</p>
           <p className="text-[12px] text-gray-400">AI OEM дугаарыг автоматаар тодорхойлно</p>

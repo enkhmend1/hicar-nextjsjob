@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700",
   paid: "bg-blue-50 text-blue-700",
-  processing: "bg-violet-50 text-violet-700",
+  processing: "bg-blue-50 text-blue-700",
   shipped: "bg-indigo-50 text-indigo-700",
   delivered: "bg-emerald-50 text-emerald-700",
   cancelled: "bg-red-50 text-red-700",
@@ -41,16 +41,15 @@ export default function AdminDashboard() {
   if (!data) return <div className="text-gray-400 text-sm">Уншиж байна...</div>;
 
   const cards = [
-    { label: "Нийт хэрэглэгч", value: data.totals.users.toLocaleString(), icon: Users, color: "violet" },
+    { label: "Нийт хэрэглэгч", value: data.totals.users.toLocaleString(), icon: Users, color: "blue" },
     { label: "Нийт бараа", value: data.totals.products.toLocaleString(), icon: Package, color: "blue" },
     { label: "Нийт захиалга", value: data.totals.orders.toLocaleString(), icon: ShoppingBag, color: "emerald" },
     { label: "Нийт борлуулалт", value: `₮${data.totals.revenue.toLocaleString()}`, icon: TrendingUp, color: "orange" },
   ];
   const colorMap: Record<string, string> = {
-    violet: "bg-violet-50 text-violet-600",
-    blue: "bg-blue-50 text-blue-600",
+    blue:    "bg-blue-50 text-blue-600",
     emerald: "bg-emerald-50 text-emerald-600",
-    orange: "bg-orange-50 text-orange-600",
+    orange:  "bg-orange-50 text-orange-600",
   };
 
   return (
@@ -79,7 +78,7 @@ export default function AdminDashboard() {
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[14px] font-semibold text-gray-900">Сүүлийн захиалгууд</h2>
-            <Link href="/admin/orders" className="text-[12px] text-violet-600 hover:underline" style={{ textDecoration: "none" }}>Бүгд →</Link>
+            <Link href="/admin/orders" className="text-[12px] text-blue-600 hover:underline">Бүгд →</Link>
           </div>
           {data.recentOrders.length === 0 ? (
             <p className="text-[13px] text-gray-400 text-center py-6">Захиалга байхгүй</p>
@@ -93,7 +92,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[o.status]}`}>{STATUS_LABEL[o.status]}</span>
-                    <span className="text-[13px] font-semibold text-violet-600 w-24 text-right">₮{o.total.toLocaleString()}</span>
+                    <span className="text-[13px] font-semibold text-blue-600 w-24 text-right">₮{o.total.toLocaleString()}</span>
                   </div>
                 </div>
               ))}
@@ -109,7 +108,7 @@ export default function AdminDashboard() {
             <div className="space-y-2">
               {data.topProducts.map((p, i) => (
                 <div key={p._id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                  <div className="w-7 h-7 bg-violet-50 text-violet-600 rounded-lg flex items-center justify-center text-[12px] font-bold shrink-0">{i + 1}</div>
+                  <div className="w-7 h-7 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center text-[12px] font-bold shrink-0">{i + 1}</div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[12px] font-medium text-gray-900 truncate">{p.name}</div>
                     <div className="text-[10px] text-gray-400">×{p.qty} · ₮{p.revenue.toLocaleString()}</div>

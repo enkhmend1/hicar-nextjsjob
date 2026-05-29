@@ -68,6 +68,8 @@ import {
   normalizeVehicleReference, expandQueryWithVehicle,
 } from "../Service/vehicleKnowledge.service.js";
 import { diagnoseSymptom, isSymptomShaped } from "../Service/diagnostic.service.js";
+import { chatWithFallback, buildTextFallbackChain } from "../Service/aiFallback.service.js";
+import { getMaintenanceHints, formatMaintenanceHints } from "../Service/maintenanceHints.service.js";
 
 // ────────────────────────────────────────────────────────────────────
 // TOOL CATALOGUE — registered once, filtered per-request by role scope
@@ -388,22 +390,376 @@ const TOOLS = [
 // Handlers MUST honour `scope.productFilter` on every DB query.
 // ────────────────────────────────────────────────────────────────────
 
-/** Lightweight inline product search — scope-aware. */
-const runScopedProductSearch = async ({ query, category, limit = 5 }, scope) => {
+// ────────────────────────────────────────────────────────────────────
+// Phase AK — Mongolian price/quality intent parser
+//
+// Buyers often hint at sort/filter intent in NATURAL language rather
+// than using the explicit form: "хямд нь юу вэ?", "200мянгаас доош",
+// "сайн чанартай нь". The LLM tries its best but is inconsistent —
+// so we PRE-EXTRACT a structured hint and pass it as both a sort
+// directive to runScopedProductSearch AND a system-prompt note so
+// the LLM's prose alignment matches what we sorted by.
+//
+// Returns `{ sortBy, priceMax, priceMin, minRating, preferTrustedBrand }`
+// with whichever fields the text expressed. Unknown → empty.
+// ────────────────────────────────────────────────────────────────────
+const TRUSTED_BRANDS = new Set([
+  "aisin", "denso", "ctr", "555", "febi", "sankei", "bosch", "nsk",
+  "koyo", "ntn", "akebono", "advics", "tokico", "kyb", "monroe", "ngk",
+]);
+
+const parsePriceIntent = (text) => {
+  const s = String(text || "").toLowerCase();
+  const out = {};
+  if (!s) return out;
+
+  // NOTE: JS `\b` is ASCII-only — Cyrillic letters are \W from regex's POV,
+  // so `\bхямд\b` NEVER matches "хямд тоормос". We use a Unicode-friendly
+  // boundary: (?:^|[^а-яёөүa-z]) AND (?:[^а-яёөүa-z]|$). This treats both
+  // Cyrillic + Latin letters as part of a "word" while still requiring
+  // proper word boundaries on either side.
+  const word = (w) => new RegExp(`(?:^|[^а-яёөүa-z])(${w})(?:[^а-яёөүa-z]|$)`, "iu");
+
+  // Cheap / cheapest signals
+  if (word("хямд|cheap|cheapest|хамгийн\\s*хямд").test(s)) out.sortBy = "price_asc";
+  // Expensive / premium
+  if (word("үнэтэй|expensive|premium|тансаг").test(s)) out.sortBy = "price_desc";
+
+  // Quality / good
+  if (word("сайн\\s*чанартай|чанартай|good\\s*quality|top\\s*quality").test(s)) {
+    out.minRating = 4;
+    out.preferTrustedBrand = true;
+  }
+  if (word("хамгийн\\s*сайн|best").test(s)) {
+    out.minRating = 4;
+    out.preferTrustedBrand = true;
+    out.sortBy = out.sortBy || "rating_desc";
+  }
+
+  // Price ceiling — supports "200мянга хүртэл", "200к доош", "≤ 200000",
+  // "200000-аас доош", "max 200000".
+  const ceilMatch = s.match(
+    /(?:max\s*|хүртэл\s*|доош\s*|≤\s*|under\s*)?(\d[\d,\s]*)\s*(?:мянга|k|к|тг|₮)?\s*(?:хүртэл|доош|or less|or below)/i,
+  );
+  if (ceilMatch) {
+    const raw = ceilMatch[1].replace(/[,\s]/g, "");
+    let n = Number(raw);
+    if (/мянга|k|к/i.test(ceilMatch[0]) && n < 100000) n *= 1000;
+    if (Number.isFinite(n) && n > 0) out.priceMax = n;
+  }
+
+  // Price floor — "200мянгаас дээш", "from 100000"
+  const floorMatch = s.match(
+    /(?:from\s*|дээш\s*|over\s*|≥\s*)?(\d[\d,\s]*)\s*(?:мянга|k|к|тг|₮)?\s*(?:дээш|or more|or above|from)/i,
+  );
+  if (floorMatch) {
+    const raw = floorMatch[1].replace(/[,\s]/g, "");
+    let n = Number(raw);
+    if (/мянга|k|к/i.test(floorMatch[0]) && n < 100000) n *= 1000;
+    if (Number.isFinite(n) && n > 0) out.priceMin = n;
+  }
+
+  return out;
+};
+
+// ────────────────────────────────────────────────────────────────────
+// Phase AK — smart product ranking.
+//
+// Mongo regex search returns matches in insertion order — useless for
+// "most relevant first" UX. Score each candidate on multiple axes and
+// re-sort. The scorer is intentionally explicit (not ML-driven) so
+// behaviour is debuggable + tweakable per category later.
+//
+// Score components (0..100 each, weighted then summed):
+//   • exactMatch      45%  — query word appears in name AND in OEM
+//   • vehicleFit      25%  — product.fitments include user's vehicle
+//   • brandTrust      15%  — TRUSTED_BRANDS contains product.brand
+//   • sellerRating    10%  — seller.sellerProfile.rating / 5
+//   • priceTier        5%  — non-zero price (free = suspicious filler)
+//
+// `intent.sortBy === "price_asc"` overrides — score is ignored and we
+// sort by price ascending. Same for "price_desc" and "rating_desc".
+// ────────────────────────────────────────────────────────────────────
+const rankProducts = (items, { query, vehicleContext, intent = {} } = {}) => {
+  if (!Array.isArray(items) || items.length === 0) return items;
+
+  // Hard sort overrides — used when intent explicitly asks for it.
+  if (intent.sortBy === "price_asc") {
+    return [...items].sort((a, b) => (a.price || Infinity) - (b.price || Infinity));
+  }
+  if (intent.sortBy === "price_desc") {
+    return [...items].sort((a, b) => (b.price || 0) - (a.price || 0));
+  }
+  if (intent.sortBy === "rating_desc") {
+    return [...items].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  }
+
+  const words = String(query || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+
+  const score = (p) => {
+    let s = 0;
+    const name  = String(p.name  || "").toLowerCase();
+    const oem   = String(p.oem   || "").toLowerCase();
+    const brand = String(p.brand || "").toLowerCase();
+
+    // exactMatch: how many query words appear in name AND OEM
+    if (words.length) {
+      const inName = words.filter((w) => name.includes(w)).length;
+      const inOem  = words.filter((w) => oem.includes(w)).length;
+      s += 45 * (Math.max(inName, inOem) / words.length);
+    }
+
+    // vehicleFit
+    if (vehicleContext && Array.isArray(p.fitments)) {
+      const want = `${vehicleContext.manufacturer || ""} ${vehicleContext.model || ""}`.toLowerCase().trim();
+      const hit = p.fitments.some((f) => {
+        const fit = `${f.manufacturer || ""} ${f.model || ""}`.toLowerCase();
+        return want && fit.includes(want);
+      });
+      if (hit) s += 25;
+    }
+
+    // brandTrust
+    if (TRUSTED_BRANDS.has(brand)) s += 15;
+    else if (intent.preferTrustedBrand) s -= 10;  // penalty when user wants quality
+
+    // sellerRating
+    const r = Number(p.seller?.sellerProfile?.rating || p.rating || 0);
+    if (r > 0) s += 10 * Math.min(1, r / 5);
+
+    // priceTier — non-zero price means actual listing
+    if (Number(p.price) > 0) s += 5;
+
+    return s;
+  };
+
+  return [...items]
+    .map((p) => ({ ...p, _score: Math.round(score(p)) }))
+    .sort((a, b) => b._score - a._score);
+};
+
+/**
+ * Lightweight inline product search — scope-aware.
+ *
+ * Query handling: input is split into individual words (3+ chars each)
+ * and OR'd as separate regexes. This is critical because the
+ * transliteration pass expands "тоормос" → "тоормос brake" — passing
+ * THAT as a single phrase regex `/тоормос brake/i` would never match
+ * since no product name literally contains "тоормос brake" together.
+ * Splitting + OR-ing means any product matching EITHER word lands.
+ *
+ * Words under 3 chars are dropped to prevent regex from matching too
+ * broadly on noise like single letters.
+ *
+ * Phase AK: also accepts `intent` (from parsePriceIntent) to apply
+ * priceMin/priceMax/minRating filters at the DB layer when present.
+ */
+const runScopedProductSearch = async ({ query, category, limit = 5, intent = {} }, scope) => {
   const base = scopeFilter(scope);
   const filter = { ...base };
   if (category) filter.category = category;
   if (query) {
-    const rx = new RegExp(String(query).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    filter.$or = [{ name: rx }, { oem: rx }, { brand: rx }, { tags: rx }];
+    const escape = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Split on whitespace + non-word punctuation; keep alphanumerics (incl.
+    // Cyrillic). Drop tokens under 3 chars to avoid noise.
+    const words = String(query)
+      .split(/[\s,;.!?\-]+/u)
+      .map((w) => w.trim())
+      .filter((w) => w.length >= 3);
+    if (words.length === 0) return [];
+    const regexes = words.map((w) => new RegExp(escape(w), "i"));
+    // For each field, match if ANY word matches. Cross-field OR via $or.
+    filter.$or = regexes.flatMap((rx) => ([
+      { name: rx }, { oem: rx }, { brand: rx }, { tags: rx },
+    ]));
   }
-  return Product.find(filter).limit(Math.max(1, Math.min(20, limit))).lean();
+  // Phase AK: apply price/rating filters from parsed intent so the LLM
+  // doesn't have to re-filter client-side.
+  if (intent.priceMin) filter.price = { ...(filter.price || {}), $gte: intent.priceMin };
+  if (intent.priceMax) filter.price = { ...(filter.price || {}), $lte: intent.priceMax };
+  if (intent.minRating) filter.rating = { $gte: intent.minRating };
+
+  // Fetch slightly more than `limit` so the ranker has options to choose
+  // from. Hard ceiling = 60 to keep server-side memory bounded.
+  //
+  // We DON'T populate("seller") here because:
+  //   (a) some smoke-test contexts don't load the User schema → throws
+  //   (b) rankProducts can score on product.rating directly without
+  //       seller details (Phase AK seller score fallback)
+  //   (c) the tool result's `items` will be sanitized by sanitizeProduct
+  //       which already strips/keeps the right fields per scope
+  // If a future caller needs seller info, do `Product.populate` outside
+  // this helper.
+  const fetchN = Math.max(limit, Math.min(60, limit * 4));
+  return Product.find(filter).limit(fetchN).lean();
+};
+
+// ────────────────────────────────────────────────────────────────────
+// Phase AL — bundle / related-product suggestions.
+//
+// When a buyer searches for ONE category, we know certain other categories
+// are routinely bought together (brake pad → brake fluid, engine → oil
+// filter, suspension → wheel bearing). Surfacing those as a small "Хамт
+// ихэвчлэн авдаг" strip below the main results is the same pattern
+// Amazon's "Frequently bought together" uses to lift cart size.
+//
+// We KEEP this map small + opinionated rather than learning it from order
+// data because:
+//   (a) we don't have enough order volume to train anything reliable yet
+//   (b) static map is debuggable / editable per-category as the team
+//       learns what actually correlates
+//   (c) when order data matures, the call site stays the same — just
+//       swap the implementation behind `findRelatedProducts`
+// ────────────────────────────────────────────────────────────────────
+const RELATED_CATEGORIES = Object.freeze({
+  // Brakes naturally pair with their fluid + the rotating disc + wheels.
+  brake:           ["oils", "wheels_tires", "wheel"],
+  // Engine work usually entails oil + filter swap.
+  engine:          ["oils", "filters"],
+  // Cooling work → check coolant + thermostat in same category.
+  cooling_system:  ["oils", "filters"],
+  // Suspension work touches bearings + sometimes steering tie-rods.
+  suspension:      ["bearings", "steering", "wheel", "wheels_tires"],
+  steering:        ["suspension"],
+  // Electrical → battery + relevant sensors.
+  electric:        ["battery", "sensors"],
+  ignition_system: ["filters", "fuel_system"],
+  fuel_system:     ["filters"],
+  // Air intake / exhaust pair with each other.
+  air_intake:      ["filters", "exhaust_system"],
+  exhaust_system:  ["filters"],
+  // Filters of any kind benefit from showing oils.
+  filters:         ["oils"],
+  // Battery + starter often replaced together.
+  battery:         ["electric"],
+  // Wheels / tires often pair with brake work.
+  wheel:           ["brake", "suspension"],
+  wheels_tires:    ["brake", "suspension"],
+});
+
+/**
+ * Phase AL — build a regex that matches ANY DB category id whose root
+ * normalises to the given bucket. e.g. bucket="brake" matches
+ * "brake", "brake_pads", "rear_brake_pads", "brake_fluid", etc.
+ * Falls back to literal bucket match for unknown buckets.
+ */
+const bucketCategoryRegex = (bucket) => {
+  const patterns = {
+    brake:           "brake",
+    engine:          "engine|motor",
+    suspension:      "suspension|shock|strut|spring",
+    steering:        "steer",
+    electric:        "electric|wiring|harness",
+    ignition_system: "ignition|spark|coil",
+    fuel_system:     "fuel|injector",
+    air_intake:      "intake|maf",
+    exhaust_system:  "exhaust|muffler|catalytic",
+    filters:         "filter",
+    battery:         "battery|akkumul",
+    cooling_system:  "cool|radiator|coolant",
+    wheel:           "wheel|tire|tyre|rim",
+    wheels_tires:    "wheel|tire|tyre|rim",
+    oils:            "oils|oil|grease|lubricant",
+    bearings:        "bearing",
+    sensors:         "sensor",
+  };
+  const pat = patterns[bucket] || bucket;
+  return new RegExp(pat, "i");
+};
+
+/**
+ * Phase AL — normalise a category id to a "root bucket" so seller-
+ * authored variants like "rear_brake_pads" / "front_brake_pads" /
+ * "brake_pads" / "brake_fluid" all bucket back to "brake" for the
+ * bundle-suggestion lookup. Falls back to the original id.
+ */
+const categoryRoot = (catId) => {
+  if (!catId) return catId;
+  const s = String(catId).toLowerCase();
+  if (/brake/.test(s)) return "brake";
+  if (/engine|motor/.test(s)) return "engine";
+  if (/suspension|shock|strut|spring/.test(s)) return "suspension";
+  if (/steer/.test(s)) return "steering";
+  if (/electric|wiring|harness/.test(s)) return "electric";
+  if (/ignition|spark|coil/.test(s)) return "ignition_system";
+  if (/fuel|injector/.test(s)) return "fuel_system";
+  if (/intake|maf/.test(s)) return "air_intake";
+  if (/exhaust|muffler|catalytic/.test(s)) return "exhaust_system";
+  if (/filter/.test(s)) return "filters";
+  if (/battery|akkumul/.test(s)) return "battery";
+  if (/cool|radiator|coolant/.test(s)) return "cooling_system";
+  if (/wheel|tire|tyre|rim/.test(s)) return "wheel";
+  return s;
+};
+
+/**
+ * Find up to N "frequently bought together" candidates for a given
+ * product. Strategy:
+ *   1. Look up RELATED_CATEGORIES[product.category]
+ *   2. For each related category, fetch the SINGLE highest-rated
+ *      approved product, sorted by rating then price-asc
+ *   3. Dedupe by _id (in case categories overlap)
+ *   4. Cap at `limit` total
+ *
+ * Returns []  if no related categories OR no approved candidates.
+ * Honours scope (e.g. seller scope = own inventory only).
+ */
+const findRelatedProducts = async (anchor, scope, limit = 3) => {
+  if (!anchor?.category) return [];
+
+  // Try the exact category first, then fall back to the normalised root
+  // bucket. This lets seller-authored category ids like "rear_brake_pads"
+  // still trigger the brake → oils + wheels suggestions.
+  const exactRelated = RELATED_CATEGORIES[anchor.category];
+  const rootRelated  = RELATED_CATEGORIES[categoryRoot(anchor.category)];
+  const related = exactRelated || rootRelated;
+  if (!related || related.length === 0) return [];
+
+  const base = scopeFilter(scope);
+  const excludeId = anchor._id || anchor.id;
+
+  // For each related root-bucket, also accept ANY category whose root
+  // resolves to that bucket (so related: ["brake"] matches DB rows
+  // categorised as "brake_pads" / "rear_brake_pads"). We do this by
+  // building one regex per bucket.
+  const promises = related.slice(0, limit).map((bucket) => {
+    // Build the matching set: exact bucket id + any category whose
+    // normalised root resolves to this bucket.
+    const rx = bucketCategoryRegex(bucket);
+    return Product.find({
+      ...base,
+      category: { $regex: rx },
+      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    })
+      .sort({ rating: -1, price: 1 })
+      .limit(1)
+      .lean();
+  });
+  const buckets = await Promise.all(promises);
+
+  // Flatten + dedupe by _id
+  const seen = new Set();
+  const out = [];
+  for (const bucket of buckets) {
+    for (const p of bucket) {
+      const k = String(p._id);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(p);
+      if (out.length >= limit) break;
+    }
+    if (out.length >= limit) break;
+  }
+  return out;
 };
 
 const TOOL_HANDLERS = {
   async search_products(args, runtime) {
     const { query, category, limit = 5 } = args;
-    const { scope, user } = runtime;
+    const { scope, user, vehicleContext } = runtime;
 
     // Phase I: chassis-code normalisation. "P30 тоормос" → enriches
     // the query with "Toyota Prius ZVW30" so the marketplace catalogue
@@ -422,11 +778,30 @@ const TOOL_HANDLERS = {
     const finalCategory = seedCategory || expanded.category;
     const finalQuery = expanded.query;
 
+    // Phase AK: parse price/quality intent from the ORIGINAL query
+    // (preserved Mongolian/Latin keywords). Applies as DB filters +
+    // hard sort overrides where present.
+    const intent = parsePriceIntent(query);
+
     const raw = await runScopedProductSearch({
-      query: finalQuery, category: finalCategory, limit,
+      query: finalQuery, category: finalCategory, limit, intent,
     }, scope);
 
-    const items = sanitizeProducts(raw, scope);
+    // Phase AK: rank by relevance + vehicle fit + brand trust before
+    // slicing to `limit`. Without this, Mongo returns insertion order
+    // which is essentially random for the user.
+    const ranked = rankProducts(raw, { query: finalQuery, vehicleContext, intent });
+    const items = sanitizeProducts(ranked.slice(0, limit), scope);
+
+    // Phase AL: fetch related bundle suggestions for the TOP item.
+    // Frontend renders these as a "Хамт ихэвчлэн авдаг" strip. Failure
+    // is non-fatal — we just return [] so the main results still ship.
+    const anchor = ranked[0];
+    const relatedRaw = anchor
+      ? await findRelatedProducts(anchor, scope, 3).catch(() => [])
+      : [];
+    const related = sanitizeProducts(relatedRaw, scope);
+
     logSearch({
       query, expandedQuery: finalQuery, category: finalCategory,
       resultCount: items.length, source: "ai", user: user?._id,
@@ -437,6 +812,14 @@ const TOOL_HANDLERS = {
       category: finalCategory,
       count: items.length,
       items,
+      // Phase AL: cross-category bundle suggestions (max 3). Empty when
+      // anchor's category has no related-categories mapping or no
+      // approved matches were found.
+      related,
+      // Phase AK: surface the applied intent so the LLM's prose can
+      // align ("Хямдыг нь эхэнд...", "200мянгаас доош 3 тааруу")
+      // instead of saying generic "I found 5 parts."
+      intent: Object.keys(intent).length ? intent : null,
       transliterated: translit.hasHits
         ? translit.hits.map((h) => ({ surface: h.surface, mn: h.mn, en: h.en }))
         : [],
@@ -587,6 +970,10 @@ const TOOL_HANDLERS = {
     // Surface the standard frontend-friendly shape — same keys
     // useCarStore.activeVehicle expects, so the chat widget can swap
     // in the vehicle without an extra fetch.
+    // Phase AE: also expose `displacement` and `carname` so the /garage
+    // "save recent → garage entry" pre-fill knows engine capacity, and
+    // so the AI can mention "2.5L Hybrid" instead of bare codes when
+    // engineCode is empty for older listings.
     return {
       vehicleId:    String(vehicle._id),
       plate:        vehicle.plate,
@@ -595,6 +982,8 @@ const TOOL_HANDLERS = {
       generation:   vehicle.snapshot?.generation || "",
       engineCode:   vehicle.snapshot?.motorcode  || "",
       engineType:   vehicle.snapshot?.motortype  || "",
+      displacement: vehicle.snapshot?.displacement || "",
+      carname:      vehicle.snapshot?.carname || "",
       isFromCache,
     };
   },
@@ -629,7 +1018,10 @@ const TOOL_HANDLERS = {
     return {
       switched: true,
       ...payload,
-      engineCode: vehicle.snapshot?.motorcode || "",
+      engineCode:   vehicle.snapshot?.motorcode || "",
+      engineType:   vehicle.snapshot?.motortype || "",
+      displacement: vehicle.snapshot?.displacement || "",
+      carname:      vehicle.snapshot?.carname || "",
     };
   },
 
@@ -1011,6 +1403,15 @@ const callSignature = (tc) =>
   `${tc.function?.name || "?"}:${tc.function?.arguments || ""}`;
 
 // ────────────────────────────────────────────────────────────────────
+// Phase M.1: build the text-completion fallback chain ONCE at module
+// load. Order: Groq 70b → Groq 8b → Gemini 2.0 Flash. Each entry has
+// an independent rate-limit counter, so when Groq's 30 RPM is saturated
+// we degrade to a smaller / different-provider model instead of 429-ing
+// the user. See Service/aiFallback.service.js for the walking logic.
+// ────────────────────────────────────────────────────────────────────
+const TEXT_FALLBACK_CHAIN = buildTextFallbackChain();
+
+// ────────────────────────────────────────────────────────────────────
 // Conversation engine — passes the runtime context (incl. scope) to
 // every tool handler.
 // ────────────────────────────────────────────────────────────────────
@@ -1046,6 +1447,16 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
   let lastUsage = null;
   let totalTokens = 0;
   let terminate = { reason: "model_finished" };
+  // Phase M.1: track which provider actually served each round so we
+  // can surface "served by Gemini fallback" in diagnostics.
+  let lastUsedProvider = profile.label;
+  const fallbackAttempts = [];
+
+  // Vision (image-bearing) requests have a single-provider chain —
+  // Groq doesn't do vision yet, so we can't fall back to it.
+  const chainForThisRequest = profile === aiConfig.vision
+    ? [{ client: profile.client, model: profile.model, label: profile.label }]
+    : TEXT_FALLBACK_CHAIN;
 
   try {
     for (let round = 0; round < limits.maxRounds; round++) {
@@ -1054,6 +1465,8 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
       if (ac.signal.aborted)                      { terminate = { reason: "walltime" }; break; }
 
       const body = {
+        // model is set per-entry by chatWithFallback; we still pass it
+        // here so single-provider paths (vision) keep working.
         model: profile.model,
         messages: conversation,
         temperature: 0.3,
@@ -1064,7 +1477,11 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
         body.tool_choice = "auto";
       }
 
-      const resp = await profile.client.chat.completions.create(body, { signal: ac.signal });
+      const { response: resp, usedEntry, attempts } = await chatWithFallback({
+        chain: chainForThisRequest, body, signal: ac.signal,
+      });
+      lastUsedProvider = usedEntry.label;
+      fallbackAttempts.push(...attempts);
       lastMessage = resp.choices?.[0]?.message;
       lastUsage   = resp.usage;
       totalTokens += Number(resp.usage?.total_tokens || 0);
@@ -1146,6 +1563,11 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
     totalTokens,
     terminate,
     reflection: finalReflection,
+    // Phase M.1: which provider actually answered, plus the per-attempt
+    // breakdown — useful for ops dashboards ("how often did we fall back
+    // to Gemini last week"). Empty for the happy path on entry #1.
+    usedProvider: lastUsedProvider,
+    fallbackAttempts,
   };
 };
 
@@ -1155,7 +1577,26 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
 const mapUpstreamError = (err) => {
   const upstream = Number(err?.status || err?.response?.status || 0);
   if (upstream === 401 || upstream === 403) return { status: 503, body: { code: "AI_AUTH_FAILED", message: "AI provider rejected credentials." } };
-  if (upstream === 429) return { status: 429, body: { code: "AI_RATE_LIMITED", message: "AI provider is rate-limiting.", retryAfter: Number(err?.headers?.["retry-after"]) || 30 } };
+  if (upstream === 429) {
+    // Phase M.1: cap the suggested cooldown at 15s — by the time the
+    // frontend countdown finishes the user has usually rage-typed
+    // anyway. Groq's actual Retry-After is honoured if present; we just
+    // cap our DEFAULT (was 30) so the worst case isn't a half-minute
+    // dead UI. Also bottom-out at 5s so we don't spin retries.
+    const headerVal = Number(err?.headers?.["retry-after"]);
+    const retryAfter = Number.isFinite(headerVal) && headerVal > 0
+      ? Math.min(headerVal, 30)
+      : 8;
+    return { status: 429, body: { code: "AI_RATE_LIMITED", message: "AI provider is rate-limiting.", retryAfter } };
+  }
+  if (upstream === 413) {
+    // Phase M.3: Groq returns 413 when the prompt exceeds the per-minute
+    // TPM cap on a specific model (e.g. 6548 input tokens on 8b's 6K
+    // ceiling). The fallback chain should have routed past this, but
+    // if EVERY entry 413'd (Gemini unconfigured + only 8b left), give
+    // the user actionable copy instead of a generic 500.
+    return { status: 413, body: { code: "AI_REQUEST_TOO_LARGE", message: "Request payload exceeds the AI provider's per-minute token cap." } };
+  }
   if (upstream === 400 || upstream === 422) return { status: 400, body: { code: "AI_BAD_REQUEST", message: err?.message || "AI rejected request shape." } };
   if (upstream >= 500 && upstream < 600) return { status: 502, body: { code: "AI_UPSTREAM_ERROR", message: "AI provider had internal error." } };
   if (err?.code === "ETIMEDOUT" || err?.code === "ECONNREFUSED"
@@ -1169,6 +1610,10 @@ const mapUpstreamError = (err) => {
 // Public entry point — POST /api/ai/chat
 // ────────────────────────────────────────────────────────────────────
 export const handleAIRequest = async (req, res) => {
+  // Phase AB: short correlation id so a user can quote it back to ops
+  // and we can grep server logs for the matching stack trace. Truncated
+  // to 8 chars — collisions are fine over a 24h log window.
+  const requestId = Math.random().toString(36).slice(2, 10);
   try {
     // ── Shape the request ─────────────────────────────────────────
     const parsed = normaliseRequest(req);
@@ -1217,7 +1662,26 @@ export const handleAIRequest = async (req, res) => {
       });
     }
 
-    // ── No AI provider — fall back to keyword search (USER role) ──
+    // ── Latin-Mongolian transliteration hint (pre-LLM) ────────────
+    // Computed BEFORE the no-AI branch so the keyword fallback can also
+    // benefit from "toormos" → "тоормос" expansion. The result is reused
+    // verbatim by the LLM path below as part of the system prompt.
+    const translitResult = transliterate(lastUserText);
+    const transliterationHint = formatHint(translitResult, locale);
+
+    // ── No AI provider — degraded but still useful path ───────────
+    //
+    // The buyer didn't ask "is the LLM up" — they asked for parts. If
+    // GROQ_API_KEY is missing we degrade gracefully:
+    //
+    //   1. Symptom diagnostic engine (regex-only, no LLM needed)
+    //   2. Latin→Cyrillic transliteration (so "toormos" → "тоормос")
+    //   3. Scope-filtered keyword search using the expanded query
+    //
+    // The diagnostic path is the key gain — typing "урдны дугуй тог
+    // тог дуу" returns a proper candidate-parts card even with zero
+    // AI providers configured. Without this branch the chat was a
+    // dead end for symptom-shaped queries in self-hosted setups.
     if (!isAiEnabled()) {
       if (hasImage) {
         return respondWithError(req, res, 400, {
@@ -1227,16 +1691,55 @@ export const handleAIRequest = async (req, res) => {
             : "Зургийн шинжилгээ AI provider шаардлагатай. Сэлбэгийн нэрийг бичээд хайна уу.",
         });
       }
-      const raw = await runScopedProductSearch({ query: lastUserText, limit: 5 }, scope);
+
+      // 1. Try the symptom engine first — same "diagnose before search"
+      //    rule the LLM-based path follows. Returns the SAME diagnostic
+      //    envelope so the frontend renderer is identical.
+      if (isSymptomShaped(lastUserText)) {
+        const dx = diagnoseSymptom(lastUserText);
+        if (dx) {
+          await cleanupUploadedAsset(req);
+          return res.json(buildEnvelope({
+            replyText: locale === "en"
+              ? `Possible causes for "${lastUserText}". Pick one to continue.`
+              : `"${lastUserText}" — боломжит шалтгаанууд. Аль нь таны нөхцөлд тааруулж байна?`,
+            toolCalls: [{ name: "diagnose_symptom", result: dx }],
+            role,
+            confidence: 70,                 // regex match — medium confidence
+            diagnostics: { route: "fallback", model: "diagnostic-rules" },
+          }));
+        }
+      }
+
+      // 2. Run the keyword search on the TRANSLITERATION-EXPANDED query
+      //    so "toormos" / "naklad" / "amortizator" land matches in the
+      //    Cyrillic catalogue.
+      const expandedQuery = translitResult.hasHits
+        ? translitResult.expandedQuery
+        : lastUserText;
+      const raw = await runScopedProductSearch({ query: expandedQuery, limit: 5 }, scope);
       const items = sanitizeProducts(raw, scope);
       await cleanupUploadedAsset(req);
+
+      // 3. Compose a reply that actually GUIDES the user. Empty results
+      //    suggest the next step (try OEM / paste plate / try synonym)
+      //    instead of a dead "no results".
+      const noHitsCopy = locale === "en"
+        ? `No matches for "${lastUserText}". Try the OEM code, your license plate, or a synonym (e.g. "brake pad", "shock absorber").`
+        : `"${lastUserText}" — олдсонгүй. OEM код, машины дугаар, эсвэл өөр нэр (жнь "наклад", "амортизатор") туршаад үзнэ үү.`;
+      const hitsCopy = locale === "en"
+        ? `Found ${items.length} parts. Tap one to see details, or refine with your car's make/model.`
+        : `${items.length} сэлбэг олдлоо. Дэлгэрэнгүйг харахын тулд дарна уу.`;
+
       return res.json(buildEnvelope({
-        replyText: items.length === 0
-          ? (locale === "en" ? "No results — try a different keyword." : "Олдсонгүй. Өөр түлхүүр үг туршаад үзнэ үү.")
-          : (locale === "en" ? `${items.length} parts found.` : `${items.length} сэлбэг олдлоо.`),
-        toolCalls: [{ name: "search_products", result: { items, count: items.length } }],
+        replyText: items.length === 0 ? noHitsCopy : hitsCopy,
+        toolCalls: [{ name: "search_products", result: { items, count: items.length, query: expandedQuery } }],
         role,
-        diagnostics: { route: "fallback", model: "keyword-search" },
+        confidence: items.length > 0 ? 75 : 40,
+        diagnostics: {
+          route: "fallback", model: "keyword-search",
+          translitApplied: translitResult.hasHits,
+        },
       }));
     }
 
@@ -1262,10 +1765,6 @@ export const handleAIRequest = async (req, res) => {
         });
       }
     }
-
-    // ── Latin-Mongolian transliteration hint (pre-LLM) ────────────
-    const translitResult = transliterate(lastUserText);
-    const transliterationHint = formatHint(translitResult, locale);
 
     // ── Phase G: load cross-session memory + plate-detect nudge ───
     // Memory load is unconditional for logged-in users; anon users get
@@ -1324,16 +1823,131 @@ export const handleAIRequest = async (req, res) => {
     // so the LLM has cross-session context without us paying for full
     // conversation history.
     const memoryHint = aiMemory.summarizeMemoryForPrompt(memory, locale);
-    const enrichedTranslitHint = [transliterationHint, memoryHint, plateNudge, vehicleNudge, symptomNudge]
-      .filter(Boolean).join("\n\n");
+
+    // Phase AM: maintenance insights. Per-make + per-model + search-
+    // triggered hints that the LLM weaves into its reply as a single
+    // natural-sounding aside ("...by the way, Toyota Prius owners
+    // typically check the hybrid inverter coolant by 80K"). Only fires
+    // when there's something meaningful to say — empty string most
+    // turns so prompt budget stays unchanged for cold-start chats.
+    const maintenanceHints = getMaintenanceHints({
+      vehicleContext: effectiveVehicleContext,
+      memory,
+      lastUserText,
+    });
+    const maintenanceBlock = formatMaintenanceHints(maintenanceHints);
+
+    const enrichedTranslitHint = [
+      transliterationHint, memoryHint, plateNudge, vehicleNudge, symptomNudge, maintenanceBlock,
+    ].filter(Boolean).join("\n\n");
 
     // ── Run the bounded conversation ──────────────────────────────
     const runtime = {
       user: req.user, role, scope, locale, memory,
       vehicleContext: effectiveVehicleContext,
     };
-    const { reply, toolCalls, usage, totalTokens, terminate, reflection } =
-      await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint });
+
+    // Phase AB+AJ: catch tool-loop / LLM crashes and degrade to keyword
+    // search instead of returning AI_INTERNAL_ERROR. The buyer should
+    // never see a dead "internal error" when there's a perfectly
+    // working catalogue lookup we could have served.
+    //
+    // Phase AJ refinement: 413 (payload too large) and 429 (sustained
+    // rate-limit AFTER all chain fallbacks exhausted) ALSO degrade — the
+    // user can't recover from those by retrying, and showing them
+    // product results is strictly better than "Хүсэлт хэт том" or
+    // "Rate limited". The OLD behaviour passed those through to the
+    // outer catch which surfaced an unhelpful error.
+    //
+    // 401 (auth fail) still re-throws because that's an ops problem
+    // (bad API key) — falling back to keyword search would mask it from
+    // the ops dashboard.
+    let reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts;
+    try {
+      ({ reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts } =
+        await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint }));
+    } catch (llmErr) {
+      const upstreamStatus = Number(llmErr?.status || llmErr?.response?.status || 0);
+      // 401/403 — bona-fide auth failure. Let ops see the alert.
+      if (upstreamStatus === 401 || upstreamStatus === 403) throw llmErr;
+
+      // Anything else (a tool crash, a JSON.stringify circular, smartSearch
+      // rejecting, …) is a code bug — log it loud with the request id and
+      // serve the user a keyword-search result so the chat thread isn't dead.
+      console.error(
+        `[ai.controller][${requestId}] runConversation crashed — degrading to keyword search.`,
+        `\n  user=${req.user?._id || "anon"} role=${role} locale=${locale}`,
+        `\n  lastUserText="${lastUserText.slice(0, 120)}"`,
+        `\n  vehicle=${effectiveVehicleContext ? `${effectiveVehicleContext.manufacturer} ${effectiveVehicleContext.model}` : "(none)"}`,
+        `\n  err.name=${llmErr?.name} err.message=${llmErr?.message}`,
+        `\n  stack:\n${llmErr?.stack || "(no stack)"}`,
+      );
+
+      const expandedQuery = translitResult.hasHits
+        ? translitResult.expandedQuery
+        : lastUserText;
+      // Phase AK: even on the degraded LLM-down path we apply price
+      // intent + ranking so "хямд тоормос" still sorts cheapest-first.
+      const degradedIntent = parsePriceIntent(lastUserText);
+      const raw = await runScopedProductSearch({
+        query: expandedQuery, limit: 5, intent: degradedIntent,
+      }, scope).catch((searchErr) => {
+        console.error(`[ai.controller][${requestId}] keyword fallback ALSO failed:`, searchErr.message);
+        return [];
+      });
+      const ranked = rankProducts(raw, {
+        query: expandedQuery,
+        vehicleContext: effectiveVehicleContext,
+        intent: degradedIntent,
+      });
+      const items = sanitizeProducts(ranked.slice(0, 5), scope);
+      // Phase AL: bundle suggestions still ship even when the LLM is
+      // down — the keyword search + related-categories map are both
+      // deterministic. Adds ~1 extra Mongo round-trip.
+      const relatedRaw = ranked[0]
+        ? await findRelatedProducts(ranked[0], scope, 3).catch(() => [])
+        : [];
+      const related = sanitizeProducts(relatedRaw, scope);
+      await cleanupUploadedAsset(req);
+
+      // Phase AJ+: word-friendly degraded copy. Only mention "AI" + ref
+      // code in the EMPTY case so a debugger can grep logs; the populated
+      // case leads with the catalogue result (which is what the user
+      // actually wanted). The "(код)" parenthetical is intentionally
+      // small / subtle so it doesn't dominate the bubble.
+      const degradedReply = items.length === 0
+        ? (locale === "en"
+            ? `Couldn't find "${lastUserText}" in the catalogue right now. Try the OEM code, license plate, or a synonym (e.g. "brake pad"). (ref ${requestId})`
+            : `"${lastUserText}" — каталогаас одоохондоо олдсонгүй. OEM код, машины дугаар, эсвэл өөр нэр (жнь "наклад", "амортизатор") туршаад үзнэ үү. (код ${requestId})`)
+        : (locale === "en"
+            ? `Found ${items.length} parts matching "${lastUserText}". Tap one to see details.`
+            : `"${lastUserText}" — ${items.length} тааруу олдлоо. Дэлгэрэнгүйг харахын тулд нэгэн дээр дарна уу.`);
+
+      return res.json(buildEnvelope({
+        replyText: degradedReply,
+        // Phase AL: pass `related` through the same tool-call envelope
+        // that the LLM-driven path uses, so the frontend renders the
+        // "Хамт ихэвчлэн авдаг" strip identically in both modes.
+        toolCalls: [{
+          name: "search_products",
+          result: { items, related, count: items.length, query: expandedQuery },
+        }],
+        role,
+        // Phase AJ+: don't surface a confidence chip on the degraded
+        // path. The keyword search is deterministic — the "AI is unsure"
+        // ConfidenceBadge would mislead the user into thinking the model
+        // ran and was uncertain. `null` tells the frontend renderer to
+        // skip the badge entirely (Phase H code path).
+        confidence: null,
+        diagnostics: {
+          route: "degraded-fallback",
+          model: "keyword-search",
+          requestId,
+          llmErrName:    llmErr?.name || null,
+          llmErrMessage: (llmErr?.message || "").slice(0, 200),
+        },
+      }));
+    }
 
     // ── Memory write-back: pick up signals from tool calls ────────
     // search_products → push to recentSearches
@@ -1381,6 +1995,11 @@ export const handleAIRequest = async (req, res) => {
         route: profile === aiConfig.vision ? "vision" : "text",
         model: profile.model,
         provider: profile.label,
+        // Phase M.1: provider that actually answered (may differ from
+        // `provider` when we fell back), and the per-attempt breakdown
+        // for ops dashboards.
+        usedProvider,
+        fallbackAttempts,
         totalTokens,
         usage,
         terminateReason: terminate.reason,
@@ -1403,12 +2022,22 @@ export const handleAIRequest = async (req, res) => {
     if (mapped) {
       const headers = mapped.status === 429 && mapped.body.retryAfter
         ? { "Retry-After": String(mapped.body.retryAfter) } : {};
-      return respondWithError(req, res, mapped.status, mapped.body, headers);
+      // Phase AB: attach requestId so a rate-limit / payload-too-large
+      // is traceable end-to-end.
+      return respondWithError(req, res, mapped.status, { ...mapped.body, requestId }, headers);
     }
-    console.error("[ai.controller] unhandled:", err.stack || err.message);
+    // Truly unhandled — everything that ISN'T a runConversation crash
+    // (those are caught above and degraded). Log full context.
+    console.error(
+      `[ai.controller][${requestId}] unhandled exception in handleAIRequest:`,
+      `\n  err.name=${err?.name} err.code=${err?.code} err.status=${err?.status}`,
+      `\n  err.message=${err?.message}`,
+      `\n  stack:\n${err?.stack || "(no stack)"}`,
+    );
     return respondWithError(req, res, 500, {
       code: "AI_INTERNAL_ERROR",
       message: "Unexpected error while processing AI request.",
+      requestId,
     });
   }
 };
@@ -1504,8 +2133,14 @@ export const handleSetActiveVehicle = async (req, res) => {
     return res.json({
       vehicle: {
         ...payload,
-        engineCode: vehicle.snapshot?.motorcode || "",
-        engineType: vehicle.snapshot?.motortype || "",
+        // Phase AE: surface motorcode + displacement + carname so
+        // /garage save-recent can pre-fill engine field with the
+        // proper engine model code ("2GR-FSE") instead of treating
+        // engineType as engine name.
+        engineCode:   vehicle.snapshot?.motorcode || "",
+        engineType:   vehicle.snapshot?.motortype || "",
+        displacement: vehicle.snapshot?.displacement || "",
+        carname:      vehicle.snapshot?.carname || "",
       },
       memory,
     });

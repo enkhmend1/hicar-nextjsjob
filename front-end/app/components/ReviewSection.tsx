@@ -35,7 +35,10 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
     }
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [productId, user]);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [productId, user]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,11 +110,11 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
             <span className="text-[12px] text-gray-500 ml-2">{myRating ? `${myRating}/5` : "Оноо сонгох"}</span>
           </div>
           <textarea value={myComment} onChange={e => setMyComment(e.target.value)} maxLength={1000}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white transition-colors resize-none h-20 font-sans"
+            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white transition-colors resize-none h-20 font-sans"
             placeholder="Сэлбэгийн чанар, хүргэлт, тохирол... (заавал биш)" />
           <div className="flex gap-2 mt-3">
             <button type="submit" disabled={busy || !myRating}
-              className="bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg px-4 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg px-4 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
               {busy ? "..." : myReview ? "Шинэчлэх" : "Илгээх"}
             </button>
             {myReview && (
@@ -124,13 +127,30 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
         </form>
       ) : (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-[13px] text-gray-500 mb-4 text-center">
-          Сэтгэгдэл бичихийн тулд <a href="/auth/login" className="text-violet-600 font-semibold underline">нэвтэрнэ</a> үү
+          Сэтгэгдэл бичихийн тулд <a href="/auth/login" className="text-blue-600 font-semibold underline">нэвтэрнэ</a> үү
         </div>
       )}
 
       {/* All reviews */}
       {loading ? (
-        <div className="text-center py-6 text-gray-400 text-[13px]">Уншиж байна...</div>
+        <div className="space-y-2" aria-busy="true" aria-label="Уншиж байна">
+          {[1, 2, 3].map(n => (
+            <div key={n} className="bg-white border border-gray-200 rounded-xl p-3 animate-pulse">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-full bg-gray-200" />
+                <div className="h-3 w-24 bg-gray-200 rounded" />
+                <div className="h-3 w-16 bg-gray-100 rounded ml-auto" />
+              </div>
+              <div className="flex gap-0.5 mb-2">
+                {[1,2,3,4,5].map(s => <div key={s} className="w-3 h-3 bg-gray-200 rounded" />)}
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-3 bg-gray-100 rounded w-full" />
+                <div className="h-3 bg-gray-100 rounded w-3/4" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : reviews.length === 0 ? (
         <div className="text-center py-6 text-gray-400 text-[13px]">Хараахан сэтгэгдэл алга</div>
       ) : (
@@ -140,7 +160,7 @@ export default function ReviewSection({ productId, rating, ratingCount }: {
             return (
               <div key={r._id} className="bg-white border border-gray-200 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-7 h-7 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[11px] font-bold">
+                  <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[11px] font-bold">
                     {(reviewer?.name ?? "?")[0]?.toUpperCase()}
                   </div>
                   <span className="text-[13px] font-medium text-gray-900">{reviewer?.name ?? "Anonymous"}</span>

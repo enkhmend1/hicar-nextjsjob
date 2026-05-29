@@ -65,20 +65,20 @@ export default function DateRangePicker({
           <button key={p.id} type="button" onClick={() => pickPreset(p.id)}
             className={`px-2.5 py-1 text-[12px] font-medium rounded-md cursor-pointer border-none transition-colors font-sans ${
               activePreset === p.id
-                ? "bg-violet-600 text-white"
-                : "bg-transparent text-gray-600 hover:text-violet-700"
+                ? "bg-blue-600 text-white"
+                : "bg-transparent text-gray-600 hover:text-blue-700"
             }`}>
             {p.label}
           </button>
         ))}
       </div>
       <div className="flex items-center gap-1.5 text-[12px] text-gray-500">
-        <Calendar size={13} className={isCustom ? "text-violet-500" : ""} />
+        <Calendar size={13} className={isCustom ? "text-blue-500" : ""} />
         <input type="date" value={value.from || ""} onChange={(e) => onCustom("from", e.target.value)}
-          className="bg-white border border-gray-200 rounded-md px-2 py-1 text-[12px] focus:border-violet-500 outline-none font-sans" />
+          className="bg-white border border-gray-200 rounded-md px-2 py-1 text-[12px] focus:border-blue-500 outline-none font-sans" />
         <span className="text-gray-400">→</span>
         <input type="date" value={value.to || ""} onChange={(e) => onCustom("to", e.target.value)}
-          className="bg-white border border-gray-200 rounded-md px-2 py-1 text-[12px] focus:border-violet-500 outline-none font-sans" />
+          className="bg-white border border-gray-200 rounded-md px-2 py-1 text-[12px] focus:border-blue-500 outline-none font-sans" />
       </div>
     </div>
   );

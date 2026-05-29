@@ -3,6 +3,7 @@ import { cacheGet, cacheSet, cacheInvalidate } from "../Config/redis.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
+import { requiresReapproval } from "../Service/productPolicy.service.js";
 import { rememberInputs } from "./seller.controller.js";
 import {
   validateProductCreate,
@@ -35,7 +36,15 @@ const SORT_MAP = {
 };
 
 const buildFilter = (query) => {
-  const { q, category, source, seller } = query;
+  // Phase T: extended filter set for the senior shop sidebar.
+  //   category/source/seller/q  — existing
+  //   priceMin/priceMax         — inclusive Mongo range, numeric coerced
+  //   brand                     — exact match (case-insensitive)
+  //   inStock=true              — drop sold-out products
+  //   minRating=4               — drop products rated < threshold
+  // All filters are best-effort: malformed values silently skip rather
+  // than 400-ing, so a fat-fingered URL param doesn't break browsing.
+  const { q, category, source, seller, priceMin, priceMax, brand, inStock, minRating } = query;
   const f = {};
   if (category && category !== "all") f.category = category;
   if (source && source !== "all") f.source = source;
@@ -44,6 +53,55 @@ const buildFilter = (query) => {
     const rx = new RegExp(q, "i");
     f.$or = [{ name: rx }, { oem: rx }, { brand: rx }];
   }
+
+  const min = Number(priceMin);
+  const max = Number(priceMax);
+  if (Number.isFinite(min) || Number.isFinite(max)) {
+    f.price = {};
+    if (Number.isFinite(min)) f.price.$gte = min;
+    if (Number.isFinite(max)) f.price.$lte = max;
+  }
+
+  if (brand && String(brand).trim()) {
+    // Exact brand match, case-insensitive. Sellers occasionally vary
+    // casing ("Toyota" vs "toyota") so anchor the regex.
+    f.brand = new RegExp(`^${String(brand).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  }
+
+  if (String(inStock).toLowerCase() === "true") {
+    f.inStock = true;
+  }
+
+  const ratingFloor = Number(minRating);
+  if (Number.isFinite(ratingFloor) && ratingFloor > 0) {
+    f.rating = { $gte: ratingFloor };
+  }
+
+  // Phase X.1: exclude one or more product ids from the result.
+  // Used by the product-detail "More from this seller" + "Related
+  // products" sections so the current product itself doesn't appear
+  // in its own related list. Accepts:
+  //   excludeId=<id>           — single id
+  //   excludeId=<id>,<id>      — comma-separated CSV
+  // Ignored when the values aren't valid ObjectIds (avoids 500s on
+  // malformed URLs; just no-op filters the bad ones out).
+  const { excludeId } = query;
+  if (excludeId) {
+    const raw = Array.isArray(excludeId) ? excludeId.join(",") : String(excludeId);
+    const ids = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    if (ids.length > 0) {
+      // ObjectId() throws on malformed input — wrap each so a single
+      // bad id doesn't poison the whole array.
+      const valid = [];
+      for (const id of ids) {
+        if (/^[a-f0-9]{24}$/i.test(id)) valid.push(id);
+      }
+      if (valid.length > 0) {
+        f._id = { $nin: valid };
+      }
+    }
+  }
+
   return f;
 };
 
@@ -112,7 +170,11 @@ export const listAllProducts = async (req, res) => {
 export const getProduct = async (req, res) => {
   try {
     const item = await Product.findById(req.params.id)
-      .populate("seller", "name sellerProfile.shopName sellerProfile.rating sellerProfile.ratingCount");
+      // Phase R.1: include sellerProfile.logo so the cart + product
+      // detail can render the seller avatar without a second round-trip.
+      // Phase AU: include sellerProfile.deliveryOptions so the detail
+      // page shows the seller's OWN delivery durations (hours/days).
+      .populate("seller", "name sellerProfile.shopName sellerProfile.logo sellerProfile.rating sellerProfile.ratingCount sellerProfile.deliveryOptions");
     if (!item) return res.status(404).json({ message: "Бараа олдсонгүй" });
     // Hide unapproved products from non-owner non-admin
     if (item.status !== "approved") {
@@ -233,7 +295,12 @@ export const updateProduct = async (req, res) => {
       if (status !== undefined) update.status = status;
       if (rejectedReason !== undefined) update.rejectedReason = rejectedReason;
       if (seller !== undefined) update.seller = seller;
-    } else if (existing.status === "approved") {
+    } else if (existing.status === "approved" && requiresReapproval(existing, update)) {
+      // Phase O: re-approval scoped to RISKY field changes only.
+      // See Service/productPolicy.service.js for the risky/safe split.
+      // Image uploads, stock bumps, description tweaks all keep
+      // status="approved" so the listing doesn't yo-yo through
+      // the admin queue every time the seller polishes their page.
       update.status = "pending";
     }
 

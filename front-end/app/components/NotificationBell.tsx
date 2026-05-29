@@ -31,10 +31,10 @@ const ICON: Record<string, typeof Bell> = {
 };
 
 const COLOR: Record<string, string> = {
-  order_placed: "text-violet-500 bg-violet-50",
+  order_placed: "text-blue-500 bg-blue-50",
   order_status_changed: "text-blue-500 bg-blue-50",
   payment_received: "text-emerald-500 bg-emerald-50",
-  seller_application: "text-fuchsia-500 bg-fuchsia-50",
+  seller_application: "text-amber-500 bg-amber-50",
   seller_approved: "text-emerald-500 bg-emerald-50",
   seller_rejected: "text-red-500 bg-red-50",
   product_pending: "text-amber-500 bg-amber-50",
@@ -60,12 +60,19 @@ export default function NotificationBell() {
     } catch { /* ignore */ }
   };
 
-  // Poll every 30s when user is logged in
+  // Poll every 30s when user is logged in.
   useEffect(() => {
-    if (!user) { setItems([]); setUnread(0); return; }
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setItems([]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUnread(0);
+      return;
+    }
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Click outside to close
@@ -97,7 +104,7 @@ export default function NotificationBell() {
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen(o => !o)}
-        className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-violet-600 hover:bg-violet-50 transition-colors cursor-pointer bg-transparent border-none"
+        className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer bg-transparent border-none"
         title="Notifications">
         <Bell size={18} />
         {unread > 0 && (
@@ -116,7 +123,7 @@ export default function NotificationBell() {
             </div>
             {unread > 0 && (
               <button onClick={markAll}
-                className="flex items-center gap-1 text-[11px] text-violet-600 hover:text-violet-700 cursor-pointer bg-transparent border-none font-medium">
+                className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer bg-transparent border-none font-medium">
                 <Check size={11} /> Бүгдийг уншсан
               </button>
             )}
@@ -142,7 +149,7 @@ export default function NotificationBell() {
                       <div className="text-[12px] text-gray-500 line-clamp-2">{n.body}</div>
                       <div className="text-[10px] text-gray-400 mt-0.5">{new Date(n.createdAt).toLocaleString("mn-MN")}</div>
                     </div>
-                    {!n.read && <span className="w-2 h-2 bg-violet-500 rounded-full shrink-0 mt-1.5" />}
+                    {!n.read && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />}
                     <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(n._id); }}
                       className="w-5 h-5 flex items-center justify-center rounded text-gray-300 hover:text-red-500 cursor-pointer bg-transparent border-none shrink-0">
                       <X size={11} />
@@ -151,7 +158,7 @@ export default function NotificationBell() {
                 );
                 return n.link ? (
                   <Link key={n._id} href={n.link} onClick={() => { setOpen(false); if (!n.read) markRead(n._id); }}
-                    className="block border-b border-gray-100 last:border-0" style={{ textDecoration: "none", color: "inherit" }}>
+                    className="block border-b border-gray-100 last:border-0">
                     {Inner}
                   </Link>
                 ) : (

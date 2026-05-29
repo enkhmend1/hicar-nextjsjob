@@ -17,7 +17,11 @@ const userSchema = new mongoose.Schema(
     sellerProfile: {
       shopName: { type: String, trim: true, default: "" },
       description: { type: String, default: "" },
-      logo: { type: String, default: "" },        // Cloudinary URL
+      logo: { type: String, default: "" },        // Cloudinary URL (1:1 avatar)
+      // Phase Q.1: optional cover banner shown at the top of the
+      // public /store/[id] storefront. Recommended 16:5 aspect ratio
+      // (e.g. 1600×500). Falls back to a generated gradient when empty.
+      coverImage: { type: String, default: "" },
 
       // ── Platform economics (per-seller commission split) ──────────
       /** Percentage the platform keeps from every paid order (0–50). */
@@ -42,6 +46,52 @@ const userSchema = new mongoose.Schema(
       // Inventory alert preferences
       defaultLowStockThreshold: { type: Number, default: 5, min: 0, max: 1000 },
       emailAlertsEnabled: { type: Boolean, default: true },
+
+      // ── Per-seller delivery options (Phase AU/AV) ─────────────────
+      // Each shipping tier, defined by the SELLER themselves:
+      //   • DURATION (`value` + `unit`) — the ETA. `unit` lets a shop
+      //     express fast local delivery in HOURS ("2 цаг") and sea freight
+      //     in DAYS ("21 хоног") instead of a one-size-fits-all default.
+      //   • PRICE (`price`) — the fee added to the order for this tier,
+      //     in MNT. Phase AV made this seller-editable (was the platform
+      //     DELIVERY_PRICE constant).
+      //
+      // AUTHORITY NOTE: `price` is the input to the order total. The order
+      // endpoint NEVER trusts a client-supplied delivery price — it reads
+      // THIS field server-side at createOrder time (see order.controller.js),
+      // falling back to the platform DELIVERY_PRICE default if unset. The
+      // escrow split is computed from item price×qty only, so delivery
+      // price changes never touch the seller-payout math.
+      //
+      // `enabled:false` hides a tier the seller doesn't offer (e.g. a
+      // local-only shop turning off the slow sea-freight tier). It is a
+      // DISPLAY hint for the product page — the order endpoint still
+      // accepts any tier so legacy carts never hard-fail.
+      //
+      // `value` max is generous (999) so both 365-day and 720-hour
+      // ranges validate against the same path; the controller clamps to
+      // sane per-unit bounds before persisting. `price` max is a generous
+      // ₮10M ceiling — bounded to stop absurd/typo values.
+      deliveryOptions: {
+        fast: {
+          enabled: { type: Boolean, default: true },
+          value:   { type: Number, default: 7,  min: 0, max: 999 },
+          unit:    { type: String, enum: ["hour", "day"], default: "day" },
+          price:   { type: Number, default: 15000, min: 0, max: 10000000 },
+        },
+        normal: {
+          enabled: { type: Boolean, default: true },
+          value:   { type: Number, default: 14, min: 0, max: 999 },
+          unit:    { type: String, enum: ["hour", "day"], default: "day" },
+          price:   { type: Number, default: 8000, min: 0, max: 10000000 },
+        },
+        cheap: {
+          enabled: { type: Boolean, default: true },
+          value:   { type: Number, default: 21, min: 0, max: 999 },
+          unit:    { type: String, enum: ["hour", "day"], default: "day" },
+          price:   { type: Number, default: 0, min: 0, max: 10000000 },
+        },
+      },
 
       // Free-text history (autocomplete from seller's own past inputs)
       customSources:    { type: [String], default: [] },

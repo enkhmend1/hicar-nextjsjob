@@ -121,7 +121,9 @@ export default function AdminSiteContentPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { reload(); }, []);
+  // queueMicrotask defers reload()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(reload); }, []);
 
   // ── Mutators ──────────────────────────────────────────────────────
   const updateCategory = (idx: number, patch: Partial<SiteCategory>) => {
@@ -269,7 +271,7 @@ export default function AdminSiteContentPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-[22px] font-semibold text-gray-900 inline-flex items-center gap-2">
-            <LayoutTemplate size={20} className="text-violet-600" />
+            <LayoutTemplate size={20} className="text-blue-600" />
             Сайтын контент
           </h1>
           <p className="text-[13px] text-gray-500 mt-0.5">
@@ -283,7 +285,7 @@ export default function AdminSiteContentPage() {
             </span>
           )}
           <button onClick={save} disabled={saving || !validation.ok}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans shadow-sm shadow-violet-200">
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans shadow-sm shadow-blue-200">
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
             {saving ? "Хадгалж байна..." : "Хадгалах"}
           </button>
@@ -321,7 +323,7 @@ export default function AdminSiteContentPage() {
             Категори жагсаалт <span className="text-[11px] text-gray-400 font-normal">({content.categories.length})</span>
           </h2>
           <button type="button" onClick={addCategory}
-            className="inline-flex items-center gap-1 text-[12px] text-violet-700 hover:text-violet-800 bg-transparent border-none cursor-pointer font-semibold">
+            className="inline-flex items-center gap-1 text-[12px] text-blue-700 hover:text-blue-800 bg-transparent border-none cursor-pointer font-semibold">
             <Plus size={12} /> Категори нэмэх
           </button>
         </div>
@@ -333,31 +335,31 @@ export default function AdminSiteContentPage() {
               {/* Reorder */}
               <div className="flex flex-col items-center justify-center gap-px">
                 <button type="button" onClick={() => moveCategory(idx, -1)} disabled={idx === 0}
-                  className="w-5 h-4 flex items-center justify-center text-gray-400 hover:text-violet-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none transition-colors">
+                  className="w-5 h-4 flex items-center justify-center text-gray-400 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none transition-colors">
                   <ArrowUp size={12} />
                 </button>
                 <button type="button" onClick={() => moveCategory(idx, 1)} disabled={idx === content.categories.length - 1}
-                  className="w-5 h-4 flex items-center justify-center text-gray-400 hover:text-violet-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none transition-colors">
+                  className="w-5 h-4 flex items-center justify-center text-gray-400 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none transition-colors">
                   <ArrowDown size={12} />
                 </button>
               </div>
 
               <input value={cat.id}
                 onChange={(e) => updateCategory(idx, { id: e.target.value.toLowerCase() })}
-                placeholder="id (brake)" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] font-mono focus:bg-white focus:border-violet-500 outline-none transition-colors" />
+                placeholder="id (brake)" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors" />
 
               <input value={cat.name}
                 onChange={(e) => updateCategory(idx, { name: e.target.value })}
-                placeholder="Дэлгэцэн нэр" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:bg-white focus:border-violet-500 outline-none transition-colors" />
+                placeholder="Дэлгэцэн нэр" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors" />
 
               <input value={cat.iconPath}
                 onChange={(e) => updateCategory(idx, { iconPath: e.target.value })}
-                placeholder="SVG path d…" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[11px] font-mono focus:bg-white focus:border-violet-500 outline-none transition-colors truncate" />
+                placeholder="SVG path d…" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[11px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors truncate" />
 
               {/* Icon preview */}
-              <div className="flex items-center justify-center bg-violet-50 rounded-lg h-9">
+              <div className="flex items-center justify-center bg-blue-50 rounded-lg h-9">
                 {cat.iconPath ? (
-                  <svg className="w-4 h-4 fill-violet-600" viewBox="0 0 24 24"><path d={cat.iconPath} /></svg>
+                  <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={cat.iconPath} /></svg>
                 ) : <span className="text-[10px] text-gray-400">—</span>}
               </div>
 
@@ -381,8 +383,8 @@ export default function AdminSiteContentPage() {
               <button type="button" onClick={() => toggleExpanded(idx)}
                 className={`inline-flex items-center justify-center h-9 rounded-lg text-[11px] cursor-pointer border transition-colors font-sans gap-1 ${
                   expanded.has(idx)
-                    ? "bg-violet-50 text-violet-700 border-violet-200"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-violet-300"
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
                 }`}
                 title="Шинж чанар тохируулах">
                 <Sliders size={11} />
@@ -428,13 +430,13 @@ export default function AdminSiteContentPage() {
                   value={String(content.hero[f.key] || "")}
                   onChange={(e) => updateHero(f.key, e.target.value)}
                   rows={3} placeholder={f.placeholder}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[12px] focus:bg-white focus:border-violet-500 outline-none transition-colors font-sans resize-none" />
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors font-sans resize-none" />
               ) : (
                 <input
                   value={String(content.hero[f.key] || "")}
                   onChange={(e) => updateHero(f.key, e.target.value)}
                   placeholder={f.placeholder}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[12px] focus:bg-white focus:border-violet-500 outline-none transition-colors font-sans" />
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors font-sans" />
               )}
             </div>
           ))}
@@ -466,18 +468,18 @@ function AttributeSchemaEditor({
     <div className="mt-2 border-t border-gray-100 pt-3 pl-9 pr-1 pb-1">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-[12px] font-semibold text-gray-700 inline-flex items-center gap-1.5">
-          <Sliders size={11} className="text-violet-600" />
+          <Sliders size={11} className="text-blue-600" />
           Шинж чанар <span className="text-[10px] font-normal text-gray-400">({attrs.length})</span>
         </h4>
         <button type="button" onClick={onAddAttribute}
-          className="inline-flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-800 bg-transparent border-none cursor-pointer font-semibold">
+          className="inline-flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-800 bg-transparent border-none cursor-pointer font-semibold">
           <Plus size={11} /> Шинж чанар нэмэх
         </button>
       </div>
 
       {attrs.length === 0 && (
         <div className="text-[11px] text-gray-400 bg-white border border-dashed border-gray-200 rounded-lg px-3 py-3 text-center">
-          Энэ категорид нэмэлт талбар алга. Шинэ шинж чанар нэмбэл seller-ийн "Шинэ бараа" форм автоматаар харуулна.
+          Энэ категорид нэмэлт талбар алга. Шинэ шинж чанар нэмбэл seller-ийн &ldquo;Шинэ бараа&rdquo; форм автоматаар харуулна.
         </div>
       )}
 
@@ -488,12 +490,12 @@ function AttributeSchemaEditor({
               <input value={attr.key}
                 onChange={(e) => onUpdateAttribute(attrIdx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
                 placeholder="key (wheelSize)" maxLength={40}
-                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] font-mono focus:border-violet-500 outline-none" />
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] font-mono focus:border-blue-500 outline-none" />
 
               <input value={attr.label}
                 onChange={(e) => onUpdateAttribute(attrIdx, { label: e.target.value })}
                 placeholder="Display label" maxLength={100}
-                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] focus:border-violet-500 outline-none" />
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] focus:border-blue-500 outline-none" />
 
               <select value={attr.type}
                 onChange={(e) => onUpdateAttribute(attrIdx, {
@@ -501,7 +503,7 @@ function AttributeSchemaEditor({
                   // Selecting a non-select type wipes obsolete options.
                   options: e.target.value === "select" ? attr.options : [],
                 })}
-                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] focus:border-violet-500 outline-none">
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] focus:border-blue-500 outline-none">
                 {(["text","number","select"] as const).map((t) => (
                   <option key={t} value={t}>{ATTR_TYPE_LABELS[t]}</option>
                 ))}
@@ -519,7 +521,7 @@ function AttributeSchemaEditor({
                 })}
                 disabled={attr.type !== "select"}
                 placeholder={attr.type === "select" ? "Option1, Option2, ..." : "(зөвхөн select-д)"}
-                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] focus:border-violet-500 outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" />
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] focus:border-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" />
 
               <button type="button" onClick={() => onUpdateAttribute(attrIdx, { required: !attr.required })}
                 className={`inline-flex items-center justify-center h-7 rounded-lg text-[10px] font-semibold cursor-pointer border transition-colors ${

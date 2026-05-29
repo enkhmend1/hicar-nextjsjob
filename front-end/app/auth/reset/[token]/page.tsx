@@ -91,24 +91,24 @@ export default function ResetPasswordPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 to-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center px-4">
       <div className="w-full max-w-[380px]">
         <Link href="/auth/login"
-          className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-violet-600 mb-6 transition-colors"
-          style={{ textDecoration: "none" }}>
+          className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-6 transition-colors"
+         >
           <ArrowLeft size={14} /> Нэвтрэх
         </Link>
 
         <div className="text-center mb-6">
           <span className="text-[26px] font-semibold">
-            <em className="text-violet-600 not-italic">Hi</em>car
+            <em className="text-blue-600 not-italic">Hi</em>car
           </span>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xl shadow-gray-100">
           {status === "checking" && (
             <div className="text-center py-6">
-              <Loader2 className="inline animate-spin text-violet-500" size={20} />
+              <Loader2 className="inline animate-spin text-blue-500" size={20} />
               <p className="text-[13px] text-gray-500 mt-3">Token шалгаж байна...</p>
             </div>
           )}
@@ -117,7 +117,7 @@ export default function ResetPasswordPage({
 
           {status === "valid" && !done && (
             <>
-              <div className="w-11 h-11 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mb-3">
+              <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-3">
                 <KeyRound size={20} />
               </div>
               <h1 className="text-[20px] font-semibold text-gray-900 mb-1">Шинэ нууц үг</h1>
@@ -141,7 +141,7 @@ export default function ResetPasswordPage({
                 </div>
 
                 <button type="submit" disabled={busy || !pw || !pw2}
-                  className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans flex items-center justify-center gap-2">
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl py-3 text-[14px] font-semibold cursor-pointer border-none transition-colors font-sans flex items-center justify-center gap-2">
                   {busy && <Loader2 size={14} className="animate-spin" />}
                   {busy ? "Шинэчилж байна..." : "Нууц үг шинэчлэх"}
                 </button>
@@ -177,7 +177,7 @@ function PasswordField({
           onChange={(e) => onChange(e.target.value)}
           autoFocus={autoFocus}
           required
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-violet-500 focus:bg-white outline-none transition-colors pr-11"
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white outline-none transition-colors pr-11"
           placeholder="••••••••"
         />
         {onToggleShow && (
@@ -216,8 +216,8 @@ function InvalidTokenPanel({ code }: { code: string }) {
       <h1 className="text-[18px] font-semibold text-gray-900 mb-1.5">{copy.title}</h1>
       <p className="text-[13px] text-gray-500 leading-relaxed">{copy.body}</p>
       <Link href="/auth/forgot"
-        className="inline-block mt-5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-colors"
-        style={{ textDecoration: "none" }}>
+        className="inline-block mt-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-colors"
+       >
         Шинэ линк авах
       </Link>
     </div>
@@ -235,7 +235,7 @@ function DonePanel({ onLogin }: { onLogin: () => void }) {
         Таны нууц үг амжилттай шинэчлэгдлээ. Шинэ нууц үгээрээ нэвтэрнэ үү.
       </p>
       <button onClick={onLogin}
-        className="mt-5 w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+        className="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
         Нэвтрэх
       </button>
     </div>

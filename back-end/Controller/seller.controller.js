@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import User from "../Model/user.model.js";
 import Product from "../Model/product.model.js";
 import Order from "../Model/order.model.js";
@@ -6,6 +7,100 @@ import { getSellerAnalytics, parseRange } from "../Service/analytics.service.js"
 import { FORMATS } from "../Service/export.service.js";
 
 const HISTORY_LIMIT = 50;
+
+/**
+ * Public seller storefront — Phase P.1.
+ *
+ * GET /api/seller/store/:id  (no auth required)
+ *
+ * Returns a sanitized "shop page" payload buyers can render. Strict
+ * allow-list of fields — NEVER include email, phone, bank account,
+ * platform commission, or any other operational data. Only the
+ * customer-facing identity + reputation + product list.
+ *
+ * Why a dedicated endpoint (not just a user-detail call):
+ *   • Sanitization happens server-side — frontend can't accidentally
+ *     leak privileged fields by mis-rendering a fuller payload.
+ *   • Joins the approved-products list in one round-trip so the
+ *     storefront page renders in a single fetch.
+ *   • Adds derived stats (totalProducts, categoryBreakdown) the User
+ *     doc doesn't store directly — keeps the frontend dumb.
+ *
+ * 404 when:
+ *   • id isn't a valid ObjectId
+ *   • user doesn't exist OR isn't an approved seller (anti-enumeration)
+ */
+export const publicStorefront = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(404).json({ message: "Дэлгүүр олдсонгүй" });
+  }
+
+  // Only fetch the fields we'll surface — explicit projection so a
+  // future schema addition can't accidentally leak.
+  const seller = await User.findOne({
+    _id: id,
+    role: { $in: ["seller", "admin"] },
+    sellerStatus: "approved",
+  }).select(
+    "name createdAt " +
+    "sellerProfile.shopName sellerProfile.description " +
+    "sellerProfile.logo sellerProfile.coverImage " +
+    "sellerProfile.trustScore sellerProfile.rating sellerProfile.ratingCount " +
+    "sellerProfile.totalSales sellerProfile.approvedAt"
+  ).lean();
+
+  if (!seller) {
+    // Anti-enumeration — same 404 whether the user doesn't exist OR
+    // exists-but-isn't-an-approved-seller. Don't leak which.
+    return res.status(404).json({ message: "Дэлгүүр олдсонгүй" });
+  }
+
+  // Approved products only. Include the same shape the catalogue
+  // ProductCard already consumes so the storefront can reuse it.
+  const products = await Product.find({
+    seller: id,
+    status: "approved",
+  })
+    .select("name oem price originalPrice images iconPath category brand " +
+            "source inStock stockQty rating ratingCount badge createdAt")
+    .sort({ createdAt: -1 })
+    .limit(200)            // bounded; future: paginate when sellers cross this
+    .lean();
+
+  // Derived stats — cheap to compute on the wire-down rather than
+  // teaching the frontend to aggregate.
+  const categoryBreakdown = {};
+  for (const p of products) {
+    const k = p.category || "other";
+    categoryBreakdown[k] = (categoryBreakdown[k] || 0) + 1;
+  }
+
+  return res.json({
+    shop: {
+      id: String(seller._id),
+      // Public display: prefer the shop name, fall back to the
+      // seller's personal name so an early-stage shop without a name
+      // still renders something humane.
+      shopName:     seller.sellerProfile?.shopName || seller.name || "Дэлгүүр",
+      description:  seller.sellerProfile?.description || "",
+      logo:         seller.sellerProfile?.logo || "",
+      coverImage:   seller.sellerProfile?.coverImage || "",
+      trustScore:   seller.sellerProfile?.trustScore ?? 50,
+      rating:       seller.sellerProfile?.rating ?? 0,
+      ratingCount:  seller.sellerProfile?.ratingCount ?? 0,
+      totalSales:   seller.sellerProfile?.totalSales ?? 0,
+      // joinedAt = whenever they were APPROVED as a seller, falling
+      // back to account creation if approvedAt isn't set (legacy data).
+      joinedAt:     seller.sellerProfile?.approvedAt || seller.createdAt,
+    },
+    products,
+    stats: {
+      totalProducts: products.length,
+      categoryBreakdown,
+    },
+  });
+};
 
 const mergeHistory = (existing, additions) => {
   const next = [...new Set([
@@ -56,12 +151,16 @@ export const updateProfile = async (req, res) => {
     if (!["seller", "admin"].includes(req.user.role)) {
       return res.status(403).json({ message: "Seller эрх шаардлагатай" });
     }
-    const { shopName, description, bankAccount, logo } = req.body;
+    const { shopName, description, bankAccount, logo, coverImage } = req.body;
     const sp = req.user.sellerProfile || {};
     if (shopName !== undefined) sp.shopName = shopName.trim();
     if (description !== undefined) sp.description = description;
     if (bankAccount !== undefined) sp.bankAccount = bankAccount;
     if (logo !== undefined) sp.logo = logo;
+    // Phase Q.1: cover banner for the public storefront. Empty string
+    // is a valid value (seller is removing their custom cover → fall
+    // back to the generated gradient on the public page).
+    if (coverImage !== undefined) sp.coverImage = coverImage;
     req.user.sellerProfile = sp;
     await req.user.save();
     return res.json({ user: req.user });
@@ -70,11 +169,57 @@ export const updateProfile = async (req, res) => {
   }
 };
 
-// ── Settings (inventory + notification preferences) ──────────────
+// ── Delivery option sanitiser (Phase AU/AV) ──────────────────────
+const DELIVERY_TIERS = ["fast", "normal", "cheap"];
+// Platform fallbacks — mirror order.controller's DELIVERY_PRICE for `price`.
+const DELIVERY_DEFAULTS = {
+  fast:   { enabled: true, value: 7,  unit: "day", price: 15000 },
+  normal: { enabled: true, value: 14, unit: "day", price: 8000 },
+  cheap:  { enabled: true, value: 21, unit: "day", price: 0 },
+};
+// ₮10M ceiling on a delivery fee — generous but blocks typo/overflow values.
+const MAX_DELIVERY_PRICE = 10_000_000;
+
+/**
+ * Validate + clamp a client-supplied deliveryOptions blob into the exact
+ * 3-tier shape the schema expects. Tolerant by design: a missing or
+ * malformed tier falls back to its platform default rather than 400-ing,
+ * so a partial payload can never wipe a seller's existing config into an
+ * invalid state. Returns null when the whole body is unusable.
+ */
+const sanitiseDeliveryOptions = (raw, existing = {}) => {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  let anyEnabled = false;
+  for (const tier of DELIVERY_TIERS) {
+    const base = existing[tier] || DELIVERY_DEFAULTS[tier];
+    const r = raw[tier] || {};
+    const unit = r.unit === "hour" ? "hour" : (r.unit === "day" ? "day" : base.unit || "day");
+    // Per-unit sane ceiling: 720h (30d) for hours, 365d for days.
+    const cap = unit === "hour" ? 720 : 365;
+    let value = Number(r.value);
+    if (!Number.isFinite(value)) value = base.value ?? DELIVERY_DEFAULTS[tier].value;
+    value = Math.max(0, Math.min(cap, Math.round(value)));
+    // Phase AV: seller-set delivery fee (MNT). Clamp 0..MAX, fall back to
+    // the seller's existing price, then the platform default.
+    let price = Number(r.price);
+    if (!Number.isFinite(price)) price = base.price ?? DELIVERY_DEFAULTS[tier].price;
+    price = Math.max(0, Math.min(MAX_DELIVERY_PRICE, Math.round(price)));
+    const enabled = r.enabled === undefined ? (base.enabled !== false) : Boolean(r.enabled);
+    if (enabled) anyEnabled = true;
+    out[tier] = { enabled, value, unit, price };
+  }
+  // Guard against a seller disabling every tier — that would leave the
+  // product page with an empty delivery selector. Re-enable "normal".
+  if (!anyEnabled) out.normal.enabled = true;
+  return out;
+};
+
+// ── Settings (inventory + notification + delivery preferences) ───
 export const updateSettings = async (req, res) => {
   try {
     const sp = req.user.sellerProfile || {};
-    const { defaultLowStockThreshold, emailAlertsEnabled } = req.body;
+    const { defaultLowStockThreshold, emailAlertsEnabled, deliveryOptions } = req.body;
     if (defaultLowStockThreshold !== undefined) {
       const n = Number(defaultLowStockThreshold);
       if (!Number.isFinite(n) || n < 0 || n > 1000) {
@@ -84,6 +229,13 @@ export const updateSettings = async (req, res) => {
     }
     if (emailAlertsEnabled !== undefined) {
       sp.emailAlertsEnabled = Boolean(emailAlertsEnabled);
+    }
+    if (deliveryOptions !== undefined) {
+      const clean = sanitiseDeliveryOptions(deliveryOptions, sp.deliveryOptions);
+      if (!clean) {
+        return res.status(400).json({ message: "Хүргэлтийн тохиргоо буруу байна" });
+      }
+      sp.deliveryOptions = clean;
     }
     req.user.sellerProfile = sp;
     req.user.markModified("sellerProfile");

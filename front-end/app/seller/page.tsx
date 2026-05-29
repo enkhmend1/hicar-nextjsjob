@@ -24,7 +24,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700",
   paid: "bg-blue-50 text-blue-700",
-  processing: "bg-violet-50 text-violet-700",
+  processing: "bg-blue-50 text-blue-700",
   shipped: "bg-indigo-50 text-indigo-700",
   delivered: "bg-emerald-50 text-emerald-700",
   cancelled: "bg-red-50 text-red-700",
@@ -44,15 +44,14 @@ export default function SellerDashboard() {
   if (!data) return <div className="text-gray-400 text-sm">Уншиж байна...</div>;
 
   const cards = [
-    { label: "Зөвшөөрөгдсөн бараа", value: data.totals.approved, sub: `Нийт ${data.totals.products}`, icon: Package, color: "fuchsia" },
+    { label: "Зөвшөөрөгдсөн бараа", value: data.totals.approved, sub: `Нийт ${data.totals.products}`, icon: Package, color: "amber" },
     { label: "Хүлээгдэж буй", value: data.totals.pending, sub: `Татгалзсан: ${data.totals.rejected}`, icon: Clock, color: "amber" },
-    { label: "Захиалга", value: data.totals.orders, sub: "Нийт", icon: ShoppingBag, color: "violet" },
+    { label: "Захиалга", value: data.totals.orders, sub: "Нийт", icon: ShoppingBag, color: "blue" },
     { label: "Цэвэр орлого", value: `₮${data.totals.netRevenue.toLocaleString()}`, sub: `Хураамж: ₮${data.totals.commission.toLocaleString()}`, icon: TrendingUp, color: "emerald" },
   ];
   const colorMap: Record<string, string> = {
-    fuchsia: "bg-fuchsia-50 text-fuchsia-600",
-    amber: "bg-amber-50 text-amber-600",
-    violet: "bg-violet-50 text-violet-600",
+    amber:   "bg-amber-50 text-amber-600",
+    blue:    "bg-blue-50 text-blue-600",
     emerald: "bg-emerald-50 text-emerald-600",
   };
 
@@ -79,7 +78,7 @@ export default function SellerDashboard() {
         })}
       </div>
 
-      <div className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white rounded-2xl p-4 flex items-center gap-3">
+      <div className="bg-gradient-to-br from-blue-500 to-amber-500 text-white rounded-2xl p-4 flex items-center gap-3">
         <Coins size={22} />
         <div className="flex-1">
           <div className="text-[12px] opacity-80">Нийт борлуулалт</div>
@@ -94,7 +93,7 @@ export default function SellerDashboard() {
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[14px] font-semibold text-gray-900">Сүүлийн захиалгууд</h2>
-            <Link href="/seller/orders" className="text-[12px] text-fuchsia-600 hover:underline" style={{ textDecoration: "none" }}>Бүгд →</Link>
+            <Link href="/seller/orders" className="text-[12px] text-amber-600 hover:underline">Бүгд →</Link>
           </div>
           {data.recentOrders.length === 0 ? (
             <p className="text-[13px] text-gray-400 text-center py-6">Захиалга байхгүй</p>
@@ -108,7 +107,7 @@ export default function SellerDashboard() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[o.status]}`}>{STATUS_LABEL[o.status]}</span>
-                    <span className="text-[13px] font-semibold text-fuchsia-600 w-24 text-right">₮{o.total.toLocaleString()}</span>
+                    <span className="text-[13px] font-semibold text-amber-600 w-24 text-right">₮{o.total.toLocaleString()}</span>
                   </div>
                 </div>
               ))}
@@ -124,7 +123,7 @@ export default function SellerDashboard() {
             <div className="space-y-2">
               {data.topProducts.map((p, i) => (
                 <div key={p._id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                  <div className="w-7 h-7 bg-fuchsia-50 text-fuchsia-600 rounded-lg flex items-center justify-center text-[12px] font-bold shrink-0">{i + 1}</div>
+                  <div className="w-7 h-7 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center text-[12px] font-bold shrink-0">{i + 1}</div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[12px] font-medium text-gray-900 truncate">{p.name}</div>
                     <div className="text-[10px] text-gray-400">×{p.qty} · ₮{p.revenue.toLocaleString()}</div>

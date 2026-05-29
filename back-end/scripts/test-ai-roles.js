@@ -944,6 +944,517 @@ assert(diagnosticEnv.payload.candidates?.length === 1, "diagnostic payload carri
 assert(diagnosticEnv.payload.urgency === "high", "diagnostic payload carries urgency");
 
 // ────────────────────────────────────────────────────────────────────
+// ⑱ Phase L — Background agents (proactive notifications)
+// Pure-function checks only: registry shape, constants, helpers, queue
+// exports, and Notification enum extension. Running the actual checks
+// is reserved for integration tests (needs Mongo).
+// ────────────────────────────────────────────────────────────────────
+const {
+  CHECKS, runAllBackgroundChecks,
+  __internal: bgAgentInternal,
+} = await import("../Service/backgroundAgent.service.js");
+
+// ─── CHECKS registry ─────────────────────────────────────────────
+assert(Array.isArray(CHECKS) && CHECKS.length === 4,
+       "CHECKS registry has 4 entries (deadstock, low-stock, market-gap, financial)");
+assert(Object.isFrozen(CHECKS),
+       "CHECKS registry is frozen (no runtime mutation)");
+
+const expectedCheckNames = [
+  "seller_deadstock_alert",
+  "seller_low_stock_alert",
+  "admin_market_gap_digest",
+  "admin_financial_summary",
+];
+for (const name of expectedCheckNames) {
+  assert(CHECKS.some((c) => c.name === name),
+         `CHECKS contains "${name}"`);
+}
+
+for (const c of CHECKS) {
+  assert(typeof c.name === "string" && c.name.length > 0,
+         `check "${c.name}" has a non-empty name`);
+  assert(Number.isFinite(c.cooldownMs) && c.cooldownMs > 0,
+         `check "${c.name}" has a positive cooldownMs`);
+  assert(typeof c.enabled === "boolean",
+         `check "${c.name}" has boolean enabled flag`);
+  assert(typeof c.compute === "function",
+         `check "${c.name}" has compute() function`);
+}
+
+// All cooldowns are 7-day by default — sellers/admins don't want a daily nag.
+assert(CHECKS.every((c) => c.cooldownMs === bgAgentInternal.ONE_WEEK_MS),
+       "every check defaults to a 7-day cooldown");
+
+// ─── __internal constants ───────────────────────────────────────
+assert(bgAgentInternal.DEADSTOCK_NOTIFY_THRESHOLD_MNT === 500_000,
+       "deadstock notification threshold default = ₮500,000");
+assert(bgAgentInternal.ONE_DAY_MS  === 24 * 60 * 60 * 1000,
+       "ONE_DAY_MS constant correct");
+assert(bgAgentInternal.ONE_WEEK_MS === 7  * 24 * 60 * 60 * 1000,
+       "ONE_WEEK_MS constant correct");
+
+// ─── Helpers ─────────────────────────────────────────────────────
+assert(typeof bgAgentInternal.isCoolDownPassed === "function",
+       "isCoolDownPassed exported via __internal");
+assert(typeof bgAgentInternal.fire === "function",
+       "fire() exported via __internal");
+assert(typeof bgAgentInternal.fmtMNT === "function",
+       "fmtMNT() exported via __internal");
+
+// fmtMNT — Mongolian currency formatting
+const fmtMNT = bgAgentInternal.fmtMNT;
+assert(fmtMNT(500_000).startsWith("₮"),
+       "fmtMNT prefixes the tugrik symbol");
+assert(fmtMNT(0).includes("0"),    "fmtMNT(0) doesn't crash");
+assert(fmtMNT(null).includes("0"), "fmtMNT(null) coerces to 0 (no NaN)");
+
+// ─── runAllBackgroundChecks — surface only (real run needs DB) ──
+assert(typeof runAllBackgroundChecks === "function",
+       "runAllBackgroundChecks exported");
+
+// ─── Queue file ──────────────────────────────────────────────────
+const {
+  BACKGROUND_AGENT_QUEUE,
+  startBackgroundAgentScheduler,
+  stopBackgroundAgentScheduler,
+} = await import("../Queue/backgroundAgent.queue.js");
+
+assert(BACKGROUND_AGENT_QUEUE === "background-agent",
+       "queue name constant = 'background-agent'");
+assert(typeof startBackgroundAgentScheduler === "function",
+       "startBackgroundAgentScheduler exported");
+assert(typeof stopBackgroundAgentScheduler  === "function",
+       "stopBackgroundAgentScheduler exported");
+
+// Scheduler is idempotent — starting twice is a no-op.
+// We use a huge intervalMs + bootDelayMs so the timer doesn't actually
+// tick during the test run, but Node still registers the handles.
+const start1 = startBackgroundAgentScheduler({
+  intervalMs: 999_999_999, bootDelayMs: 999_999_999,
+});
+const start2 = startBackgroundAgentScheduler({
+  intervalMs: 999_999_999, bootDelayMs: 999_999_999,
+});
+assert(start1 === true || start1 === false,
+       "startBackgroundAgentScheduler returns boolean");
+// Either first call returned true (started) and second returned false
+// (already running), OR both returned false (AI_BG_AGENT_DISABLED=true
+// in test env — both shapes are valid).
+if (start1 === true) {
+  assert(start2 === false,
+         "second start call is a no-op when scheduler is already running");
+}
+stopBackgroundAgentScheduler();        // clean up handles
+stopBackgroundAgentScheduler();        // double-stop must not throw
+
+// ─── Notification model enum extension ──────────────────────────
+const NotificationModel = (await import("../Model/notification.model.js")).default;
+const notifTypeEnum = NotificationModel.schema.path("type").enumValues;
+assert(notifTypeEnum.includes("ai_insight"),
+       "Notification.type enum includes 'ai_insight' (Phase L)");
+
+// ─── BackgroundAgentLog model shape ─────────────────────────────
+const LogModel = (await import("../Model/backgroundAgentLog.model.js")).default;
+const logPaths = LogModel.schema.paths;
+assert(!!logPaths.checkName,  "BackgroundAgentLog has checkName field");
+assert(!!logPaths.recipient,  "BackgroundAgentLog has recipient field");
+assert(!!logPaths.lastRunAt,  "BackgroundAgentLog has lastRunAt field");
+assert(!!logPaths.payload,    "BackgroundAgentLog has payload field");
+
+// Compound unique index on (checkName, recipient) — guarantees one
+// throttle row per (check, recipient) pair.
+const logIndexes = LogModel.schema.indexes();
+const hasUniquePair = logIndexes.some(([keys, opts]) =>
+  keys.checkName === 1 && keys.recipient === 1 && opts?.unique === true);
+assert(hasUniquePair,
+       "BackgroundAgentLog has unique compound index on (checkName, recipient)");
+
+// TTL on lastRunAt — 60-day expiry keeps the collection bounded.
+const hasTtlIndex = logIndexes.some(([keys, opts]) =>
+  keys.lastRunAt === 1 && typeof opts?.expireAfterSeconds === "number");
+assert(hasTtlIndex,
+       "BackgroundAgentLog has TTL index on lastRunAt");
+
+// ────────────────────────────────────────────────────────────────────
+// ⑲ Phase M.1 — Fallback chain (rate-limit fortress)
+// Pure-function checks for chatWithFallback walking + error classifier.
+// Doesn't require Groq/Gemini keys: builds tiny fake clients that
+// resolve / throw on demand.
+// ────────────────────────────────────────────────────────────────────
+const { chatWithFallback, buildTextFallbackChain, __internal: fallbackInternal } =
+  await import("../Service/aiFallback.service.js");
+
+const { isFallbackableError } = fallbackInternal;
+
+// ─── isFallbackableError — classifier behaviour ────────────────
+assert(isFallbackableError({ status: 429 }) === true,
+       "429 is fallbackable");
+assert(isFallbackableError({ status: 413 }) === true,
+       "413 is fallbackable (Phase M.3 — Groq returns this when prompt > model TPM)");
+assert(isFallbackableError({ status: 503 }) === true,
+       "503 is fallbackable (provider overloaded)");
+assert(isFallbackableError({ status: 502 }) === true,
+       "502 is fallbackable (gateway)");
+assert(isFallbackableError({ status: 504 }) === true,
+       "504 is fallbackable (timeout)");
+assert(isFallbackableError({ code: "ETIMEDOUT" }) === true,
+       "ETIMEDOUT is fallbackable");
+assert(isFallbackableError({ code: "ECONNRESET" }) === true,
+       "ECONNRESET is fallbackable");
+assert(isFallbackableError({ status: 400 }) === false,
+       "400 bad request is NOT fallbackable (smaller model won't help)");
+assert(isFallbackableError({ status: 401 }) === false,
+       "401 auth failure is NOT fallbackable");
+assert(isFallbackableError({ status: 500 }) === false,
+       "500 generic server error is NOT fallbackable (likely provider bug)");
+assert(isFallbackableError({}) === false,
+       "empty error object is NOT fallbackable");
+
+// ─── chatWithFallback walks the chain on 429 ───────────────────
+// Build fake clients: first 429s, second succeeds.
+const fakeOk = { choices: [{ message: { content: "hello from entry-2" } }], usage: { total_tokens: 100 } };
+const make429Client = () => ({
+  chat: { completions: { create: async () => {
+    const e = new Error("Rate limited");
+    e.status = 429;
+    throw e;
+  } } },
+});
+const makeOkClient = (resp) => ({
+  chat: { completions: { create: async () => resp } },
+});
+
+const chain = [
+  { client: make429Client(), model: "model-a", label: "entry-1" },
+  { client: makeOkClient(fakeOk), model: "model-b", label: "entry-2" },
+];
+const fbWalk = await chatWithFallback({ chain, body: { messages: [] } });
+assert(fbWalk.response === fakeOk,
+       "fallback walks past 429 to the next entry");
+assert(fbWalk.usedEntry.label === "entry-2",
+       "usedEntry surfaces the entry that actually answered");
+assert(fbWalk.attempts.length === 2,
+       "attempts array records BOTH the failure and the success");
+assert(fbWalk.attempts[0].ok === false && fbWalk.attempts[0].status === 429,
+       "attempts[0] = failed entry with status=429");
+assert(fbWalk.attempts[1].ok === true,
+       "attempts[1] = successful entry");
+
+// ─── First entry succeeds → no walk, no attempts beyond first ──
+const happyChain = [
+  { client: makeOkClient(fakeOk), model: "model-a", label: "entry-1" },
+  { client: makeOkClient(fakeOk), model: "model-b", label: "entry-2" },
+];
+const fbHappy = await chatWithFallback({ chain: happyChain, body: { messages: [] } });
+assert(fbHappy.usedEntry.label === "entry-1",
+       "happy path uses entry-1 without touching entry-2");
+assert(fbHappy.attempts.length === 1,
+       "happy path produces exactly one attempt record");
+
+// ─── Non-fallbackable error short-circuits ─────────────────────
+const badRequestChain = [
+  { client: { chat: { completions: { create: async () => {
+    const e = new Error("Bad request");
+    e.status = 400;
+    throw e;
+  } } } }, model: "model-a", label: "entry-1" },
+  { client: makeOkClient(fakeOk), model: "model-b", label: "entry-2" },
+];
+let threw400 = false;
+try {
+  await chatWithFallback({ chain: badRequestChain, body: { messages: [] } });
+} catch (e) {
+  threw400 = e.status === 400;
+}
+assert(threw400, "400 short-circuits — no walk to next entry");
+
+// ─── All entries exhausted → rethrows last error ───────────────
+const allBadChain = [
+  { client: make429Client(), model: "model-a", label: "entry-1" },
+  { client: make429Client(), model: "model-b", label: "entry-2" },
+];
+let exhaustedStatus = null;
+try {
+  await chatWithFallback({ chain: allBadChain, body: { messages: [] } });
+} catch (e) {
+  exhaustedStatus = e.status;
+}
+assert(exhaustedStatus === 429,
+       "all entries 429 → rethrows the last 429 (frontend countdown takes over)");
+
+// ─── Empty chain → defensive throw, not undefined behaviour ────
+let emptyChainErr = null;
+try {
+  await chatWithFallback({ chain: [], body: { messages: [] } });
+} catch (e) {
+  emptyChainErr = e.message;
+}
+assert(/empty chain/i.test(emptyChainErr || ""),
+       "empty chain throws a clear error");
+
+// ─── chatWithFallback overrides body.model per entry ───────────
+// (caller passes any model; chain entry's model wins so the same body
+// can be reused without copy-mutating.)
+let observedModel = null;
+const modelSpyChain = [
+  { client: { chat: { completions: { create: async (body) => {
+    observedModel = body.model;
+    return fakeOk;
+  } } } }, model: "spy-model", label: "spy" },
+];
+await chatWithFallback({
+  chain: modelSpyChain,
+  body: { model: "caller-supplied", messages: [] },
+});
+assert(observedModel === "spy-model",
+       "chain entry's model overrides caller-supplied model");
+
+// ─── Abort signal short-circuits walk ──────────────────────────
+const aborted = new AbortController();
+aborted.abort();
+let abortedThrew = false;
+try {
+  await chatWithFallback({
+    chain: [{ client: make429Client(), model: "x", label: "x" }],
+    body: { messages: [] },
+    signal: aborted.signal,
+  });
+} catch (e) {
+  abortedThrew = e.aborted === true || /walltime/i.test(e.message);
+}
+assert(abortedThrew,
+       "pre-aborted signal short-circuits with walltime_exceeded");
+
+// ─── buildTextFallbackChain — composes from supplied parts ─────
+// Use stub clients so this works regardless of whether real API keys
+// are set in the test env.
+const stubGroq   = makeOkClient(fakeOk);
+const stubGemini = makeOkClient(fakeOk);
+const builtChain = buildTextFallbackChain({
+  primaryClient: stubGroq,    primaryModel: "groq-70b",   primaryLabel: "groq",
+  groqFallbackModel: "groq-8b",
+  geminiClient: stubGemini,   geminiModel: "gem-2",       geminiLabel: "gem",
+});
+assert(builtChain.length === 3,
+       "buildTextFallbackChain produces 3 entries when all parts present");
+assert(builtChain[0].model === "groq-70b" && builtChain[0].label === "groq",
+       "entry 1 = primary Groq 70b");
+// Phase M.3: chain reordered — Gemini second so big seller/admin
+// prompts that 413 on 8b's 6K TPM still survive via Gemini's 1M TPM.
+assert(builtChain[1].client === stubGemini && builtChain[1].model === "gem-2",
+       "entry 2 = Gemini (1M TPM — handles large prompts; reordered in Phase M.3)");
+assert(builtChain[2].model === "groq-8b",
+       "entry 3 = Groq 8b last-resort fallback");
+assert(builtChain[2].client === stubGroq,
+       "entry 3 reuses the primary client");
+
+// Same client for Gemini == Groq → dedup'd (would happen if someone
+// pointed both env vars at the same provider).
+const dedupChain = buildTextFallbackChain({
+  primaryClient: stubGroq, primaryModel: "m1", primaryLabel: "p",
+  groqFallbackModel: "m2",
+  geminiClient: stubGroq, geminiModel: "m3", geminiLabel: "g",
+});
+assert(dedupChain.length === 2,
+       "buildTextFallbackChain dedups when Gemini client === primary client");
+
+// Skip 8b fallback if it matches the primary model (degenerate config).
+const sameModelChain = buildTextFallbackChain({
+  primaryClient: stubGroq, primaryModel: "same", primaryLabel: "p",
+  groqFallbackModel: "same",
+  geminiClient: stubGemini, geminiModel: "g", geminiLabel: "g",
+});
+assert(sameModelChain.length === 2,
+       "buildTextFallbackChain skips 8b entry when model matches primary");
+
+// ─── 413 walks past too-small-TPM models (Phase M.3) ───────────
+// Simulates the real seller-chat bug: 70b 429s, 8b 413s on the
+// prompt size, Gemini saves the day.
+const big413Chain = [
+  { client: make429Client(),                           model: "70b", label: "groq-70b" },
+  { client: makeOkClient(fakeOk),                      model: "gem", label: "gemini" },
+  { client: { chat: { completions: { create: async () => {
+    const e = new Error("Request too large for model");
+    e.status = 413;
+    throw e;
+  } } } },                                              model: "8b",  label: "groq-8b" },
+];
+const fb413 = await chatWithFallback({ chain: big413Chain, body: { messages: [] } });
+assert(fb413.usedEntry.label === "gemini",
+       "Phase M.3: chain walks 70b 429 → Gemini (skipping nothing) instead of dying on 8b 413");
+
+// Missing primary key (null client) → chain still works with only Gemini.
+const geminiOnlyChain = buildTextFallbackChain({
+  primaryClient: null, primaryModel: "", primaryLabel: "",
+  geminiClient: stubGemini, geminiModel: "g", geminiLabel: "g",
+});
+assert(geminiOnlyChain.length === 1 && geminiOnlyChain[0].client === stubGemini,
+       "missing primary client → Gemini-only chain (degraded but functional)");
+
+// ────────────────────────────────────────────────────────────────────
+// ⑳ Phase M.2 — Symptom Latin coverage + weird_noise catch-all
+// Bug report: "motor hachin dugaraad baina" returned "Алдаа гарлаа"
+// because the symptom detector only matched Cyrillic. Now Latin
+// transliteration is covered, plus a weird_noise catch-all so vague
+// noise complaints still trigger diagnose_symptom.
+// ────────────────────────────────────────────────────────────────────
+
+// ─── weird_noise catch-all ─────────────────────────────────────
+const wnLatin = diagnoseSymptom("motor hachin dugaraad baina");
+assert(wnLatin?.patternId === "weird_noise",
+       "Latin 'motor hachin dugaraad' → weird_noise");
+assert(wnLatin.clarifyingQuestions.length >= 1,
+       "weird_noise always returns a clarifying question");
+assert(wnLatin.candidates.length >= 4,
+       "weird_noise returns multi-candidate list");
+
+const wnCyrillic = diagnoseSymptom("хачин дуу гарч байна");
+assert(wnCyrillic?.patternId === "weird_noise",
+       "Cyrillic 'хачин дуу' → weird_noise");
+
+const wnEnglish = diagnoseSymptom("the engine is making a weird noise");
+assert(wnEnglish?.patternId === "weird_noise",
+       "English 'weird noise' → weird_noise");
+
+// ─── Specific patterns still win over weird_noise ──────────────
+// A "тог тог" (knocking) input should hit knocking_suspension, NOT
+// weird_noise, because knocking_suspension is listed earlier.
+const stillKnock = diagnoseSymptom("дугуй тог тог дуугарна");
+assert(stillKnock?.patternId === "knocking_suspension",
+       "specific 'тог тог' still beats weird_noise catch-all");
+
+// ─── Latin transliteration coverage across existing patterns ──
+assert(diagnoseSymptom("motor asahgui baina")?.patternId === "wont_start",
+       "Latin 'asahgui' → wont_start");
+assert(diagnoseSymptom("het halaa garch baina")?.patternId === "overheating",
+       "Latin 'het halaa' → overheating");
+assert(diagnoseSymptom("huh utaa garch baina")?.patternId === "smoke",
+       "Latin 'huh utaa' → smoke");
+assert(diagnoseSymptom("tog tog dugaraad")?.patternId === "knocking_suspension",
+       "Latin 'tog tog' → knocking_suspension");
+assert(diagnoseSymptom("tormos pedal zoolon")?.patternId === "soft_brake_pedal",
+       "Latin 'tormos pedal' → soft_brake_pedal");
+
+// ─── isSymptomShaped recognises Latin too ──────────────────────
+assert(isSymptomShaped("motor hachin dugaraad baina") === true,
+       "isSymptomShaped: Latin weird-noise phrasing → true");
+assert(isSymptomShaped("asahgu baina") === true,
+       "isSymptomShaped: Latin 'asahgu' → true");
+assert(isSymptomShaped("hello") === false,
+       "isSymptomShaped: bare greeting → false");
+
+// ─── PATTERN_COUNT bumped by the new weird_noise entry ─────────
+assert(diagnosticInternal.PATTERN_COUNT >= 9,
+       "diagnostic patterns now ≥9 with weird_noise catch-all (Phase M.2.3)");
+assert(diagnosticInternal.PATTERN_IDS.includes("weird_noise"),
+       "PATTERN_IDS includes 'weird_noise'");
+
+// ─── SECURITY_DIRECTIVE tightening (Phase M.2.1) ───────────────
+// We can't introspect the prompt directly from outside aiPrompts, but
+// buildSystemPrompt composes the directive into every output. Smoke-
+// check that "WHEN TO USE THE REFUSAL TEMPLATE" guidance is in the
+// USER system prompt now — that's the protection against the over-
+// refusal regression.
+const userPromptSample = buildSystemPrompt({
+  role: "user", locale: "mn", vehicleContext: null, transliterationHint: "",
+});
+assert(userPromptSample.includes("WHEN TO USE THE REFUSAL TEMPLATE"),
+       "USER system prompt includes the refusal-scope guidance (Phase M.2.1)");
+assert(userPromptSample.includes("DO NOT refuse for ANY of the following"),
+       "USER system prompt includes the 'do not refuse' positive examples");
+assert(userPromptSample.includes("When in doubt → ANSWER, don't refuse"),
+       "USER system prompt has the answer-by-default bias");
+
+// ────────────────────────────────────────────────────────────────────
+// ㉑ Phase O — Re-approval scoped to risky-field changes
+// Was: ANY seller edit to an approved product → status="pending".
+// Now: only name/oem/category/price/fitments/attributes/compatible
+// changes reset. Image uploads, stock bumps, description tweaks stay
+// approved so sellers can polish without waiting for the admin queue.
+// ────────────────────────────────────────────────────────────────────
+const { requiresReapproval, RISKY_FIELDS } =
+  await import("../Service/productPolicy.service.js");
+
+// Frozen registry — protect the policy from accidental widening.
+assert(Object.isFrozen(RISKY_FIELDS),
+       "RISKY_FIELDS list is frozen (no runtime widening)");
+assert(RISKY_FIELDS.length === 7,
+       "RISKY_FIELDS has exactly 7 entries");
+for (const f of ["name", "oem", "category", "price", "fitments", "attributes", "compatible"]) {
+  assert(RISKY_FIELDS.includes(f),
+         `RISKY_FIELDS includes "${f}"`);
+}
+
+const existing = {
+  name: "Brake pad", oem: "04465-02220", category: "brake",
+  price: 50000, fitments: [{ make: "Toyota", model: "Camry" }],
+  attributes: { position: "front" }, compatible: ["Camry", "Avalon"],
+  // Safe fields:
+  images: ["a.jpg"], stockQty: 10, inStock: true, description: "Good",
+};
+
+// ─── Safe-only update → NO re-approval ─────────────────────────
+assert(requiresReapproval(existing, { images: ["a.jpg", "b.jpg"] }) === false,
+       "adding a product image alone does NOT require re-approval (Phase O headline fix)");
+assert(requiresReapproval(existing, { stockQty: 25 }) === false,
+       "stock bump alone does NOT require re-approval");
+assert(requiresReapproval(existing, { description: "Better description" }) === false,
+       "description tweak does NOT require re-approval");
+assert(requiresReapproval(existing, {
+         images: ["a.jpg", "b.jpg", "c.jpg"], stockQty: 25, description: "..."
+       }) === false,
+       "combined safe updates (images + stock + desc) do NOT require re-approval");
+
+// ─── Risky-field update → YES re-approval ──────────────────────
+assert(requiresReapproval(existing, { name: "Different brake pad" }) === true,
+       "name change requires re-approval");
+assert(requiresReapproval(existing, { oem: "04465-99999" }) === true,
+       "OEM change requires re-approval");
+assert(requiresReapproval(existing, { category: "engine" }) === true,
+       "category change requires re-approval");
+assert(requiresReapproval(existing, { price: 75000 }) === true,
+       "price change requires re-approval");
+assert(requiresReapproval(existing, {
+         fitments: [{ make: "Toyota", model: "Corolla" }],
+       }) === true,
+       "fitments change requires re-approval");
+assert(requiresReapproval(existing, {
+         attributes: { position: "rear" },
+       }) === true,
+       "attributes change requires re-approval");
+assert(requiresReapproval(existing, {
+         compatible: ["Camry", "Avalon", "Lexus ES"],
+       }) === true,
+       "compatible array change requires re-approval");
+
+// ─── Same-value re-submission → NO re-approval ─────────────────
+// (Seller forms typically PUT the whole object; same values shouldn't
+// trip the policy.)
+assert(requiresReapproval(existing, {
+         name: existing.name, oem: existing.oem, price: existing.price,
+       }) === false,
+       "re-PUTting risky fields with SAME values does NOT require re-approval");
+assert(requiresReapproval(existing, {
+         attributes: { position: "front" },   // structurally identical
+       }) === false,
+       "re-PUTting an identical attributes object does NOT require re-approval");
+
+// ─── Risky + safe combined → YES (risky wins) ──────────────────
+assert(requiresReapproval(existing, {
+         images: ["a.jpg", "b.jpg"], price: 75000,
+       }) === true,
+       "any risky change requires re-approval even alongside safe ones");
+
+// ─── Defensive: bad input → false (no crash) ───────────────────
+assert(requiresReapproval(null, { name: "x" }) === false,
+       "null existing → false (defensive)");
+assert(requiresReapproval(existing, null) === false,
+       "null update → false (defensive)");
+assert(requiresReapproval(existing, {}) === false,
+       "empty update → false");
+
+// ────────────────────────────────────────────────────────────────────
 // Summary
 // ────────────────────────────────────────────────────────────────────
 console.log("");

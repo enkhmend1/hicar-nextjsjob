@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { Brain, Search, Plus, Pencil, Trash2, X, RefreshCw, MessageCircle, Sparkles } from "lucide-react";
+import { Brain, Search, Plus, Pencil, Trash2, X, RefreshCw, Sparkles } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────
 interface SearchLog {
@@ -41,7 +41,7 @@ const CATEGORIES = [
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.id, c.label]));
 
 const SOURCE_COLOR: Record<string, string> = {
-  ai: "bg-violet-50 text-violet-700",
+  ai: "bg-blue-50 text-blue-700",
   shop: "bg-blue-50 text-blue-700",
   voice: "bg-emerald-50 text-emerald-700",
   image: "bg-amber-50 text-amber-700",
@@ -58,14 +58,14 @@ export default function AdminTrainingPage() {
       <header className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Brain size={20} className="text-violet-500" /> AI сургалтын самбар
+            <Brain size={20} className="text-blue-500" /> AI сургалтын самбар
           </h1>
           <p className="text-[13px] text-gray-500 mt-0.5">
             Хайлтын логыг хянаж, AI-н OEM таних ур чадварыг сайжруулна.
           </p>
         </div>
         <button onClick={refresh}
-          className="flex items-center gap-1.5 border border-gray-200 hover:border-violet-400 rounded-lg px-3 py-1.5 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors font-sans">
+          className="flex items-center gap-1.5 border border-gray-200 hover:border-blue-400 rounded-lg px-3 py-1.5 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors font-sans">
           <RefreshCw size={12} /> Сэргээх
         </button>
       </header>
@@ -77,7 +77,7 @@ export default function AdminTrainingPage() {
         ] as const).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-[13px] font-medium cursor-pointer bg-transparent border-none border-b-2 transition-colors font-sans ${
-              tab === t.id ? "border-violet-600 text-violet-700" : "border-transparent text-gray-500 hover:text-gray-700"
+              tab === t.id ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
             {t.label}
           </button>
@@ -116,7 +116,9 @@ function LogsTab({ onChange }: { onChange: () => void }) {
     }
   }, [zeroOnly, source]);
 
-  useEffect(() => { load(); }, [load]);
+  // queueMicrotask defers load()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const seedMapping = async (q: ZeroQuery) => {
     const cat = prompt(`"${q.query}" — ангилал? (${CATEGORIES.filter(c => c.id).map(c => c.id).join(" | ")})`, "other");
@@ -148,7 +150,7 @@ function LogsTab({ onChange }: { onChange: () => void }) {
                   <div className="text-[10px] text-gray-400">×{q.count} · {new Date(q.lastAt).toLocaleDateString("mn-MN")}</div>
                 </div>
                 <button onClick={() => seedMapping(q)} title="Mapping үүсгэх"
-                  className="w-6 h-6 inline-flex items-center justify-center rounded-md text-violet-600 hover:bg-violet-50 cursor-pointer bg-transparent border border-violet-200 shrink-0">
+                  className="w-6 h-6 inline-flex items-center justify-center rounded-md text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border border-blue-200 shrink-0">
                   <Plus size={11} />
                 </button>
               </li>
@@ -162,10 +164,10 @@ function LogsTab({ onChange }: { onChange: () => void }) {
           <h2 className="text-[14px] font-semibold text-gray-900 flex-1">Хайлтын лог ({logs.length})</h2>
           <label className="flex items-center gap-1.5 text-[12px] text-gray-600 cursor-pointer">
             <input type="checkbox" checked={zeroOnly} onChange={e => setZeroOnly(e.target.checked)}
-              className="accent-violet-600 w-3.5 h-3.5" /> Зөвхөн үр дүнгүй
+              className="accent-blue-600 w-3.5 h-3.5" /> Зөвхөн үр дүнгүй
           </label>
           <select value={source} onChange={e => setSource(e.target.value)}
-            className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[12px] focus:border-violet-500 outline-none font-sans">
+            className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-[12px] focus:border-blue-500 outline-none font-sans">
             <option value="all">Бүх эх сурвалж</option>
             <option value="ai">AI chat</option>
             <option value="shop">Дэлгүүр хайлт</option>
@@ -238,7 +240,9 @@ function MappingsTab() {
     }
   }, [q, category]);
 
-  useEffect(() => { load(); }, [load]);
+  // queueMicrotask defers load()'s setLoading(true) past the effect
+  // commit — React 19 warns on sync setState in effect bodies.
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const totalUsage = useMemo(() => items.reduce((s, i) => s + (i.usageCount || 0), 0), [items]);
 
@@ -277,16 +281,16 @@ function MappingsTab() {
         <div className="relative flex-1 max-w-sm">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={q} onChange={e => setQ(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[13px] focus:border-violet-500 outline-none"
+            className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[13px] focus:border-blue-500 outline-none"
             placeholder="Keyword хайх..." />
         </div>
         <select value={category} onChange={e => setCategory(e.target.value)}
-          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none font-sans">
+          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none font-sans">
           <option value="all">Бүх ангилал</option>
           {CATEGORIES.filter(c => c.id).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         <button onClick={() => setEditing({ keyword: "", category: "", oemHint: "", note: "", enabled: true })}
-          className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
           <Plus size={13} /> Mapping нэмэх
         </button>
       </div>
@@ -329,7 +333,7 @@ function MappingsTab() {
                   <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{m.usageCount}</td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <button onClick={() => setEditing(m)} title="Засах"
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 cursor-pointer bg-transparent border-none transition-colors mr-1">
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors mr-1">
                       <Pencil size={13} />
                     </button>
                     <button onClick={() => remove(m)} title="Устгах"
@@ -359,30 +363,30 @@ function MappingsTab() {
               {err && <div className="bg-red-50 border border-red-200 text-red-600 text-[12px] rounded-lg px-3 py-2">{err}</div>}
               <Field label="Keyword (substring, lowercase автоматаар хувирна)">
                 <input required value={editing.keyword ?? ""} onChange={e => setEditing(s => ({ ...s, keyword: e.target.value }))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white outline-none"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none"
                   placeholder="жнь: приус мотор, 30 inverter" />
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Ангилал">
                   <select value={editing.category ?? ""} onChange={e => setEditing(s => ({ ...s, category: e.target.value }))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white outline-none font-sans">
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none font-sans">
                     {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label || "—"}</option>)}
                   </select>
                 </Field>
                 <Field label="OEM hint (заавал биш)">
                   <input value={editing.oemHint ?? ""} onChange={e => setEditing(s => ({ ...s, oemHint: e.target.value }))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white outline-none font-mono"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none font-mono"
                     placeholder="43512" />
                 </Field>
               </div>
               <Field label="Тэмдэглэл (заавал биш)">
                 <textarea value={editing.note ?? ""} onChange={e => setEditing(s => ({ ...s, note: e.target.value }))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 focus:bg-white outline-none resize-none h-20 font-sans"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none resize-none h-20 font-sans"
                   placeholder="Энэ mapping нь яагаад зөв вэ..." />
               </Field>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={editing.enabled !== false} onChange={e => setEditing(s => ({ ...s, enabled: e.target.checked }))}
-                  className="accent-violet-600 w-4 h-4" />
+                  className="accent-blue-600 w-4 h-4" />
                 <span className="text-[13px] text-gray-700">Идэвхтэй</span>
               </label>
               <div className="flex gap-2 pt-2">
@@ -391,7 +395,7 @@ function MappingsTab() {
                   Болих
                 </button>
                 <button type="submit" disabled={busy}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
                   {busy ? "Хадгалж байна..." : "Хадгалах"}
                 </button>
               </div>

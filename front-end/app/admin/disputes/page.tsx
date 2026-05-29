@@ -28,7 +28,7 @@ import {
 const STATUS_CHIP: Record<DisputeStatus, { label: string; cls: string }> = {
   open:             { label: "Шинэ",          cls: "bg-rose-50 text-rose-700 border-rose-200" },
   awaiting_seller:  { label: "Seller хүлээж буй", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  ai_analyzing:     { label: "AI шинжилж буй",   cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  ai_analyzing:     { label: "AI шинжилж буй",   cls: "bg-blue-50 text-blue-700 border-blue-200" },
   awaiting_buyer:   { label: "Buyer хариу хүлээж", cls: "bg-blue-50 text-blue-700 border-blue-200" },
   escalated_admin:  { label: "Шийдвэрлэх",       cls: "bg-orange-50 text-orange-700 border-orange-200" },
   resolved_refund:  { label: "Бүрэн буцаалт",    cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -69,7 +69,8 @@ export default function AdminDisputesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [filter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { queueMicrotask(reload); }, [filter]);
 
   const selected = useMemo(
     () => disputes.find((d) => d._id === selectedId) || null,
@@ -80,7 +81,7 @@ export default function AdminDisputesPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-          <Scale size={20} className="text-violet-600" /> Маргаан шийдвэрлэх
+          <Scale size={20} className="text-blue-600" /> Маргаан шийдвэрлэх
         </h1>
         <p className="text-[13px] text-gray-500">AI шинжилгээ + хоёр талын түүх + escrow удирдлага</p>
       </div>
@@ -89,7 +90,7 @@ export default function AdminDisputesPage() {
         {FILTERS.map((f) => (
           <button key={f.id} onClick={() => setFilter(f.id)}
             className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === f.id ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-200 hover:border-violet-400"
+              filter === f.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
             }`}>
             {f.label}
           </button>
@@ -114,7 +115,7 @@ export default function AdminDisputesPage() {
                 return (
                   <button key={d._id} onClick={() => setSelectedId(d._id!)}
                     className={`w-full text-left p-3 cursor-pointer border-none transition-colors block ${
-                      active ? "bg-violet-50" : "bg-transparent hover:bg-gray-50"
+                      active ? "bg-blue-50" : "bg-transparent hover:bg-gray-50"
                     }`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[11px] font-mono text-gray-400">
@@ -312,7 +313,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
             {dispute.messages.map((m, i) => (
               <div key={m._id || i} className={`text-[12px] rounded-lg p-2 ${
                 m.author === "system" ? "bg-gray-50 text-gray-500 italic"
-                : m.author === "ai"     ? "bg-violet-50 text-violet-800"
+                : m.author === "ai"     ? "bg-blue-50 text-blue-800"
                 : m.author === "admin"  ? "bg-orange-50 text-orange-800"
                 : m.author === "seller" ? "bg-blue-50 text-blue-800"
                 : "bg-rose-50 text-rose-800"
@@ -333,7 +334,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Шийдвэрийн дотоод тэмдэглэл (audit log)..."
             rows={2} maxLength={2000}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none resize-none font-sans"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
           />
 
           <div>
@@ -344,7 +345,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
               <span className="text-[13px] text-gray-500">₮</span>
               <input type="number" value={penalty} onChange={(e) => setPenalty(e.target.value)}
                 min={0} step={1000} placeholder="0"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-violet-500 outline-none" />
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none" />
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
               Худалдагчийн буруу гэж дүгнэсэн үед буцаалтын шуудангийн төлбөрийг
@@ -361,7 +362,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
             <div className="flex gap-1">
               <input type="number" value={partial} onChange={(e) => setPartial(e.target.value)}
                 min={1} max={dispute.requestedRefundAmount}
-                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[12px] focus:border-violet-500 outline-none w-0" />
+                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[12px] focus:border-blue-500 outline-none w-0" />
               <button onClick={() => resolve("refund_partial")} disabled={busy}
                 className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-2 py-2 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans inline-flex items-center gap-1 whitespace-nowrap">
                 <Coins size={11} /> Хэсэг

@@ -22,18 +22,26 @@
 
 /** Attribute-specific overrides — checked BEFORE the flat map. */
 const BY_ATTR: Record<string, Record<string, string>> = {
-  // The two global attrs the user explicitly called out.
+  // Phase AH: car-parts market vocabulary — "Шинэтгэсэн" / "Хэрэглэсэн"
+  // are technically correct but sound translated, not native. Mongolian
+  // mechanics + buyers use shorter, more concrete words. We also keep
+  // the two attribute namespaces (compatibility_status vs part_condition)
+  // semantically distinct: the first is about PROVENANCE (was it OEM,
+  // aftermarket, refurbished etc.), the second is about PHYSICAL STATE.
+  //
+  //  compatibility_status answers "What KIND of part is this?"
+  //  part_condition       answers "What CONDITION is the part in?"
   compatibility_status: {
-    oem:             "Анхны OEM",
-    aftermarket:     "Aftermarket Брэнд сэлбэг",
-    used:            "Хэрэглэсэн",
-    remanufactured:  "Сэргээсэн",
-    refurbished:     "Шинэтгэсэн",
+    oem:             "Үйлдвэрийн OEM",      // "Original OEM" → cleaner
+    aftermarket:     "Aftermarket",         // single word is enough
+    used:            "Хуучин",              // "Хэрэглэсэн" → less natural
+    remanufactured:  "Үйлдвэрт сэргээсэн",  // distinct from "refurbished"
+    refurbished:     "Засварласан",         // ← "Шинэтгэсэн" replaced
   },
   part_condition: {
     new:         "Шинэ",
-    used:        "Хэрэглэсэн",
-    refurbished: "Шинэтгэсэн",
+    used:        "Хуучин",                  // ← match compatibility_status
+    refurbished: "Засварласан",             // ← "Шинэтгэсэн" replaced
     damaged:     "Эвдэрсэн",
     for_parts:   "Сэлбэгт зориулсан",
   },

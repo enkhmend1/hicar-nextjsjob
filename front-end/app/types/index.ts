@@ -2,14 +2,33 @@ export interface Car {
   id: string; plate?: string; vin?: string;
   make: string; model: string; year: number; engine: string; chassis: string;
 }
+/** Phase AU/AV — per-seller delivery config (duration + price). */
+export type DeliveryTierKey = "fast" | "normal" | "cheap";
+export type DeliveryUnit = "hour" | "day";
+export interface DeliveryOption {
+  enabled: boolean;
+  /** Magnitude of the ETA — interpreted with `unit`. */
+  value: number;
+  unit: DeliveryUnit;
+  /** Phase AV — seller-set delivery fee for this tier, in MNT. */
+  price: number;
+}
+export type DeliveryOptions = Record<DeliveryTierKey, DeliveryOption>;
+
 export interface SellerSummary {
   _id?: string;
   name: string;
   email?: string;
   sellerProfile?: {
     shopName?: string;
+    /** Cloudinary URL of the seller's avatar — populated by GET
+     *  /api/products/:id (cart + product detail use this). */
+    logo?: string;
     rating?: number;
     ratingCount?: number;
+    /** Phase AU — seller's own delivery durations, populated by GET
+     *  /api/products/:id so the detail page can render real ETAs. */
+    deliveryOptions?: Partial<DeliveryOptions>;
   };
 }
 
@@ -76,6 +95,8 @@ export interface SellerProfile {
   shopName?: string;
   description?: string;
   logo?: string;
+  /** Cover banner shown on the public /store/[id] page. Recommended 16:5. */
+  coverImage?: string;
 
   // Platform economics (replaces the old wallet-era `commissionRate`)
   platformFeePercent?: number;
@@ -92,6 +113,8 @@ export interface SellerProfile {
   rejectedReason?: string;
   defaultLowStockThreshold?: number;
   emailAlertsEnabled?: boolean;
+  /** Phase AU — seller-defined delivery durations per shipping tier. */
+  deliveryOptions?: Partial<DeliveryOptions>;
   customSources?: string[];
   customCategories?: string[];
   customBrands?: string[];
@@ -223,6 +246,10 @@ export interface Order {
   deliveredAt?: string;
   escrowReleaseScheduledAt?: string;
   escrowReleasedAt?: string;
+  /** Phase AQ — courier tracking number, set when seller marks shipped. */
+  trackingNumber?: string;
+  /** Phase AQ — buyer-confirmed delivery timestamp (escrow ground truth). */
+  buyerConfirmedDeliveryAt?: string;
   createdAt: string;
   address: string;
   phone?: string;

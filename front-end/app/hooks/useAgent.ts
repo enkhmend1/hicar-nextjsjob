@@ -35,7 +35,7 @@
  *   • clearErrors()   — reset both error slots
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore, useCarStore, type ActiveVehicle } from "@/store";
 import { useLocale } from "@/lib/i18n";
 import { ApiError } from "@/lib/api";
@@ -53,8 +53,29 @@ export interface UseAgentReturn {
   chatError: string;
   plateError: string;
 
+  // Phase M.1: rate-limit cooldown. `rateLimitedUntil` is epoch ms;
+  // 0 = not rate limited. `secondsUntilRetry` is the live countdown the
+  // UI shows in the input affordance. While cooldown is active, the
+  // last attempt auto-resends once when it expires.
+  rateLimitedUntil:  number;
+  secondsUntilRetry: number;
+  cancelRateLimit:   () => void;
+
   // Chat
-  sendChat: (messages: ChatMessage[]) => Promise<AIResponse | null>;
+  //
+  // Phase M.2.2: returns a discriminated result so the caller has the
+  // localized error message IN HAND. The previous "return null and read
+  // hook.chatError" pattern was broken because the parent component's
+  // captured closure of `agent` still held the OLD chatError when read
+  // synchronously after `await sendChat(...)` — setState is async, the
+  // re-render hasn't flushed yet. Result: every error displayed as the
+  // generic "Алдаа гарлаа" fallback. With the new shape the caller does:
+  //   const r = await agent.sendChat(history);
+  //   if (!r.ok) pushAi({ text: r.errorMessage, error: true });
+  sendChat: (messages: ChatMessage[]) => Promise<
+    | { ok: true;  response: AIResponse }
+    | { ok: false; errorMessage: string }
+  >;
 
   // Vehicle switcher
   switchVehicleByPlate:    (plate: string) => Promise<{ ok: boolean; vehicle?: ActiveVehicle; message?: string }>;
@@ -81,31 +102,129 @@ export function useAgent(): UseAgentReturn {
   const [chatError,  setChatError]  = useState("");
   const [plateError, setPlateError] = useState("");
 
+  // Phase M.1: rate-limit cooldown machinery.
+  //   • rateLimitedUntil — epoch ms. 0 means "not in cooldown".
+  //   • _tick           — forces a re-render each second so countdown updates.
+  //   • autoRetryTimer  — pending auto-resend; cleared if user cancels.
+  //   • inAutoRetry     — true while running the post-cooldown retry, so
+  //                       a SECOND 429 doesn't schedule a THIRD attempt
+  //                       (we cap automatic retries at one per failure).
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number>(0);
+  // `now` state нь зөвхөн countdown цаг бичигч. Render бүрт `Date.now()`-г
+  // шууд унших нь impure (React compiler / strict-mode дургүйцнэ) — оронд
+  // нь setInterval-ээр өөрчлөгддөг state-руу хадгална. Тиймээс render нь
+  // deterministic болж, countdown UI нэг секундэд нэг удаа шинэчилнэ.
+  const [now, setNow] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : Date.now(),
+  );
+  const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inAutoRetry    = useRef<boolean>(false);
+
+  // Tick once per second while we're in cooldown so consumers reading
+  // `secondsUntilRetry` see a live countdown. Tear down the interval
+  // when cooldown is cleared OR the component unmounts.
+  useEffect(() => {
+    if (rateLimitedUntil <= now) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [rateLimitedUntil, now]);
+
+  // Derived: live countdown the UI shows in the input affordance.
+  const secondsUntilRetry = rateLimitedUntil > now
+    ? Math.ceil((rateLimitedUntil - now) / 1000)
+    : 0;
+
+  // Cancel auto-retry on unmount so we don't fire a request into a dead
+  // component (which would set state and warn in React 19).
+  useEffect(() => () => {
+    if (autoRetryTimer.current) {
+      clearTimeout(autoRetryTimer.current);
+      autoRetryTimer.current = null;
+    }
+  }, []);
+
+  const cancelRateLimit = useCallback(() => {
+    if (autoRetryTimer.current) {
+      clearTimeout(autoRetryTimer.current);
+      autoRetryTimer.current = null;
+    }
+    setRateLimitedUntil(0);
+    inAutoRetry.current = false;
+  }, []);
+
   // ── Chat ─────────────────────────────────────────────────────────
   // Phase J.2: error mapping table — distinguish rate-limit, upstream
   // outage, validation-failure, and generic so the user sees a useful
   // message instead of a flat "Алдаа гарлаа".
-  const sendChat = useCallback(async (messages: ChatMessage[]): Promise<AIResponse | null> => {
+  //
+  // Phase M.1: ref-pattern indirection so the auto-retry timer can call
+  // the LATEST sendChat without taking it as a useCallback dep (which
+  // would re-create the callback on every retry and break the dep array).
+  type SendChatResult =
+    | { ok: true;  response: AIResponse }
+    | { ok: false; errorMessage: string };
+  const sendChatRef = useRef<((messages: ChatMessage[]) => Promise<SendChatResult>) | null>(null);
+  const sendChat = useCallback(async (messages: ChatMessage[]): Promise<SendChatResult> => {
     setBusy(true); setChatError("");
     try {
       const resp = await chatService.send(messages, { locale, vehicle: activeVehicle });
-      return resp;
+      // Phase M.1: successful response — clear any lingering cooldown
+      // (e.g. user manually retried mid-countdown and it worked).
+      if (rateLimitedUntil > 0) {
+        setRateLimitedUntil(0);
+        inAutoRetry.current = false;
+      }
+      return { ok: true, response: resp };
     } catch (e) {
       const ae = e as ApiError;
       const code = (ae.data?.code as string | undefined);
       let msg: string;
       switch (code) {
         case "AI_RATE_LIMITED": {
-          const wait = Number(ae.data?.retryAfter) || 30;
-          msg = locale === "en"
-            ? `Rate limited — please retry in ~${wait}s.`
-            : `Хүсэлт хэт олон — ойролцоогоор ${wait} секундын дараа дахин оролдоно уу.`;
+          const wait = Math.max(3, Math.min(60, Number(ae.data?.retryAfter) || 8));
+          // Phase M.1: instead of a dead error, schedule an auto-retry.
+          // We only schedule once per failure (`inAutoRetry` flag) so a
+          // SECOND 429 during the retry doesn't loop forever — that path
+          // surfaces the error and the user can decide.
+          if (!inAutoRetry.current) {
+            const until = Date.now() + wait * 1000;
+            setRateLimitedUntil(until);
+            if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
+            autoRetryTimer.current = setTimeout(() => {
+              autoRetryTimer.current = null;
+              inAutoRetry.current = true;
+              // Re-fire the SAME messages array via the ref so we always
+              // call the latest sendChat (and don't capture a stale one
+              // from the closure). If this also 429s, the inAutoRetry
+              // guard prevents another schedule and the error surfaces.
+              void sendChatRef.current?.(messages).finally(() => {
+                inAutoRetry.current = false;
+              });
+            }, wait * 1000);
+            msg = locale === "en"
+              ? `Rate limited — auto-retrying in ${wait}s…`
+              : `Хүсэлт хэт олон — ${wait} секундын дараа автоматаар дахин илгээнэ…`;
+          } else {
+            // Second 429 during auto-retry. Don't schedule again.
+            msg = locale === "en"
+              ? "Still rate limited — please wait a moment and try again."
+              : "Дахиад л хязгаарт хүрсэн — түр хүлээж дахин оролдоно уу.";
+          }
           break;
         }
         case "AI_AUTH_FAILED":
           msg = locale === "en"
             ? "AI provider auth failed. Operator must check API keys."
             : "AI үйлчилгээ нэвтрэх алдаатай. Оператортой холбогдоно уу.";
+          break;
+        case "AI_REQUEST_TOO_LARGE":
+          // Phase M.3: 413 — the prompt + tool context blew past the
+          // per-minute token cap on every provider in the chain. Tell
+          // the user how to recover (shorten the message) rather than
+          // hiding it behind a generic error.
+          msg = locale === "en"
+            ? "That message is too long for the AI. Please send a shorter version."
+            : "Хүсэлт хэт том байна. Богино асуултаар туршаад үзнэ үү.";
           break;
         case "AI_PROVIDER_UNAVAILABLE":
         case "AI_UPSTREAM_UNREACHABLE":
@@ -129,11 +248,18 @@ export function useAgent(): UseAgentReturn {
             ? "Image search needs an AI provider. Try text search instead."
             : "Зургийн хайлт AI шаардана. Текстээр хайна уу.";
           break;
-        case "AI_INTERNAL_ERROR":
+        case "AI_INTERNAL_ERROR": {
+          // Phase AB: the server attaches a requestId so a user reporting
+          // "the chat broke" can quote the code back and ops can grep the
+          // matching stack trace in seconds. We show it inline only when
+          // present (defensive — older backends may not return it).
+          const ref = ae.data?.requestId ? ` (код: ${String(ae.data.requestId)})` : "";
+          const refEn = ae.data?.requestId ? ` (ref: ${String(ae.data.requestId)})` : "";
           msg = locale === "en"
-            ? "Something broke internally. We've logged it — please retry."
-            : "Дотоод алдаа гарлаа. Бид бүртгэсэн — дахин оролдоно уу.";
+            ? `Something broke internally${refEn}. We've logged it — please retry.`
+            : `Дотоод алдаа гарлаа${ref}. Бид бүртгэсэн — дахин оролдоно уу.`;
           break;
+        }
         default:
           // Use the server's message if it looks human-readable, otherwise
           // fall back to the generic.
@@ -144,11 +270,21 @@ export function useAgent(): UseAgentReturn {
               : "Чат алдаа гарлаа — дахин оролдоно уу.");
       }
       setChatError(msg);
-      return null;
+      // Phase M.2.2: return the message in-band so the caller has it
+      // immediately, without waiting for the chatError state to flush
+      // through React's render queue (the closure-staleness bug).
+      return { ok: false, errorMessage: msg };
     } finally {
       setBusy(false);
     }
-  }, [locale, activeVehicle]);
+  }, [locale, activeVehicle, rateLimitedUntil]);
+
+  // Keep sendChatRef pointed at the latest sendChat. The auto-retry
+  // timer fires via sendChatRef.current(), so this assignment guarantees
+  // it always sees the freshest closure (latest locale / vehicle).
+  useEffect(() => {
+    sendChatRef.current = sendChat;
+  }, [sendChat]);
 
   // ── Vehicle switcher ─────────────────────────────────────────────
   // Both switch paths share the same post-success effect: update Zustand
@@ -235,6 +371,7 @@ export function useAgent(): UseAgentReturn {
 
   return {
     busy, plateBusy, chatError, plateError,
+    rateLimitedUntil, secondsUntilRetry, cancelRateLimit,
     sendChat,
     switchVehicleByPlate, switchVehicleByVehicleId, clearVehicle,
     hydrateMemory,
