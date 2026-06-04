@@ -59,7 +59,9 @@ const categorySchema = new mongoose.Schema(
     /** Display name shown to users — locale-free for now (Mongolian only). */
     name:      { type: String, required: true, trim: true, maxlength: 60 },
     /** Raw SVG path-d attribute. Kept inline so the homepage doesn't need separate icon hosting. */
-    iconPath:  { type: String, required: true, trim: true, maxlength: 2000 },
+    iconPath:  { type: String, default: "", trim: true, maxlength: 2000 },
+    /** Uploaded image URL (Cloudinary or local). When set, the category card renders this instead of the SVG icon. */
+    imageUrl:  { type: String, default: "", trim: true, maxlength: 500 },
     /** Sort key — lower numbers appear first. Ties broken by insert order. */
     order:     { type: Number, default: 0 },
     /** Hide without deleting (preserves counts in case of rollback). */

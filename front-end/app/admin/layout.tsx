@@ -3,13 +3,15 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
-import { LayoutDashboard, Package, ShoppingBag, Users, Store, LogOut, Home, Brain, Scale, LayoutTemplate } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, Store, LogOut, Home, Brain, Scale, LayoutTemplate, Sparkles, UploadCloud } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Хяналтын самбар", icon: LayoutDashboard, exact: true },
   { href: "/admin/products", label: "Бараа", icon: Package },
   { href: "/admin/orders", label: "Захиалга", icon: ShoppingBag },
   { href: "/admin/disputes", label: "Маргаан", icon: Scale },
+  { href: "/admin/import", label: "Импорт", icon: UploadCloud },
+  { href: "/admin/normalization", label: "Нормчлол", icon: Sparkles },
   { href: "/admin/sellers", label: "Seller", icon: Store },
   { href: "/admin/users", label: "Хэрэглэгч", icon: Users },
   { href: "/admin/site-content", label: "Сайтын контент", icon: LayoutTemplate },

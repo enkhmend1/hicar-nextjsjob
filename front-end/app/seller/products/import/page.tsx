@@ -130,14 +130,13 @@ export default function ImportWizardPage() {
   // ── Preview state ──
   const [enrichedRows, setEnrichedRows] = useState<EnrichedRow[]>([]);
   const [enrichProgress, setEnrichProgress] = useState<{ done: number; total: number } | null>(null);
-  const [onDuplicate, setOnDuplicate] = useState<"skip" | "update">("skip");
   /** Phase D — summary of new vs conflict vs low-confidence rows. */
   const [previewSummary, setPreviewSummary] = useState<PreviewSummary | null>(null);
 
-  // ── Result state ──
+  // ── Result state — mirrors commit-v2 response shape ──
   const [result, setResult] = useState<null | {
-    created: number; updated: number; skipped: number; failed: number;
-    total: number; createdIds: string[]; failures: { row: string; error: string }[];
+    created: number; merged: number; overwritten: number; skipped: number; failed: number;
+    total: number; failures: { row: string; error: string }[];
   }>(null);
 
   // ── Derived stats for preview header ──
@@ -266,15 +265,28 @@ export default function ImportWizardPage() {
     }
     setBusy(true); setErr("");
     try {
-      const r = await api.post<typeof result>("/seller/import/commit-v2", {
+      type CommitV2Resp = {
+        total: number; created: number; merged: number; overwritten: number;
+        skipped: number; failed: number;
+        outcomes: { oem?: string; name?: string; action: string; result: string; error?: string }[];
+      };
+      const raw = await api.post<CommitV2Resp>("/seller/import/commit-v2", {
         rows: enrichedRows.map((row) => ({
           ...row,
-          // Default to "create" for rows without an explicit action
-          // (e.g. legacy enriched rows that bypassed /preview).
           action: row.action || (row.conflict ? "skip" : "create"),
         })),
       });
-      setResult(r);
+      setResult({
+        created:     raw.created,
+        merged:      raw.merged,
+        overwritten: raw.overwritten,
+        skipped:     raw.skipped,
+        failed:      raw.failed,
+        total:       raw.total,
+        failures:    raw.outcomes
+          .filter((o) => o.result === "failed")
+          .map((o) => ({ row: o.oem || o.name || "—", error: o.error || "" })),
+      });
       setStep("result");
     } catch (e) {
       setErr((e as Error).message);
@@ -583,18 +595,7 @@ export default function ImportWizardPage() {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 text-[12px] text-gray-600">
-              <span>Давхардсан OEM-той бараа байвал:</span>
-              <label className="inline-flex items-center gap-1 cursor-pointer">
-                <input type="radio" name="dupe" value="skip" checked={onDuplicate === "skip"} onChange={() => setOnDuplicate("skip")} className="accent-blue-600 w-3 h-3" />
-                Алгасах
-              </label>
-              <label className="inline-flex items-center gap-1 cursor-pointer">
-                <input type="radio" name="dupe" value="update" checked={onDuplicate === "update"} onChange={() => setOnDuplicate("update")} className="accent-blue-600 w-3 h-3" />
-                Шинэчлэх
-              </label>
-            </div>
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-end gap-3 flex-wrap">
             <div className="flex gap-2">
               <button onClick={() => setStep("source")} disabled={busy}
                 className="inline-flex items-center gap-1 border border-gray-200 hover:border-blue-400 rounded-xl px-4 py-2 text-[12px] text-gray-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
@@ -615,15 +616,16 @@ export default function ImportWizardPage() {
         <div className="space-y-4">
           <div className="bg-gradient-to-br from-blue-500 to-amber-500 text-white rounded-3xl p-6">
             <div className="text-[14px] opacity-80 mb-1">Импорт амжилттай</div>
-            <div className="text-[40px] font-bold tabular-nums">{result.created + result.updated}</div>
+            <div className="text-[40px] font-bold tabular-nums">{result.created + result.merged + result.overwritten}</div>
             <div className="text-[13px] opacity-80">{result.total} мөрөөс</div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <ResultStat label="Шинээр үүсгэсэн" value={result.created} tone="emerald" />
-            <ResultStat label="Шинэчилсэн"      value={result.updated} tone="blue"    />
-            <ResultStat label="Алгасасан"        value={result.skipped} tone="gray"   />
-            <ResultStat label="Алдаатай"         value={result.failed}  tone="red"    />
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <ResultStat label="Шинээр үүсгэсэн" value={result.created}     tone="emerald" />
+            <ResultStat label="Нөөц нэгтгэсэн"  value={result.merged}      tone="blue"    />
+            <ResultStat label="Дарж бичсэн"     value={result.overwritten} tone="blue"    />
+            <ResultStat label="Алгасасан"        value={result.skipped}     tone="gray"    />
+            <ResultStat label="Алдаатай"         value={result.failed}      tone="red"     />
           </div>
 
           {result.failures.length > 0 && (

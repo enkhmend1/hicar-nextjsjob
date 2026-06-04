@@ -31,6 +31,8 @@ const BOOT_DELAY_MS       = Number(process.env.AI_BG_AGENT_BOOT_DELAY_MS) || 60 
 const SCHEDULER_DISABLED  = String(process.env.AI_BG_AGENT_DISABLED || "").toLowerCase() === "true";
 
 // ── BullMQ job handler ─────────────────────────────────────────────
+
+
 register(BACKGROUND_AGENT_QUEUE, async (job) => {
   const summary = await runAllBackgroundChecks();
   if (summary.totalSent > 0 || summary.errored.length > 0) {

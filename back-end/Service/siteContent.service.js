@@ -79,7 +79,8 @@ export const getCategoriesWithCounts = async () => {
     .map((c) => ({
       id: c.id,
       name: c.name,
-      iconPath: c.iconPath,
+      iconPath: c.iconPath || "",
+      imageUrl: c.imageUrl || "",
       count: countById.get(c.id) ?? 0,
       // Surface the attribute schema so seller forms can render dynamic
       // fields directly from this payload (no second round-trip).
@@ -110,7 +111,8 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
       const id = String(c?.id || "").trim().toLowerCase();
       const name = String(c?.name || "").trim();
       const iconPath = String(c?.iconPath || "").trim();
-      if (!id || !name || !iconPath) {
+      const imageUrl = String(c?.imageUrl || "").trim();
+      if (!id || !name) {
         // Skip silently — frontend already inline-validates required
         // fields. Bad rows are non-fatal here so a typo in one row
         // doesn't reject the entire save.
@@ -151,7 +153,7 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
       });
 
       normalised.push({
-        id, name, iconPath,
+        id, name, iconPath, imageUrl,
         order: Number.isFinite(Number(c.order)) ? Number(c.order) : 0,
         visible: c.visible !== false,
         attributesSchema: cleanedAttrs,

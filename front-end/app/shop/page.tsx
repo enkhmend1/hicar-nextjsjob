@@ -503,7 +503,13 @@ function FilterContent({
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "bg-transparent text-gray-600 hover:bg-gray-50"
               }`}>
-              <span className="truncate">{c.name}</span>
+              <span className="flex items-center gap-1.5 truncate">
+                {c.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.imageUrl} alt="" className="w-4 h-4 rounded object-cover shrink-0" />
+                )}
+                <span className="truncate">{c.name}</span>
+              </span>
               {c.id !== "all" && c.count > 0 && (
                 <span className="shrink-0 text-[10px] text-gray-400 font-mono">
                   {c.count}

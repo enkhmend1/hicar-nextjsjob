@@ -28,7 +28,7 @@ function CatIcon({ d }: { d: string }) {
  * the labels/icons/visibility at /admin/site-content; the counts are
  * always real.
  */
-type HomepageCategory = { id: string; name: string; iconPath: string; count: number };
+type HomepageCategory = { id: string; name: string; iconPath: string; imageUrl?: string; count: number };
 
 export default function Home() {
   const t = useT();
@@ -154,6 +154,7 @@ export default function Home() {
                   <Link key={c.id} href={`/shop?cat=${c.id}`}>
                     <CategoryCard
                       id={c.id}
+                      imageUrl={c.imageUrl || undefined}
                       name={c.name}
                       count={`${c.count.toLocaleString()} зүйл`}
                       icon={<CatIcon d={c.iconPath} />}
