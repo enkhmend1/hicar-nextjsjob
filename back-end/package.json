@@ -5,13 +5,21 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "dp:typecheck": "tsc --noEmit",
+    "dp:build": "tsc",
+    "dp:server": "tsx src/data-platform/server.ts",
+    "dp:worker": "tsx src/data-platform/workers.ts",
+    "dp:seed": "tsx src/data-platform/scripts/seed-catalog.ts",
+    "dp:reindex": "tsx src/data-platform/scripts/reindex.ts",
+    "dp:dev": "tsx watch src/data-platform/server.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "argon2": "^0.44.0",
     "bullmq": "^5.76.9",
     "cloudinary": "^1.41.3",
@@ -29,12 +37,18 @@
     "openai": "^6.37.0",
     "opossum": "^9.0.0",
     "pdfkit": "^0.18.0",
+    "typesense": "^3.0.6",
     "undici": "^8.3.0",
     "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.1",
     "chalk": "^5.6.2",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
   }
 }

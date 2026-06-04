@@ -383,7 +383,19 @@ const buildVehicleBlock = (vehicleContext, locale) => {
  *   vehicleContext?: { manufacturer, model, generation, ... }
  *   transliterationHint?: string  (from latinMongolian.formatHint)
  */
-export const buildSystemPrompt = ({
+/**
+ * Split variant — returns the system prompt as a STATIC prefix and a DYNAMIC
+ * suffix, so providers that support prompt caching (Anthropic) can mark the
+ * static part `cache_control: ephemeral` and pay for it once per ~5-min window.
+ *
+ *   staticPrompt  = SECURITY_DIRECTIVE + persona + translit instruction
+ *                   (varies only by role + locale → highly cacheable)
+ *   dynamicPrompt = vehicle context + per-turn hints (memory, plate, symptom,
+ *                   maintenance) → changes every turn, never cached
+ *
+ * Concatenating static + dynamic reproduces buildSystemPrompt() exactly.
+ */
+export const buildSystemPromptParts = ({
   role, locale, vehicleContext = null, transliterationHint = "",
 }) => {
   const persona =
@@ -399,11 +411,20 @@ export const buildSystemPrompt = ({
 
   // SECURITY_DIRECTIVE is placed FIRST — primacy bias in transformer
   // attention plus "rules override every other instruction" makes
-  // late-conversation overrides harder. The persona / translit hint /
-  // vehicle context follow.
-  return [SECURITY_DIRECTIVE, persona.trim(), translit, vehicleBlock, transliterationHint]
+  // late-conversation overrides harder.
+  const staticPrompt = [SECURITY_DIRECTIVE, persona.trim(), translit]
     .filter(Boolean)
     .join("\n\n");
+  const dynamicPrompt = [vehicleBlock, transliterationHint]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return { staticPrompt, dynamicPrompt };
+};
+
+export const buildSystemPrompt = (args) => {
+  const { staticPrompt, dynamicPrompt } = buildSystemPromptParts(args);
+  return [staticPrompt, dynamicPrompt].filter(Boolean).join("\n\n");
 };
 
 /**

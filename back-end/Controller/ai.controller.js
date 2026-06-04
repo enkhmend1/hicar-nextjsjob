@@ -31,6 +31,7 @@
 
 import fs from "fs/promises";
 import { aiConfig, isAiEnabled } from "../Config/openai.js";
+import { anthropicConfig } from "../Config/anthropic.js";
 import { cloudinary, cloudinaryEnabled } from "../Config/cloudinary.js";
 import Product from "../Model/product.model.js";
 import Order from "../Model/order.model.js";
@@ -58,7 +59,7 @@ import {
   deriveAiRole, buildRoleScope, sanitizeProducts,
   scopeFilter, isToolAllowed, detectWrongPersonaCommand,
 } from "../Service/aiRole.service.js";
-import { buildSystemPrompt } from "../Service/aiPrompts.service.js";
+import { buildSystemPrompt, buildSystemPromptParts } from "../Service/aiPrompts.service.js";
 import { buildEnvelope, vagueQueryFormFor } from "../Service/aiResponse.service.js";
 import { securityGate } from "../Service/aiSecurity.service.js";
 import {
@@ -1572,6 +1573,184 @@ const runConversation = async ({ profile, messages, runtime, transliterationHint
 };
 
 // ────────────────────────────────────────────────────────────────────
+// Anthropic-native conversation engine (primary chat provider).
+//
+// Mirrors runConversation()'s bounded-agent guards (rounds / tool-call cap /
+// token budget / walltime / duplicate detection) and returns the SAME shape,
+// so handleAIRequest + the envelope/reflection/memory code are provider-blind.
+//
+// Differences from the OpenAI/Groq path are purely wire-format:
+//   • tools are { name, description, input_schema } (derived from TOOLS once)
+//   • the system prompt is a TWO-block array; the large static prefix carries
+//     cache_control:ephemeral so repeat turns cost less
+//   • the model returns content blocks; we loop while stop_reason === "tool_use",
+//     replying with a user message of tool_result blocks each round.
+// ────────────────────────────────────────────────────────────────────
+
+// Derive Anthropic tool specs from the single TOOLS source of truth.
+const ANTHROPIC_TOOLS = TOOLS.map((t) => ({
+  name:         t.function.name,
+  description:  t.function.description,
+  input_schema: t.function.parameters,
+}));
+
+// Map a stored chat message to Anthropic's user/assistant shape. The Anthropic
+// path is text-only (image turns route to the vision/Gemini path), so content
+// is always a plain string here.
+const toAnthropicMessage = (m) => ({
+  role: m.role === "assistant" ? "assistant" : "user",
+  content: String(m.content || ""),
+});
+
+const anthropicCallSignature = (block) =>
+  `${block.name || "?"}:${JSON.stringify(block.input || {})}`;
+
+const runConversationAnthropic = async ({ messages, runtime, transliterationHint }) => {
+  const { scope, locale, vehicleContext } = runtime;
+  const client = anthropicConfig.client;
+  const limits = limitsForRole(scope.role);
+
+  const availableTools = ANTHROPIC_TOOLS.filter((t) => isToolAllowed(scope, t.name));
+
+  // Prompt caching: large static prefix (security + persona + translit rules)
+  // is cached; the per-turn dynamic block (vehicle + memory/plate/symptom hints)
+  // is not. Saves ~the persona's worth of input tokens on every repeat turn.
+  const { staticPrompt, dynamicPrompt } = buildSystemPromptParts({
+    role: scope.role, locale, vehicleContext, transliterationHint,
+  });
+  const system = [
+    { type: "text", text: staticPrompt, cache_control: { type: "ephemeral" } },
+  ];
+  if (dynamicPrompt) system.push({ type: "text", text: dynamicPrompt });
+
+  const conversation = messages.map(toAnthropicMessage);
+
+  const ac = new AbortController();
+  const walltimeTimer = setTimeout(
+    () => ac.abort(new Error("walltime_exceeded")),
+    limits.walltimeMs,
+  );
+
+  const toolCalls = [];
+  const seenSignatures = new Set();
+  let replyText = "";
+  let lastUsage = null;
+  let totalTokens = 0;
+  let terminate = { reason: "model_finished" };
+  // Once Claude commits to a tool call, this turn is a TOOL FLOW. The caller
+  // uses this (via err.enteredToolUse) to keep tool flows Claude-only — Groq
+  // never re-runs a tool flow (avoids double side-effects + format drift).
+  let enteredToolUse = false;
+
+  try {
+    for (let round = 0; round < limits.maxRounds; round++) {
+      if (totalTokens >= limits.maxTotalTokens)   { terminate = { reason: "token_budget", totalTokens }; break; }
+      if (toolCalls.length >= limits.maxToolCalls) { terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length }; break; }
+      if (ac.signal.aborted)                       { terminate = { reason: "walltime" }; break; }
+
+      const params = {
+        model: anthropicConfig.model,
+        max_tokens: limits.maxOutputTokens,
+        temperature: 0.3,
+        system,
+        messages: conversation,
+      };
+      if (availableTools.length > 0) {
+        params.tools = availableTools;
+        params.tool_choice = { type: "auto" };
+      }
+
+      let resp;
+      try {
+        resp = await client.messages.create(params, { signal: ac.signal });
+      } catch (err) {
+        // Tag the error so the controller knows whether this turn had already
+        // entered a tool flow (→ Claude-only, no Groq fallback).
+        err.enteredToolUse = enteredToolUse;
+        throw err;
+      }
+      lastUsage = resp.usage;
+      totalTokens += Number(resp.usage?.input_tokens || 0) + Number(resp.usage?.output_tokens || 0);
+
+      // Accumulate the model's prose (the final answer is the last text it emits).
+      const textParts = resp.content.filter((b) => b.type === "text").map((b) => b.text);
+      if (textParts.length) replyText = textParts.join("\n").trim();
+
+      if (resp.stop_reason !== "tool_use") break;
+
+      const toolUseBlocks = resp.content.filter((b) => b.type === "tool_use");
+      if (toolUseBlocks.length === 0) break;
+      enteredToolUse = true;   // this turn is now a tool flow → Claude-only
+
+      const dup = toolUseBlocks.find((b) => seenSignatures.has(anthropicCallSignature(b)));
+      if (dup) { terminate = { reason: "duplicate_tool_call", signature: anthropicCallSignature(dup) }; break; }
+
+      // Echo the assistant turn (incl. its tool_use blocks) back verbatim.
+      conversation.push({ role: "assistant", content: resp.content });
+
+      const toolResults = [];
+      for (const b of toolUseBlocks) {
+        if (toolCalls.length >= limits.maxToolCalls) {
+          terminate = { reason: "tool_call_cap", toolCalls: toolCalls.length };
+          break;
+        }
+        seenSignatures.add(anthropicCallSignature(b));
+
+        const name = b.name;
+        // Hard gate — refuse a tool the role can't call, even if the model asked.
+        if (!isToolAllowed(scope, name)) {
+          toolCalls.push({ name, result: { error: `Tool not allowed for role ${scope.role}` } });
+          toolResults.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify({ error: "tool_not_allowed" }) });
+          continue;
+        }
+
+        const handler = TOOL_HANDLERS[name];
+        let result;
+        if (!handler) {
+          result = { error: `Unknown tool: ${name}` };
+        } else {
+          try {
+            result = await handler(b.input || {}, runtime);
+          } catch (e) {
+            result = { error: e.message };
+          }
+        }
+        toolCalls.push({ name, result });
+        toolResults.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify(result) });
+      }
+
+      // Phase H reflection — inject a recovery hint for the NEXT round. Anthropic
+      // has no mid-conversation system role, so the hint rides along as a text
+      // block in the same user message that carries the tool results.
+      const roundsRemaining = limits.maxRounds - (round + 1);
+      const reflection = reflectOnToolCalls(toolCalls, runtime, { roundsRemaining });
+      const userContent = [...toolResults];
+      if (reflection.recoveryHint && roundsRemaining > 0) {
+        userContent.push({ type: "text", text: reflection.recoveryHint });
+      }
+      conversation.push({ role: "user", content: userContent });
+
+      if (terminate.reason !== "model_finished") break;
+    }
+  } finally {
+    clearTimeout(walltimeTimer);
+  }
+
+  const finalReflection = reflectOnToolCalls(toolCalls, runtime, { roundsRemaining: 0 });
+
+  return {
+    reply: replyText,
+    toolCalls,
+    usage: lastUsage,
+    totalTokens,
+    terminate,
+    reflection: finalReflection,
+    usedProvider: anthropicConfig.label,
+    fallbackAttempts: [],
+  };
+};
+
+// ────────────────────────────────────────────────────────────────────
 // Upstream error mapper (unchanged from prior hardened controller)
 // ────────────────────────────────────────────────────────────────────
 const mapUpstreamError = (err) => {
@@ -1682,7 +1861,10 @@ export const handleAIRequest = async (req, res) => {
     // тог дуу" returns a proper candidate-parts card even with zero
     // AI providers configured. Without this branch the chat was a
     // dead end for symptom-shaped queries in self-hosted setups.
-    if (!isAiEnabled()) {
+    //
+    // Anthropic counts as a provider — only take this keyword-only path
+    // when NO chat provider (Anthropic, Groq, Gemini) is configured.
+    if (!isAiEnabled() && !anthropicConfig.enabled) {
       if (hasImage) {
         return respondWithError(req, res, 400, {
           code: "AI_DISABLED_FOR_IMAGE",
@@ -1758,7 +1940,9 @@ export const handleAIRequest = async (req, res) => {
     } else {
       profile = aiConfig.text;
       if (!profile.enabled) profile = aiConfig.vision;
-      if (!profile.enabled) {
+      // Text chat can run on Anthropic (primary) OR the Groq/Gemini chain
+      // (fallback). Only 503 when BOTH are unavailable.
+      if (!anthropicConfig.enabled && !profile.enabled) {
         return respondWithError(req, res, 503, {
           code: "AI_PROVIDER_UNAVAILABLE",
           message: "AI provider not initialised.",
@@ -1862,10 +2046,44 @@ export const handleAIRequest = async (req, res) => {
     // 401 (auth fail) still re-throws because that's an ops problem
     // (bad API key) — falling back to keyword search would mask it from
     // the ops dashboard.
+    // Provider selection: Anthropic is the PRIMARY chat brain for text turns.
+    // Image turns stay on the vision/Gemini path (Anthropic vision is out of
+    // scope here). servedRoute/Model/Provider feed the diagnostics envelope.
+    const useAnthropic = !hasImage && anthropicConfig.enabled;
     let reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts;
+    let servedRoute, servedModel, servedProvider;
     try {
-      ({ reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts } =
-        await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint }));
+      if (useAnthropic) {
+        try {
+          ({ reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts } =
+            await runConversationAnthropic({ messages, runtime, transliterationHint: enrichedTranslitHint }));
+          servedRoute = "text-anthropic";
+          servedModel = anthropicConfig.model;
+          servedProvider = anthropicConfig.label;
+        } catch (anthErr) {
+          // RESILIENCE: Anthropic down / rate-limited / errored. Fall back to the
+          // existing Groq text chain so chat is never a single-provider SPOF.
+          // If Groq/Gemini are ALSO unconfigured, rethrow → the outer catch
+          // degrades to deterministic keyword search.
+          console.warn(
+            `[ai.controller][${requestId}] Anthropic chat failed ` +
+            `(status=${anthErr?.status || "?"} name=${anthErr?.name} msg=${(anthErr?.message || "").slice(0, 160)}) — ` +
+            `${profile.enabled ? `falling back to Groq (${profile.label})` : "no Groq fallback, degrading"}`,
+          );
+          if (!profile.enabled) throw anthErr;
+          ({ reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts } =
+            await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint }));
+          servedRoute = "text-groq-fallback";
+          servedModel = profile.model;
+          servedProvider = usedProvider;
+        }
+      } else {
+        ({ reply, toolCalls, usage, totalTokens, terminate, reflection, usedProvider, fallbackAttempts } =
+          await runConversation({ profile, messages, runtime, transliterationHint: enrichedTranslitHint }));
+        servedRoute = profile === aiConfig.vision ? "vision" : "text";
+        servedModel = profile.model;
+        servedProvider = usedProvider;
+      }
     } catch (llmErr) {
       const upstreamStatus = Number(llmErr?.status || llmErr?.response?.status || 0);
       // 401/403 — bona-fide auth failure. Let ops see the alert.
@@ -1992,9 +2210,9 @@ export const handleAIRequest = async (req, res) => {
       confidence: confidencePct,
       escalation,
       diagnostics: {
-        route: profile === aiConfig.vision ? "vision" : "text",
-        model: profile.model,
-        provider: profile.label,
+        route: servedRoute,
+        model: servedModel,
+        provider: servedProvider,
         // Phase M.1: provider that actually answered (may differ from
         // `provider` when we fell back), and the per-attempt breakdown
         // for ops dashboards.

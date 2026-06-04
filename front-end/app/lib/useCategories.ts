@@ -33,6 +33,7 @@ export interface SiteCategoryWithCount {
   id: string;
   name: string;
   iconPath: string;
+  imageUrl?: string;
   count: number;
   /** Empty when the legacy hardcoded schema still applies (e.g. body/oils). */
   attributesSchema?: AttributeDefinition[];

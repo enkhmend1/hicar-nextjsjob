@@ -19,12 +19,13 @@
  *     and-drop, simpler than a library dep).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 import { invalidateCategoriesCache } from "@/app/lib/useCategories";
 import {
   AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Eye, EyeOff,
-  LayoutTemplate, Loader2, Plus, Save, Sliders, Trash2,
+  ImagePlus, LayoutTemplate, Loader2, Plus, Save, Sliders, Trash2, X,
 } from "lucide-react";
 
 interface AttributeDef {
@@ -38,6 +39,7 @@ interface SiteCategory {
   id: string;
   name: string;
   iconPath: string;
+  imageUrl: string;
   order: number;
   visible: boolean;
   attributesSchema: AttributeDef[];
@@ -61,6 +63,7 @@ interface HomepageCategoryWithCount {
   id: string;
   name: string;
   iconPath: string;
+  imageUrl?: string;
   count: number;
 }
 
@@ -75,7 +78,7 @@ const HERO_FIELDS: { key: keyof SiteHero; label: string; placeholder?: string; m
 ];
 
 const EMPTY_CATEGORY: SiteCategory = {
-  id: "", name: "", iconPath: "", order: 999, visible: true, attributesSchema: [],
+  id: "", name: "", iconPath: "", imageUrl: "", order: 999, visible: true, attributesSchema: [],
 };
 const EMPTY_ATTRIBUTE: AttributeDef = {
   key: "", label: "", type: "text", options: [], required: false,
@@ -97,6 +100,9 @@ export default function AdminSiteContentPage() {
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   // Which category rows are showing their attributesSchema editor.
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Per-row image upload state: index → uploading boolean
+  const [uploadingIdx, setUploadingIdx] = useState<Set<number>>(new Set());
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const toggleExpanded = (idx: number) => {
     setExpanded((prev) => {
@@ -104,6 +110,18 @@ export default function AdminSiteContentPage() {
       if (next.has(idx)) next.delete(idx); else next.add(idx);
       return next;
     });
+  };
+
+  const uploadCategoryImage = async (idx: number, file: File) => {
+    setUploadingIdx((prev) => new Set(prev).add(idx));
+    try {
+      const r = await api.uploadImage(file);
+      updateCategory(idx, { imageUrl: r.url });
+    } catch {
+      setErr("Зураг upload хийж чадсангүй");
+    } finally {
+      setUploadingIdx((prev) => { const next = new Set(prev); next.delete(idx); return next; });
+    }
   };
 
   const reload = async () => {
@@ -230,9 +248,8 @@ export default function AdminSiteContentPage() {
     const seen = new Set<string>();
     content.categories.forEach((c, i) => {
       const id = c.id.trim().toLowerCase();
-      if (!id)        issues.push(`Мөр ${i + 1}: id хоосон`);
-      if (!c.name)    issues.push(`Мөр ${i + 1}: нэр хоосон`);
-      if (!c.iconPath) issues.push(`Мөр ${i + 1}: icon SVG path хоосон`);
+      if (!id)     issues.push(`Мөр ${i + 1}: id хоосон`);
+      if (!c.name) issues.push(`Мөр ${i + 1}: нэр хоосон`);
       if (id && seen.has(id)) issues.push(`Мөр ${i + 1}: давхардсан id "${id}"`);
       seen.add(id);
 
@@ -331,7 +348,7 @@ export default function AdminSiteContentPage() {
         <div className="space-y-2">
           {content.categories.map((cat, idx) => (
             <div key={idx} className="rounded-xl border border-gray-100 bg-gray-50/40 p-2">
-            <div className="grid grid-cols-[28px_2fr_2fr_1fr_60px_72px_80px_70px_64px] gap-1.5 items-center">
+            <div className="grid grid-cols-[28px_2fr_2fr_1fr_80px_80px_72px_80px_70px_64px] gap-1.5 items-center">
               {/* Reorder */}
               <div className="flex flex-col items-center justify-center gap-px">
                 <button type="button" onClick={() => moveCategory(idx, -1)} disabled={idx === 0}
@@ -361,6 +378,45 @@ export default function AdminSiteContentPage() {
                 {cat.iconPath ? (
                   <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={cat.iconPath} /></svg>
                 ) : <span className="text-[10px] text-gray-400">—</span>}
+              </div>
+
+              {/* Image upload */}
+              <div className="relative flex items-center justify-center h-9">
+                <input
+                  ref={(el) => { fileInputRefs.current[idx] = el; }}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadCategoryImage(idx, file);
+                    e.target.value = "";
+                  }}
+                />
+                {cat.imageUrl ? (
+                  <div className="relative w-9 h-9 rounded-lg overflow-hidden border border-gray-200 group/img">
+                    <Image src={cat.imageUrl} alt={cat.name || "category"} fill className="object-cover" sizes="36px" />
+                    <button
+                      type="button"
+                      onClick={() => updateCategory(idx, { imageUrl: "" })}
+                      className="absolute inset-0 bg-black/50 hidden group-hover/img:flex items-center justify-center cursor-pointer border-none"
+                    >
+                      <X size={12} className="text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={uploadingIdx.has(idx)}
+                    onClick={() => fileInputRefs.current[idx]?.click()}
+                    className="inline-flex items-center justify-center h-9 w-full rounded-lg text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer bg-white border border-dashed border-blue-300 transition-colors disabled:opacity-50"
+                    title="Зураг upload"
+                  >
+                    {uploadingIdx.has(idx)
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <ImagePlus size={12} />}
+                  </button>
+                )}
               </div>
 
               {/* Live count */}
