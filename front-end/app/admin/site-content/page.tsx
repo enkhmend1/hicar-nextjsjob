@@ -117,8 +117,9 @@ export default function AdminSiteContentPage() {
     try {
       const r = await api.uploadImage(file);
       updateCategory(idx, { imageUrl: r.url });
-    } catch {
-      setErr("Зураг upload хийж чадсангүй");
+    } catch (e) {
+      const msg = (e as ApiError)?.message;
+      setErr(msg ? `Зураг upload хийж чадсангүй: ${msg}` : "Зураг upload хийж чадсангүй");
     } finally {
       setUploadingIdx((prev) => { const next = new Set(prev); next.delete(idx); return next; });
     }

@@ -145,7 +145,7 @@ export default function Home() {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {categories.length === 0
               ? Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[120px] animate-pulse" />
+                  <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[150px] animate-pulse" />
                 ))
               : (showAllCategories
                   ? categories
