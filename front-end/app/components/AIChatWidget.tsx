@@ -12,58 +12,20 @@ import { Product, Order } from "@/app/types";
 import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
-import type { AIResponse } from "@/app/lib/services/chat.service";
-import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Search as SearchIcon, Clock } from "lucide-react";
+import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Clock } from "lucide-react";
+// Chat-widget types + sub-renderers extracted to ./ai-chat/* (Phase: split a
+// 1.4k-line file). This component keeps only the orchestrating shell.
+import type { Message, Suggestion } from "./ai-chat/types";
+import DiagFormCard from "./ai-chat/DiagFormCard";
+import QuotationCard from "./ai-chat/QuotationCard";
+import DiagnosticCard from "./ai-chat/DiagnosticCard";
+import { ConfidenceBadge, ConfidenceEscalation } from "./ai-chat/ConfidenceBits";
+import VehicleSwitcher from "./ai-chat/VehicleSwitcher";
+import AdminWidget from "./ai-chat/AdminWidget";
+import { layoutToMessage } from "./ai-chat/layoutToMessage";
 
 /** /car or /changecar — both open the switcher dropdown without sending. */
 const SLASH_CAR_RX = /^\/(?:car|changecar)\b/i;
-
-type ProductCard = { id: string; name: string; oem: string; price: number; brand?: string; stockQty?: number; inStock?: boolean };
-type Suggestion = { label: string; cmd: string };
-
-interface Message {
-  id: number;
-  role: "ai" | "user";
-  text?: string;
-  imageUrl?: string;
-  products?: ProductCard[];
-  crossRefs?: CrossRef[];
-  /** Phase AL — bundle suggestions ("Хамт ихэвчлэн авдаг"). */
-  related?: ProductCard[];
-  lowStock?: ProductCard[];
-  excelHint?: { filename: string };
-  /** Seller-table renderer payload from layout="seller_table". */
-  table?: { columns: string[]; rows: NonNullable<AIResponse["payload"]["rows"]>; summary?: Record<string, unknown> | null };
-  /** Admin chart-ready payload from layout="admin_widget". */
-  widget?: { kind: NonNullable<AIResponse["payload"]["kind"]>; title: string; data: Record<string, unknown> };
-  /** Disambiguation form from layout="diag_form". */
-  diagForm?: { partType: string; fields: DiagField[]; note?: string };
-  /** Phase B — generated B2B quotation block. */
-  quotation?: { quoteId: string; bodyText: string; summary: Record<string, unknown> };
-  /** Phase I — diagnostic card. */
-  diagnostic?: {
-    symptom:             string;
-    candidates:          NonNullable<AIResponse["payload"]["candidates"]>;
-    clarifyingQuestions: string[];
-    urgency:             "low" | "medium" | "high";
-  };
-  /**
-   * Phase H — confidence + escalation attached to assistant bubbles.
-   * Only assistant bubbles can carry these (user messages always 100%).
-   */
-  confidence?: number | null;
-  escalation?: NonNullable<AIResponse["escalation"]>;
-  error?: boolean;
-}
-
-/**
- * Phase H-prep: AIResponse wire shape is owned by chat.service.ts so the
- * widget and the hook share the same TS contract. Local aliases below
- * preserve the legacy component-local field names without re-declaring
- * the union.
- */
-type DiagField = NonNullable<AIResponse["payload"]["fields"]>[number];
-type CrossRef  = NonNullable<AIResponse["payload"]["crossRefs"]>[number];
 
 const USER_GREETING_MN = `Сайн байна уу 👋
 Ямар сэлбэг хайж байна вэ?`;
@@ -409,7 +371,10 @@ export default function HiCarAIChat() {
   if (!isOpen || isMinimized) {
     return (
       <button onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer border-none transition-all font-sans"
+        // Lifted above the 56px mobile bottom nav (+ iOS safe area) so the FAB
+        // never covers the right-most nav tab; back to bottom-5 from md up,
+        // where MobileBottomNav is hidden.
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer border-none transition-all font-sans"
         aria-label="AI chat">
         {isAdminPath ? <Bot size={18} /> : isSellerPath ? <FileSpreadsheet size={18} /> : <MessageCircle size={18} />}
         <span className="text-[13px] font-semibold">
@@ -422,7 +387,9 @@ export default function HiCarAIChat() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-2rem)] bg-white border border-gray-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    // Mobile (<md): true fullscreen sheet so the keyboard + thread get the
+    // whole viewport. md+: floating 360px panel anchored bottom-right.
+    <div className="fixed inset-0 z-50 w-full h-full bg-white border-0 shadow-2xl flex flex-col overflow-hidden md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:max-w-[calc(100vw-2rem)] md:h-[600px] md:max-h-[calc(100vh-2rem)] md:border md:border-gray-200 md:rounded-2xl">
       <div className={`flex items-center justify-between px-4 py-3 ${isAdminPath ? "bg-gradient-to-r from-blue-700 to-indigo-700" : "bg-gradient-to-r from-blue-600 to-amber-500"} text-white`}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
@@ -436,8 +403,8 @@ export default function HiCarAIChat() {
               <button
                 onClick={() => setSwitcherOpen((v) => !v)}
                 title={locale === "en" ? "Switch vehicle" : "Машин солих"}
-                className="text-[10px] opacity-90 hover:opacity-100 flex items-center gap-1 truncate cursor-pointer bg-transparent border-none text-white p-0 m-0 font-sans">
-                <Car size={9} />
+                className="mt-0.5 -ml-1 text-[11px] opacity-90 hover:opacity-100 flex items-center gap-1 truncate cursor-pointer bg-white/10 hover:bg-white/20 rounded-md border-none text-white px-1.5 py-1 m-0 font-sans transition-colors">
+                <Car size={11} />
                 {activeVehicle ? (
                   <>
                     <span>{activeVehicle.manufacturer} {activeVehicle.model}</span>
@@ -450,7 +417,7 @@ export default function HiCarAIChat() {
                     {locale === "en" ? "Add a vehicle…" : "Машин нэмэх…"}
                   </span>
                 )}
-                <ChevronDown size={9} className={`transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={11} className={`transition-transform ${switcherOpen ? "rotate-180" : ""}`} />
               </button>
             ) : isSellerPath ? (
               <div className="text-[10px] opacity-80">
@@ -463,11 +430,11 @@ export default function HiCarAIChat() {
         </div>
         <div className="flex gap-1">
           <button onClick={() => setIsMinimized(true)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/15 cursor-pointer bg-transparent border-none text-white">
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/15 cursor-pointer bg-transparent border-none text-white">
             <Minus size={14} />
           </button>
           <button onClick={() => { setIsOpen(false); setIsMinimized(false); }}
-            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/15 cursor-pointer bg-transparent border-none text-white">
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/15 cursor-pointer bg-transparent border-none text-white">
             <X size={14} />
           </button>
         </div>
@@ -512,7 +479,7 @@ export default function HiCarAIChat() {
               {m.products && m.products.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {m.products.map(p => (
-                    <Link key={p.id} href={`/shop/${p.id}`} className="block bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg p-2 transition-colors">
+                    <Link key={p.id} href={`/shop/${p.id}`} className="block bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg p-2.5 transition-colors">
                       <div className="text-[12px] font-semibold text-gray-900 line-clamp-1">{p.name}</div>
                       <div className="text-[10px] text-gray-400 font-mono">{p.oem}{p.brand ? ` · ${p.brand}` : ""}</div>
                       <div className="flex items-center justify-between mt-1">
@@ -747,7 +714,7 @@ export default function HiCarAIChat() {
       <div className="px-3 py-2 border-t border-gray-100 bg-white flex gap-1.5 overflow-x-auto scrollbar-none">
         {suggestions.map(s => (
           <button key={s.cmd} onClick={() => send(s.cmd)} disabled={busy}
-            className="shrink-0 text-[11px] border border-gray-200 rounded-full px-2.5 py-1 text-gray-600 hover:border-blue-400 hover:text-blue-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+            className="shrink-0 text-[12px] border border-gray-200 rounded-full px-3 py-1.5 text-gray-600 hover:border-blue-400 hover:text-blue-600 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
             {s.label}
           </button>
         ))}
@@ -758,7 +725,7 @@ export default function HiCarAIChat() {
           <>
             <button onClick={() => fileInputRef.current?.click()} disabled={busy || uploadingImg}
               title="Зураг ачаалах"
-              className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border border-gray-200 transition-colors shrink-0 disabled:opacity-50">
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border border-gray-200 transition-colors shrink-0 disabled:opacity-50">
               {uploadingImg ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" hidden
@@ -768,7 +735,7 @@ export default function HiCarAIChat() {
         {voiceSupported && (
           <button onClick={toggleVoice} disabled={busy}
             title={listening ? "Зогсоох" : "Хоолой бичих"}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl cursor-pointer border transition-colors shrink-0 disabled:opacity-50 ${
+            className={`w-10 h-10 flex items-center justify-center rounded-xl cursor-pointer border transition-colors shrink-0 disabled:opacity-50 ${
               listening
                 ? "text-white bg-red-500 border-red-500 hover:bg-red-600 animate-pulse"
                 : "text-gray-400 hover:text-blue-600 hover:bg-blue-50 bg-transparent border-gray-200"
@@ -788,656 +755,14 @@ export default function HiCarAIChat() {
                 ? (locale === "en" ? "Listening..." : "Хүлээж байна...")
                 : placeholder
           }
-          className={`flex-1 ${inCooldown ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"} border rounded-xl px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white transition-colors outline-none`} />
+          // text-[16px] on mobile prevents iOS Safari's auto-zoom on focus
+          // (it zooms any input with font-size < 16px); compact 13px from md up.
+          className={`flex-1 ${inCooldown ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"} border rounded-xl px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors outline-none`} />
         <button onClick={() => send()} disabled={busy || !input.trim()}
-          className="w-9 h-9 flex items-center justify-center bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-blue-300 disabled:to-amber-300 text-white rounded-xl cursor-pointer border-none transition-colors shrink-0">
+          className="w-10 h-10 flex items-center justify-center bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-blue-300 disabled:to-amber-300 text-white rounded-xl cursor-pointer border-none transition-colors shrink-0">
           <Send size={14} />
         </button>
       </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// DiagFormCard — inline disambiguation widget rendered by layout="diag_form".
-//
-// Tiny self-contained form that captures the answers the AI asked for
-// (year / model / side / position) and submits them back as a single
-// chat turn. We deliberately keep it minimal — the source of truth for
-// available fields is the backend's vagueQueryFormFor() registry.
-// ────────────────────────────────────────────────────────────────────
-function DiagFormCard({
-  data, locale, onSubmit,
-}: {
-  data: { partType: string; fields: DiagField[]; note?: string };
-  locale: "mn" | "en";
-  onSubmit: (answers: Record<string, string>) => void;
-}) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const ready = data.fields
-    .filter((f) => f.required)
-    .every((f) => answers[f.key] && answers[f.key].length > 0);
-
-  return (
-    <div className="mt-2 border border-amber-200 bg-amber-50 rounded-lg p-2 space-y-1.5 text-[12px]">
-      <div className="font-semibold text-amber-800">
-        {locale === "en" ? `Narrow down: ${data.partType}` : `Тодруулъя — ${data.partType}`}
-      </div>
-      {data.note && <div className="text-[10px] text-amber-700 italic">{data.note}</div>}
-      {data.fields.map((f) => (
-        <div key={f.key} className="flex items-center gap-2">
-          <label className="w-24 text-amber-900 shrink-0">{f.label}{f.required ? " *" : ""}</label>
-          {f.type === "select" && f.options ? (
-            <select
-              value={answers[f.key] || ""}
-              onChange={(e) => setAnswers((a) => ({ ...a, [f.key]: e.target.value }))}
-              className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[12px] outline-none">
-              <option value="">—</option>
-              {f.options.map((o) => (<option key={o} value={o}>{o}</option>))}
-            </select>
-          ) : f.type === "year" ? (
-            <input
-              type="number" min={1980} max={2030}
-              value={answers[f.key] || ""}
-              onChange={(e) => setAnswers((a) => ({ ...a, [f.key]: e.target.value }))}
-              className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[12px] outline-none" />
-          ) : (
-            <input
-              type="text"
-              value={answers[f.key] || ""}
-              onChange={(e) => setAnswers((a) => ({ ...a, [f.key]: e.target.value }))}
-              className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[12px] outline-none" />
-          )}
-        </div>
-      ))}
-      <button
-        onClick={() => onSubmit(answers)}
-        disabled={!ready}
-        className="w-full mt-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded px-2 py-1.5 text-[12px] font-semibold cursor-pointer border-none transition-colors">
-        {locale === "en" ? "Search →" : "Хайх →"}
-      </button>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// QuotationCard — renders layout="quotation". The bodyText is already
-// preformatted plain-text (template lives in sellerInsights.service.js),
-// so this component is intentionally dumb: monospace block + a copy-to-
-// clipboard button so the seller can paste it straight into an email.
-// ────────────────────────────────────────────────────────────────────
-function QuotationCard({
-  data, locale,
-}: {
-  data: { quoteId: string; bodyText: string; summary: Record<string, unknown> };
-  locale: "mn" | "en";
-}) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(data.bodyText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API can fail in non-HTTPS contexts; fall back to select.
-      const ta = document.createElement("textarea");
-      ta.value = data.bodyText;
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-      catch { /* user can still select manually */ }
-      document.body.removeChild(ta);
-    }
-  };
-
-  return (
-    <div className="mt-2 border border-emerald-200 bg-emerald-50 rounded-lg overflow-hidden text-[11px]">
-      <div className="flex items-center justify-between px-2 py-1 bg-emerald-100 text-emerald-800">
-        <span className="font-mono font-semibold">{data.quoteId}</span>
-        <button
-          onClick={handleCopy}
-          className="text-[10px] px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded cursor-pointer border-none transition-colors">
-          {copied
-            ? (locale === "en" ? "✓ Copied" : "✓ Хууллаа")
-            : (locale === "en" ? "Copy" : "Хуулах")}
-        </button>
-      </div>
-      <pre className="px-2 py-1.5 m-0 whitespace-pre overflow-x-auto font-mono text-[10px] leading-tight text-emerald-900 bg-white">
-{data.bodyText}
-      </pre>
-      {data.summary && Object.keys(data.summary).length > 0 && (
-        <div className="px-2 py-1 bg-emerald-50 text-[10px] text-emerald-700 font-mono">
-          {Object.entries(data.summary)
-            .filter(([k]) => !["validUntil"].includes(k))
-            .map(([k, v]) => `${k}: ${typeof v === "number" ? v.toLocaleString() : String(v)}`)
-            .join(" · ")}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Phase I — DiagnosticCard.
-//
-// Renders layout="diagnostic" payloads as a mechanic's-style ranked
-// candidate list with a horizontal likelihood bar per row, plus ONE
-// clarifying-question prompt that the user can answer in-place by
-// clicking the chip (which then submits as the next user message).
-//
-// Urgency colour-codes the card border:
-//   low    — slate (informational)
-//   medium — amber (worth checking soon)
-//   high   — rose  (safety / drivability — bring to mechanic)
-// ────────────────────────────────────────────────────────────────────
-function DiagnosticCard({
-  data, locale, onQuickAnswer,
-}: {
-  data: NonNullable<Message["diagnostic"]>;
-  locale: "mn" | "en";
-  onQuickAnswer: (text: string) => void;
-}) {
-  const urgencyStyle = {
-    low:    { wrap: "border-slate-200 bg-slate-50", chip: "bg-slate-200 text-slate-700", label: locale === "en" ? "Low" : "Бага" },
-    medium: { wrap: "border-amber-200 bg-amber-50",  chip: "bg-amber-200 text-amber-800",  label: locale === "en" ? "Medium" : "Дунд" },
-    high:   { wrap: "border-rose-200 bg-rose-50",    chip: "bg-rose-200 text-rose-800",    label: locale === "en" ? "High" : "Өндөр" },
-  }[data.urgency];
-
-  return (
-    <div className={`mt-2 border rounded-lg overflow-hidden text-[11px] ${urgencyStyle.wrap}`}>
-      {/* Header — symptom + urgency badge */}
-      <div className="px-2.5 py-1.5 flex items-center gap-2 border-b border-current/10">
-        <span className="font-semibold text-gray-800 truncate flex-1">
-          {locale === "en" ? "Possible causes" : "Боломжит шалтгаан"}
-        </span>
-        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${urgencyStyle.chip}`}>
-          {locale === "en" ? "Urgency" : "Чухал"}: {urgencyStyle.label}
-        </span>
-      </div>
-
-      {/* Candidate ranked list */}
-      <div className="px-2.5 py-1.5 space-y-1.5 bg-white">
-        {data.candidates.map((c, i) => {
-          const pct = Math.round((c.likelihood || 0) * 100);
-          return (
-            <div key={`${c.name}-${i}`} className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-700 truncate flex-1">
-                  {i + 1}. {c.name}
-                </span>
-                <span className="text-[10px] text-gray-500 font-mono shrink-0">{pct}%</span>
-              </div>
-              <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${
-                    c.urgency === "high"   ? "bg-rose-500" :
-                    c.urgency === "medium" ? "bg-amber-500" :
-                                              "bg-slate-400"
-                  }`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              {c.location && (
-                <div className="text-[10px] text-gray-500">📍 {c.location}</div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Clarifying question chips */}
-      {data.clarifyingQuestions.length > 0 && (
-        <div className="px-2.5 py-1.5 border-t border-current/10 space-y-1">
-          <div className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">
-            {locale === "en" ? "Help narrow it down" : "Нэмэлт асуулт"}
-          </div>
-          {data.clarifyingQuestions.slice(0, 2).map((q, i) => (
-            <button
-              key={i}
-              onClick={() => onQuickAnswer(q)}
-              className="w-full text-left text-[11px] px-2 py-1.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded cursor-pointer transition-colors font-sans text-gray-700">
-              ❓ {q}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Phase H — Confidence badge (medium / low bands).
-//
-// Subtle inline pill below the assistant bubble. Color shifts by band:
-//   70-89  amber  ("Магадлал: 78%")
-//   50-69  rose   ("AI бүрэн итгэлгүй байна — Магадлал: 62%")
-//
-// We deliberately DO NOT show this in the high band (≥90) — the
-// product UX rule is "no chrome for happy paths". Critical (<50) gets
-// the escalation banner instead, not a badge.
-// ────────────────────────────────────────────────────────────────────
-function ConfidenceBadge({ value, locale }: { value: number; locale: "mn" | "en" }) {
-  const isLow = value < 70;
-  const wrap  = isLow
-    ? "border-rose-200 bg-rose-50 text-rose-700"
-    : "border-amber-200 bg-amber-50 text-amber-700";
-  const label = locale === "en"
-    ? (isLow ? `Low confidence — ${value}%` : `Confidence: ${value}%`)
-    : (isLow ? `AI бүрэн итгэлгүй байна — Магадлал: ${value}%` : `Магадлал: ${value}%`);
-
-  return (
-    <div className={`mt-1.5 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${wrap}`}>
-      <AlertTriangle size={9} />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Phase H — Escalation banner (CRITICAL band).
-//
-// Prominent block under the assistant bubble inviting the user to
-// connect to a human operator. Renders when reflection.shouldEscalate
-// fires (confidence < 50% OR a tool errored mid-turn).
-// ────────────────────────────────────────────────────────────────────
-function ConfidenceEscalation({
-  data, locale,
-}: {
-  data: NonNullable<AIResponse["escalation"]>;
-  locale: "mn" | "en";
-}) {
-  return (
-    <div className="mt-2 border border-rose-200 bg-rose-50 rounded-lg p-2.5 space-y-1.5">
-      <div className="flex items-start gap-2 text-[12px]">
-        <AlertTriangle size={13} className="text-rose-600 shrink-0 mt-0.5" />
-        <span className="text-rose-900">{data.message}</span>
-      </div>
-      <Link
-        href={data.suggestedAction.href}
-        className="inline-block text-[11px] px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-semibold transition-colors"
-       >
-        {locale === "en" ? "Contact operator →" : "Оператортой холбогдох →"}
-      </Link>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// layoutToMessage — pure dispatcher from AIResponse → chat-bubble payload.
-//
-// Extracted out of `send()` so the widget's main render path stays
-// readable. The function is pure (no hooks, no store touch), trivial
-// to unit-test, and the same shape every AI response converges on.
-// ────────────────────────────────────────────────────────────────────
-function layoutToMessage(resp: AIResponse): Omit<Message, "id" | "role"> {
-  const p = resp.payload || {};
-  const msg: Omit<Message, "id" | "role"> = {
-    text: resp.reply,
-    // Phase H — bubble carries its own confidence/escalation so older
-    // bubbles keep their badges when the user keeps chatting.
-    confidence: typeof resp.confidence === "number" ? resp.confidence : null,
-    escalation: resp.escalation || undefined,
-  };
-  switch (resp.layout) {
-    case "user_cards":
-      if (p.items?.length)     msg.products  = p.items;
-      if (p.crossRefs?.length) msg.crossRefs = p.crossRefs;
-      // Phase AL — bundle/cross-sell suggestions surface as a separate
-      // strip below the main result cards.
-      if (p.related?.length)   msg.related   = p.related;
-      break;
-    case "seller_table":
-      if (p.columns && p.rows) {
-        msg.table = { columns: p.columns, rows: p.rows, summary: p.summary ?? null };
-      }
-      break;
-    case "admin_widget":
-      if (p.kind && p.data) {
-        msg.widget = { kind: p.kind, title: p.title || "", data: p.data };
-      }
-      break;
-    case "diag_form":
-      if (p.fields?.length) {
-        msg.diagForm = { partType: p.partType || "", fields: p.fields, note: p.note };
-      }
-      break;
-    case "quotation":
-      if (p.bodyText) {
-        msg.quotation = {
-          quoteId:  p.quoteId  || "",
-          bodyText: p.bodyText,
-          summary:  (p.summary as Record<string, unknown>) || {},
-        };
-      }
-      break;
-    case "diagnostic":
-      if (p.candidates?.length || p.clarifyingQuestions?.length) {
-        msg.diagnostic = {
-          symptom:             p.symptom || "",
-          candidates:          p.candidates || [],
-          clarifyingQuestions: p.clarifyingQuestions || [],
-          urgency:             p.urgency || "low",
-        };
-      }
-      break;
-    // "plain" → reply text only.
-  }
-  return msg;
-}
-
-// ────────────────────────────────────────────────────────────────────
-// VehicleSwitcher — Phase G dropdown rendered below the chat header.
-//
-// One self-contained panel for THREE entry points:
-//   ① "Active vehicle" row at the top (with a Clear button)
-//   ② Recent vehicles list (move-to-front LRU, capped at 5)
-//   ③ Plate input — manual lookup that creates/activates a Vehicle
-//
-// All actions resolve via callbacks the parent supplied, so the
-// switcher is purely presentational. State (loading, error) is also
-// owned by the parent so a stale switcher mount can't get out of sync
-// after a chat re-render.
-// ────────────────────────────────────────────────────────────────────
-function VehicleSwitcher({
-  activeVehicle, recentVehicles, plateInput, plateBusy, plateErr,
-  locale, onPlateInputChange, onLookupPlate, onPickRecent, onClear, onClose,
-}: {
-  activeVehicle:       ActiveVehicle | null;
-  recentVehicles:      ActiveVehicle[];
-  plateInput:          string;
-  plateBusy:           boolean;
-  plateErr:            string;
-  locale:              "mn" | "en";
-  onPlateInputChange:  (v: string) => void;
-  onLookupPlate:       () => void;
-  onPickRecent:        (vehicleId: string) => void;
-  onClear:             () => void;
-  onClose:             () => void;
-}) {
-  // Filter out the active vehicle from the "recents" list — showing
-  // it twice is noise.
-  const others = recentVehicles.filter((v) => v.id !== activeVehicle?.id);
-
-  return (
-    <div className="border-b border-gray-200 bg-white px-3 py-2.5 text-[12px] space-y-2">
-      {/* Active vehicle row */}
-      <div className="flex items-center gap-2">
-        <Car size={13} className="text-blue-600 shrink-0" />
-        <div className="flex-1 min-w-0">
-          {activeVehicle ? (
-            <>
-              <div className="font-semibold text-gray-900 truncate">
-                {activeVehicle.manufacturer} {activeVehicle.model}
-                {activeVehicle.generation && (
-                  <span className="text-gray-400 font-normal"> · {activeVehicle.generation}</span>
-                )}
-              </div>
-              <div className="text-[10px] text-gray-500 font-mono">{activeVehicle.plate}</div>
-            </>
-          ) : (
-            <div className="text-gray-500 italic">
-              {locale === "en" ? "No vehicle selected" : "Машин сонгоогүй"}
-            </div>
-          )}
-        </div>
-        {activeVehicle && (
-          <button
-            onClick={onClear} disabled={plateBusy}
-            title={locale === "en" ? "Clear vehicle" : "Машингүй болгох"}
-            className="text-[10px] px-2 py-0.5 rounded border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
-            {locale === "en" ? "Clear" : "Цуцлах"}
-          </button>
-        )}
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0.5">
-          <X size={12} />
-        </button>
-      </div>
-
-      {/* Recents */}
-      {others.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-gray-100">
-          <div className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">
-            {locale === "en" ? "Recent" : "Сүүлийн машинууд"}
-          </div>
-          <div className="space-y-0.5">
-            {others.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => onPickRecent(v.id)}
-                disabled={plateBusy}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors disabled:opacity-50 font-sans">
-                <Car size={11} className="text-gray-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-gray-800 truncate">
-                    {v.manufacturer} {v.model}
-                    {v.generation && <span className="text-gray-400 font-normal"> · {v.generation}</span>}
-                  </div>
-                  <div className="text-[10px] text-gray-400 font-mono">{v.plate}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Manual plate input */}
-      <div className="pt-1 border-t border-gray-100 space-y-1.5">
-        <div className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">
-          {locale === "en" ? "New plate" : "Шинэ дугаар"}
-        </div>
-        <div className="flex gap-1.5">
-          <input
-            value={plateInput}
-            onChange={(e) => onPlateInputChange(e.target.value.toUpperCase())}
-            onKeyDown={(e) => e.key === "Enter" && !plateBusy && onLookupPlate()}
-            placeholder="1234УБА"
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] font-mono focus:border-blue-500 focus:bg-white outline-none transition-colors"
-            autoCapitalize="characters"
-            spellCheck={false}
-          />
-          <button
-            onClick={onLookupPlate}
-            disabled={plateBusy || !plateInput.trim()}
-            className="shrink-0 inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg px-2.5 py-1.5 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans">
-            {plateBusy
-              ? <Loader2 size={11} className="animate-spin" />
-              : <SearchIcon size={11} />}
-            {locale === "en" ? "Look up" : "Хайх"}
-          </button>
-        </div>
-        {plateErr && (
-          <div className="text-[11px] text-red-600 flex items-center gap-1">
-            <AlertTriangle size={10} /> {plateErr}
-          </div>
-        )}
-        <div className="text-[10px] text-gray-400 italic">
-          {locale === "en"
-            ? "Tip: type /car anywhere to open this menu."
-            : "Зөвлөгөө: чат дотор /car бичвэл энэ цонх нээгдэнэ."}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// AdminWidget — Phase C BI renderer.
-//
-// Renders layout="admin_widget" payloads in one of four chart styles
-// based on payload.kind. Pure CSS / inline SVG — no chart library
-// dependency, no runtime download.
-//
-//   kpi_grid    : compact key-value grid (existing behavior)
-//   bar_chart   : horizontal bars from data.x[] + data.y[]
-//   line_chart  : inline SVG polyline from data.x[] + data.y[]
-//   pie_chart   : legend table from data.slices = [{label, value}]
-//
-// Falls back to kpi_grid for any unknown kind so the chat never crashes.
-// ────────────────────────────────────────────────────────────────────
-function AdminWidget({
-  data,
-}: {
-  data: { kind: NonNullable<AIResponse["payload"]["kind"]>; title: string; data: Record<string, unknown> };
-}) {
-  const d = data.data || {};
-  return (
-    <div className="mt-2 border border-indigo-200 rounded-lg p-2 text-[11px] bg-indigo-50">
-      {data.title && <div className="font-semibold text-indigo-700 mb-1">{data.title}</div>}
-      {data.kind === "bar_chart"   && <BarChartView d={d} />}
-      {data.kind === "line_chart"  && <LineChartView d={d} />}
-      {data.kind === "pie_chart"   && <PieLegendView d={d} />}
-      {(data.kind === "kpi_grid" || !["bar_chart","line_chart","pie_chart"].includes(data.kind)) && (
-        <KpiGridView d={d} />
-      )}
-    </div>
-  );
-}
-
-// Helpers — extract typed arrays from a loose data bag without throwing.
-function asNumberArray(v: unknown): number[] {
-  return Array.isArray(v) ? v.map((x) => Number(x) || 0) : [];
-}
-function asStringArray(v: unknown): string[] {
-  return Array.isArray(v) ? v.map((x) => String(x ?? "")) : [];
-}
-
-// Horizontal-bar chart, CSS-only.
-function BarChartView({ d }: { d: Record<string, unknown> }) {
-  const labels = asStringArray(d.x);
-  const values = asNumberArray(d.y);
-  const max = Math.max(1, ...values);
-  if (labels.length === 0) {
-    return (
-      <div className="text-[11px] text-indigo-700 italic">
-        {String(d.note || "Өгөгдөл алга.")}
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-1">
-      {labels.map((label, i) => {
-        const v = values[i] || 0;
-        const pct = Math.max(2, Math.round((v / max) * 100));
-        return (
-          <div key={`${label}-${i}`} className="flex items-center gap-2">
-            <div className="w-24 text-[10px] text-gray-700 truncate font-mono shrink-0" title={label}>{label}</div>
-            <div className="flex-1 h-3 bg-white rounded overflow-hidden border border-indigo-100">
-              <div className="h-full bg-gradient-to-r from-indigo-400 to-amber-500" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="w-12 text-right text-[10px] font-mono text-indigo-700 shrink-0">{v.toLocaleString()}</div>
-          </div>
-        );
-      })}
-      {d.seasonalNote ? <div className="mt-1 text-[10px] text-indigo-600 italic">{String(d.seasonalNote)}</div> : null}
-      {d.note ? <div className="mt-1 text-[10px] text-indigo-600 italic">{String(d.note)}</div> : null}
-    </div>
-  );
-}
-
-// Inline SVG polyline (trend lines).
-function LineChartView({ d }: { d: Record<string, unknown> }) {
-  const labels = asStringArray(d.x);
-  const values = asNumberArray(d.y);
-  if (values.length < 2) {
-    return <div className="text-[11px] text-indigo-700 italic">Хангалттай цэг алга.</div>;
-  }
-  const W = 300, H = 80, P = 4;
-  const max = Math.max(...values), min = Math.min(...values, 0);
-  const span = Math.max(1, max - min);
-  const xStep = (W - 2 * P) / (values.length - 1);
-  const points = values
-    .map((v, i) => {
-      const x = P + i * xStep;
-      const y = P + (H - 2 * P) * (1 - (v - min) / span);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <div>
-      <svg width={W} height={H} className="w-full h-auto">
-        <polyline fill="none" stroke="rgb(99, 102, 241)" strokeWidth="2" points={points} />
-        {values.map((v, i) => (
-          <circle key={i} cx={P + i * xStep} cy={P + (H - 2 * P) * (1 - (v - min) / span)} r="2.5" fill="rgb(217, 70, 239)" />
-        ))}
-      </svg>
-      <div className="flex justify-between text-[9px] text-indigo-500 font-mono mt-0.5">
-        {labels.map((l, i) => <span key={`${l}-${i}`}>{l}</span>)}
-      </div>
-    </div>
-  );
-}
-
-// Pie chart → legend table (cheap, readable, accessible).
-function PieLegendView({ d }: { d: Record<string, unknown> }) {
-  const slices = (Array.isArray(d.slices) ? d.slices : []) as Array<{ label: string; value: number }>;
-  if (slices.length === 0) {
-    return <div className="text-[11px] text-indigo-700 italic">Хуваарилалт алга.</div>;
-  }
-  const total = slices.reduce((s, sl) => s + (Number(sl.value) || 0), 0) || 1;
-  const palette = ["bg-indigo-500", "bg-amber-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500", "bg-blue-500"];
-  return (
-    <div className="space-y-1">
-      {slices.map((sl, i) => {
-        const pct = Math.round(((Number(sl.value) || 0) / total) * 100);
-        return (
-          <div key={`${sl.label}-${i}`} className="flex items-center gap-2 text-[10px]">
-            <span className={`w-3 h-3 rounded-sm shrink-0 ${palette[i % palette.length]}`} />
-            <span className="flex-1 truncate text-gray-700">{sl.label}</span>
-            <span className="font-mono text-indigo-700">{pct}%</span>
-            <span className="font-mono text-gray-500 w-16 text-right">{Number(sl.value).toLocaleString()}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// KPI grid — scalars + nested topBrands list when present.
-function KpiGridView({ d }: { d: Record<string, unknown> }) {
-  const topBrands = Array.isArray(d.topBrands) ? d.topBrands : null;
-  const statusBreakdown = (d.statusBreakdown && typeof d.statusBreakdown === "object")
-    ? d.statusBreakdown as Record<string, number>
-    : null;
-
-  // Scalars only — strip nested objects / arrays for the grid.
-  const scalars = Object.entries(d).filter(([, v]) => {
-    return v !== null && (typeof v !== "object" || v instanceof Date);
-  });
-
-  return (
-    <div>
-      {scalars.length > 0 && (
-        <div className="grid grid-cols-2 gap-1">
-          {scalars.map(([k, v]) => (
-            <div key={k} className="bg-white rounded px-2 py-1">
-              <div className="text-gray-500 text-[10px]">{k}</div>
-              <div className="font-mono text-gray-900 truncate">
-                {typeof v === "number" ? v.toLocaleString() : String(v)}
-                {k.endsWith("Percent") || k.startsWith("growthRate") ? "%" : ""}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {topBrands && topBrands.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-indigo-200">
-          <div className="text-[10px] text-indigo-600 font-semibold mb-1">Топ брэндүүд</div>
-          <BarChartView d={{
-            x: topBrands.map((b: { brand?: string }) => b.brand || "?"),
-            y: topBrands.map((b: { revenue?: number }) => b.revenue || 0),
-          }} />
-        </div>
-      )}
-      {statusBreakdown && (
-        <div className="mt-2 pt-2 border-t border-indigo-200">
-          <div className="text-[10px] text-indigo-600 font-semibold mb-1">Захиалгын төлөв</div>
-          <PieLegendView d={{
-            slices: Object.entries(statusBreakdown).map(([label, value]) => ({ label, value })),
-          }} />
-        </div>
-      )}
     </div>
   );
 }
