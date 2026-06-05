@@ -5,6 +5,7 @@ import SessionBoot from "./components/SessionBoot";
 import Toaster from "./components/Toaster";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://hicar.mn"),
   title: "HiCar MN — Автомашины сэлбэг",
   description: "Монголын №1 авто сэлбэгийн онлайн дэлгүүр. Japan OEM сэлбэг.",
 };
