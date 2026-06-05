@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -131,6 +131,63 @@ export default function HiCarAIChat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voiceRef = useRef<ReturnType<typeof createVoiceRecognition>>(null);
   const voiceSupported = isVoiceSupported();
+
+  // ── Draggable widget ──────────────────────────────────────────────
+  // The launcher (and the open panel via its header) can be dragged out of
+  // the way of anything it overlaps. FAB + panel keep SEPARATE persisted
+  // positions (different footprints); panel dragging is desktop-only since
+  // the panel is a fullscreen sheet on mobile.
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ sx: number; sy: number; dx: number; dy: number; w: number; h: number; setter: (p: { x: number; y: number }) => void; key: string } | null>(null);
+  const movedRef = useRef(false);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const load = (k: string) => {
+      try { const r = localStorage.getItem(k); return r ? (JSON.parse(r) as { x: number; y: number }) : null; }
+      catch { return null; }
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFabPos(load("hicar-aichat-fab"));
+    setPanelPos(load("hicar-aichat-panel"));
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const clampToView = (x: number, y: number, w: number, h: number) => ({
+    x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - w - 8)),
+    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - h - 8)),
+  });
+  const beginDrag = (e: ReactPointerEvent, el: HTMLElement | null, setter: (p: { x: number; y: number }) => void, key: string) => {
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    dragRef.current = { sx: e.clientX, sy: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height, setter, key };
+    movedRef.current = false;
+    lastPosRef.current = null;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* unsupported */ }
+  };
+  const moveDrag = (e: ReactPointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    // Treat as a drag (not a click) only past a 5px dead-zone from the start —
+    // tolerates finger jitter so a plain tap still opens the chat.
+    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) movedRef.current = true;
+    const p = clampToView(e.clientX - d.dx, e.clientY - d.dy, d.w, d.h);
+    lastPosRef.current = p;
+    d.setter(p);
+  };
+  const endDrag = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (lastPosRef.current) { try { localStorage.setItem(d.key, JSON.stringify(lastPosRef.current)); } catch { /* quota */ } }
+    dragRef.current = null;
+  };
 
   useEffect(() => {
     // Three-surface greeting selector (Phase J).
@@ -370,11 +427,17 @@ export default function HiCarAIChat() {
 
   if (!isOpen || isMinimized) {
     return (
-      <button onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-        // Lifted above the 56px mobile bottom nav (+ iOS safe area) so the FAB
-        // never covers the right-most nav tab; back to bottom-5 from md up,
-        // where MobileBottomNav is hidden.
-        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer border-none transition-all font-sans"
+      <button
+        // Click opens — unless the pointer was dragged (reposition), in which
+        // case we swallow the click so a drag never accidentally opens chat.
+        onClick={() => { if (movedRef.current) { movedRef.current = false; return; } setIsOpen(true); setIsMinimized(false); }}
+        onPointerDown={(e) => beginDrag(e, e.currentTarget, setFabPos, "hicar-aichat-fab")}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        // Default anchor lifts above the 56px mobile bottom nav (+ iOS safe
+        // area); once dragged, an inline left/top overrides the anchor.
+        style={fabPos ? { left: fabPos.x, top: fabPos.y, right: "auto", bottom: "auto" } : undefined}
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer active:cursor-grabbing touch-none select-none border-none transition-colors font-sans"
         aria-label="AI chat">
         {isAdminPath ? <Bot size={18} /> : isSellerPath ? <FileSpreadsheet size={18} /> : <MessageCircle size={18} />}
         <span className="text-[13px] font-semibold">
@@ -388,9 +451,18 @@ export default function HiCarAIChat() {
 
   return (
     // Mobile (<md): true fullscreen sheet so the keyboard + thread get the
-    // whole viewport. md+: floating 360px panel anchored bottom-right.
-    <div className="fixed inset-0 z-50 w-full h-full bg-white border-0 shadow-2xl flex flex-col overflow-hidden md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:max-w-[calc(100vw-2rem)] md:h-[600px] md:max-h-[calc(100vh-2rem)] md:border md:border-gray-200 md:rounded-2xl">
-      <div className={`flex items-center justify-between px-4 py-3 ${isAdminPath ? "bg-gradient-to-r from-blue-700 to-indigo-700" : "bg-gradient-to-r from-blue-600 to-amber-500"} text-white`}>
+    // whole viewport. md+: floating 360px panel anchored bottom-right, or a
+    // dragged left/top position (desktop only — mobile stays fullscreen).
+    <div ref={panelRef}
+      style={panelPos && isDesktop ? { left: panelPos.x, top: panelPos.y, right: "auto", bottom: "auto", margin: 0 } : undefined}
+      className="fixed inset-0 z-50 w-full h-full bg-white border-0 shadow-2xl flex flex-col overflow-hidden md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:max-w-[calc(100vw-2rem)] md:h-[600px] md:max-h-[calc(100vh-2rem)] md:border md:border-gray-200 md:rounded-2xl">
+      <div
+        // Drag handle (desktop only — the panel is fullscreen on mobile).
+        // Ignore drags that start on an interactive control inside the header.
+        onPointerDown={(e) => { if (!isDesktop) return; if ((e.target as HTMLElement).closest("button")) return; beginDrag(e, panelRef.current, setPanelPos, "hicar-aichat-panel"); }}
+        onPointerMove={(e) => { if (dragRef.current) moveDrag(e); }}
+        onPointerUp={endDrag}
+        className={`flex items-center justify-between px-4 py-3 md:cursor-grab md:active:cursor-grabbing select-none ${isAdminPath ? "bg-gradient-to-r from-blue-700 to-indigo-700" : "bg-gradient-to-r from-blue-600 to-amber-500"} text-white`}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
             {isAdminPath ? <Bot size={16} /> : <Sparkles size={15} />}
