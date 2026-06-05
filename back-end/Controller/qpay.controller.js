@@ -2,6 +2,7 @@ import Order from "../Model/order.model.js";
 import { createInvoice, checkPayment, qpayEnabled } from "../Service/qpay.service.js";
 import { notify } from "../Service/notification.service.js";
 import { settleOrderPaid } from "../Service/escrow.service.js";
+import { logger } from "../Config/logger.js";
 
 /**
  * POST /api/qpay/invoice
@@ -116,7 +117,7 @@ export const callback = async (req, res) => {
     }
     return res.json({ ok: true, paid });
   } catch (err) {
-    console.error("QPay callback error:", err);
+    logger.error("QPay callback error", { err });
     return res.status(500).json({ message: err.message });
   }
 };

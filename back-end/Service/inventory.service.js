@@ -13,6 +13,7 @@
 
 import Product from "../Model/product.model.js";
 import User from "../Model/user.model.js";
+import { logger } from "../Config/logger.js";
 import { notify, notifyAdmins } from "./notification.service.js";
 import { cacheGet, cacheSet } from "../Config/redis.js";
 
@@ -90,7 +91,7 @@ export const maybeAlertLowStock = async (productId) => {
 
     await markAlerted(productId);
   } catch (e) {
-    console.error("low-stock alert failed:", e.message);
+    logger.error("low-stock alert failed", { err: e });
   }
 };
 

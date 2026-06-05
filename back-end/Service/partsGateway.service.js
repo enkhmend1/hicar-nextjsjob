@@ -17,7 +17,7 @@
  * without firing any HTTP request.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import { wrapBreaker } from "./circuitBreaker.service.js";
 import { pickProxy, reportProxyResult } from "./proxyPool.service.js";
 import { cacheGet, cacheSet } from "../Config/redis.js";
@@ -158,7 +158,7 @@ export const lookupParts = async (args, opts = {}) => {
     return { ...payload, hit: "network", tookMs: Date.now() - started };
   } catch (err) {
     // Never let a failing upstream block our search — log & degrade.
-    console.warn(chalk.yellow(`Parts API '${adapter.name}' failed: ${err.message} (${err.code || "?"})`));
+    logger.warn("Parts API failed", { adapter: adapter.name, err });
     return {
       provider: adapter.name,
       oems:     [],

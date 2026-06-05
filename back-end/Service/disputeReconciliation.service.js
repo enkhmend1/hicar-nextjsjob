@@ -32,7 +32,7 @@
  * than scrolling through individual heal log lines.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 import Order from "../Model/order.model.js";
 import Dispute from "../Model/dispute.model.js";
@@ -146,7 +146,7 @@ export const reconcileLostSchedules = async () => {
       const { jobId, releaseAt } = await scheduleRelease(order);
       healed.push({ orderId: String(order._id), jobId, releaseAt });
     } catch (e) {
-      console.warn(chalk.yellow(`[reconcile] schedule failed for ${order._id}: ${e.message}`));
+      logger.warn("reconcile schedule failed", { err: e, orderId: order._id });
     }
   }
   return healed;

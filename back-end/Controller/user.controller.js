@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import chalk from "chalk";
 import User from "../Model/user.model.js";
 import { notify } from "../Service/notification.service.js";
+import { logger } from "../Config/logger.js";
 
 /**
  * Generate a cryptographically random temporary password.
@@ -200,9 +200,9 @@ export const resetUserPassword = async (req, res) => {
     await user.save();
 
     // Audit — server console only, never includes the password
-    console.log(chalk.yellow(
-      `[audit] password-reset  admin=${req.user._id}  target=${user._id}  email=${user.email}  at=${new Date().toISOString()}`,
-    ));
+    logger.info("audit: password-reset (admin)", {
+      adminId: req.user._id, targetId: user._id, email: user.email,
+    });
 
     // Notify the user so unauthorised resets are immediately visible
     notify({
