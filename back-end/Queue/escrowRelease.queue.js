@@ -13,7 +13,7 @@
 import { register, enqueue, cancelJob } from "../Service/jobQueue.service.js";
 import { releaseEscrow, computeHoldForOrder } from "../Service/escrowRelease.service.js";
 import Order from "../Model/order.model.js";
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 export const ESCROW_RELEASE_QUEUE = "escrow-release";
 
@@ -22,10 +22,13 @@ register(ESCROW_RELEASE_QUEUE, async (job) => {
   const result = await releaseEscrow(orderId);
   if (!result.released) {
     // Not an error — common case is "dispute opened in the meantime".
-    console.log(chalk.gray(`[escrow-release] order=${orderId} skipped: ${result.reason}`));
+    logger.info("escrow-release skipped", { orderId, reason: result.reason });
   } else {
-    console.log(chalk.green(
-      `[escrow-release] order=${orderId} released ₮${result.amount} to ${result.sellers.length} seller(s)`));
+    logger.info("escrow-release done", {
+      orderId,
+      amount: result.amount,
+      sellers: result.sellers.length,
+    });
   }
   return result;
 }, { concurrency: 4 });

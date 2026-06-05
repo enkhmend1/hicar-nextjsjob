@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 /**
  * QPay v2 client.
@@ -21,9 +21,9 @@ const CALLBACK_SECRET = process.env.QPAY_CALLBACK_SECRET || "";
 export const qpayEnabled = Boolean(USERNAME && PASSWORD && INVOICE_CODE);
 
 if (qpayEnabled) {
-  console.log(chalk.green.bold(`QPay enabled (${BASE})`));
+  logger.info("QPay enabled", { base: BASE });
 } else {
-  console.log(chalk.yellow("QPay disabled — set QPAY_USERNAME, QPAY_PASSWORD, QPAY_INVOICE_CODE to enable"));
+  logger.warn("QPay disabled — set QPAY_USERNAME, QPAY_PASSWORD, QPAY_INVOICE_CODE to enable");
 }
 
 // ── Token cache (auth token has expiry; we lazily refresh) ─────────
