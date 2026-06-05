@@ -4,6 +4,7 @@ import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
 import { requiresReapproval } from "../Service/productPolicy.service.js";
+import { getCategoryWithDescendants } from "../Service/siteContent.service.js";
 import { rememberInputs } from "./seller.controller.js";
 import {
   validateProductCreate,
@@ -105,6 +106,20 @@ const buildFilter = (query) => {
   return f;
 };
 
+/**
+ * Expand a parent category filter to include all of its descendant
+ * categories. Products live on LEAF ids, so opening the shop on a top-level
+ * category ("engine") with a flat equality match would return nothing. We
+ * swap the equality for a single indexed `$in` over [parent, ...descendants],
+ * resolved from the cached category tree (no per-request DB read). Mutates
+ * `filter` in place; a no-op for "all" / leaf / unknown categories.
+ */
+const expandCategoryFilter = async (filter, category) => {
+  if (!category || category === "all") return;
+  const ids = await getCategoryWithDescendants(category);
+  if (ids.length > 1) filter.category = { $in: ids };
+};
+
 /** PUBLIC: only approved products visible. Cached. */
 export const listProducts = async (req, res) => {
   try {
@@ -114,6 +129,8 @@ export const listProducts = async (req, res) => {
 
     const { sort, limit } = req.query;
     const filter = { ...buildFilter(req.query), status: "approved" };
+    // Parent category → include all sub-category products in one query.
+    await expandCategoryFilter(filter, req.query.category);
     let query = Product.find(filter)
       .populate("seller", "name sellerProfile.shopName sellerProfile.rating")
       .sort(SORT_MAP[sort] || { createdAt: -1 });

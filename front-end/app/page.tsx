@@ -28,7 +28,7 @@ function CatIcon({ d }: { d: string }) {
  * the labels/icons/visibility at /admin/site-content; the counts are
  * always real.
  */
-type HomepageCategory = { id: string; name: string; iconPath: string; imageUrl?: string; count: number };
+type HomepageCategory = { id: string; parentId?: string; name: string; iconPath: string; imageUrl?: string; count: number };
 
 export default function Home() {
   const t = useT();
@@ -41,6 +41,9 @@ export default function Home() {
   // Same pattern Amazon / AliExpress use to keep the homepage scannable.
   const [showAllCategories, setShowAllCategories] = useState(false);
   const CATEGORY_PREVIEW_COUNT = 6;
+  // Homepage grid shows only MAIN (top-level) categories — sub-parts live
+  // inside the seller form + shop filters, not the front-page strip.
+  const topCategories = categories.filter((c) => !c.parentId);
 
   useEffect(() => {
     api.get<{ items: Product[] }>("/products?limit=8")
@@ -123,9 +126,9 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-[20px] font-semibold text-gray-900 tracking-tight">{t("home.categoriesTitle")}</h2>
-                {categories.length > 0 && (
+                {topCategories.length > 0 && (
                   <span className="inline-flex items-center bg-blue-50 text-blue-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-100">
-                    {categories.length}
+                    {topCategories.length}
                   </span>
                 )}
               </div>
@@ -148,8 +151,8 @@ export default function Home() {
                   <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[150px] animate-pulse" />
                 ))
               : (showAllCategories
-                  ? categories
-                  : categories.slice(0, CATEGORY_PREVIEW_COUNT)
+                  ? topCategories
+                  : topCategories.slice(0, CATEGORY_PREVIEW_COUNT)
                 ).map((c) => (
                   <Link key={c.id} href={`/shop?cat=${c.id}`}>
                     <CategoryCard
@@ -166,7 +169,7 @@ export default function Home() {
           {/* Phase R: expand/collapse toggle — anchors the section so
               the homepage stays scannable above the fold (no infinite
               scroll of category cards before "Featured products"). */}
-          {categories.length > CATEGORY_PREVIEW_COUNT && (
+          {topCategories.length > CATEGORY_PREVIEW_COUNT && (
             <div className="mt-5 flex justify-center">
               <button
                 type="button"
@@ -179,7 +182,7 @@ export default function Home() {
                   <>
                     Бүх ангилал
                     <span className="inline-flex items-center bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5">
-                      {categories.length}
+                      {topCategories.length}
                     </span>
                   </>
                 )}

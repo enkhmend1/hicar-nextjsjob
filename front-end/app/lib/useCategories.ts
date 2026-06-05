@@ -31,6 +31,8 @@ export interface AttributeDefinition {
 
 export interface SiteCategoryWithCount {
   id: string;
+  /** Parent category id for nesting. "" / undefined = top-level (main). */
+  parentId?: string;
   name: string;
   iconPath: string;
   imageUrl?: string;
