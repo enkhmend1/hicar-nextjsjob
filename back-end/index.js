@@ -3,9 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import chalk from 'chalk';
 import path from 'path';
 import { connectDB } from './Config/connectDB.js';
+import { logger } from './Config/logger.js';
 
 // Side-effect imports (init configs / register queues) — must come BEFORE routes
 import './Config/cloudinary.js';
@@ -103,16 +103,35 @@ app.use('/api/disputes',      disputeRoutes);   // Phase-2: refund / dispute sys
 app.use('/api/admin/audit',   auditRoutes);     // hash-chained financial event log
 app.use('/api/site-content',  siteContentRoutes); // homepage display labels + hero copy
 
-app.use((err, _req, res, _next) => {
-  console.error(chalk.red(err.stack || err.message));
+app.use((err, req, res, _next) => {
+  logger.error('Unhandled request error', {
+    err,
+    method: req.method,
+    path: req.originalUrl,
+    status: err.status || 500,
+  });
   res.status(err.status || 500).json({ message: err.message || 'Server error' });
 });
 
 app.listen(PORT, () => {
-  console.log(chalk.blueBright.bold(`Server running on port ${PORT}`));
+  logger.info('Server running', { port: PORT });
   // Kick off background workers. Both schedulers have bootDelayMs so they
   // wait for Mongo + Redis to settle before firing the first tick.
   startReconciliationScheduler();
   startOutboxWorker();
   startBackgroundAgentScheduler();  // Phase L — daily AI insight notifications
+});
+
+// ── Process-level safety net ──────────────────────────────────────────
+// Previously unhandled — a rejected promise or thrown error left no
+// structured trace. Log both; on an uncaught exception the process state
+// is undefined, so we exit(1) and let the supervisor (pm2/systemd) restart.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', {
+    err: reason instanceof Error ? reason : new Error(String(reason)),
+  });
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception — exiting', { err });
+  process.exit(1);
 });
