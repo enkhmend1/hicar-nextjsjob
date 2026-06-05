@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
-import chalk from "chalk";
+import { logger } from "./logger.js";
 
 const {
   CLOUDINARY_CLOUD_NAME,
@@ -22,16 +22,13 @@ const cloudNameLooksValid = CLOUDINARY_CLOUD_NAME
   : false;
 
 if (CLOUDINARY_CLOUD_NAME && !cloudNameLooksValid) {
-  console.log(chalk.red.bold(
-    `Cloudinary cloud_name "${CLOUDINARY_CLOUD_NAME}" looks invalid.`
-  ));
-  console.log(chalk.yellow(
-    "  • Expected: 3-30 lowercase letters / digits / hyphens (e.g. 'dabc1234e').\n" +
-    "  • You probably copied your project / repo name instead of the Cloudinary\n" +
-    "    account 'Cloud name' shown at https://console.cloudinary.com/ (top-right).\n" +
-    "  • Fix CLOUDINARY_CLOUD_NAME in .env, then restart the server.\n" +
-    "  • Falling back to local /uploads for now so the app still boots."
-  ));
+  logger.warn(
+    `Cloudinary cloud_name "${CLOUDINARY_CLOUD_NAME}" looks invalid — ` +
+    "expected 3-30 lowercase letters/digits/hyphens (e.g. 'dabc1234e'). " +
+    "You likely copied the project/repo name instead of the Cloudinary " +
+    "account 'Cloud name' from https://console.cloudinary.com/ (top-right). " +
+    "Fix CLOUDINARY_CLOUD_NAME in .env and restart. Falling back to local /uploads."
+  );
 }
 
 export const cloudinaryEnabled = Boolean(
@@ -45,10 +42,10 @@ if (cloudinaryEnabled) {
     api_secret: CLOUDINARY_API_SECRET,
     secure: true,
   });
-  console.log(chalk.green.bold(`Cloudinary enabled (cloud=${CLOUDINARY_CLOUD_NAME}, folder=${CLOUDINARY_FOLDER})`));
+  logger.info("Cloudinary enabled", { cloud: CLOUDINARY_CLOUD_NAME, folder: CLOUDINARY_FOLDER });
 } else if (!CLOUDINARY_CLOUD_NAME && !CLOUDINARY_API_KEY) {
   // Genuinely not configured — quiet log.
-  console.log(chalk.yellow.bold("Cloudinary disabled — falling back to local /uploads"));
+  logger.warn("Cloudinary disabled — falling back to local /uploads");
 }
 
 export const cloudinaryStorage = cloudinaryEnabled

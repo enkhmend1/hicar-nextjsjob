@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import chalk from "chalk";
+import { logger } from "./logger.js";
 
 /**
  * Anthropic Claude — Chat Configuration Layer
@@ -36,9 +36,9 @@ const CLIENT_MAX_RETRIES = Number(env("AI_REQUEST_MAX_RETRIES", "4")) || 4;
 
 const buildClient = () => {
   if (!ANTHROPIC_API_KEY) {
-    console.log(chalk.yellow(
+    logger.warn(
       "Anthropic chat disabled — set ANTHROPIC_API_KEY to enable (chat will use the Groq fallback chain)",
-    ));
+    );
     return null;
   }
   try {
@@ -47,12 +47,10 @@ const buildClient = () => {
       maxRetries: CLIENT_MAX_RETRIES,
       timeout: CLIENT_TIMEOUT_MS,
     });
-    console.log(chalk.green.bold(
-      `Anthropic chat enabled — model=${ANTHROPIC_CHAT_MODEL}`,
-    ));
+    logger.info("Anthropic chat enabled", { model: ANTHROPIC_CHAT_MODEL });
     return client;
   } catch (err) {
-    console.error(chalk.red(`Anthropic chat init failed: ${err.message}`));
+    logger.error("Anthropic chat init failed", { err });
     return null;
   }
 };
