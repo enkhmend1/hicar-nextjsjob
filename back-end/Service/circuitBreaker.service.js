@@ -14,7 +14,7 @@
  */
 
 import CircuitBreaker from "opossum";
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 const DEFAULTS = {
   timeout: 12_000,
@@ -29,11 +29,13 @@ export const wrapBreaker = (name, fn, opts = {}) => {
   const breaker = new CircuitBreaker(fn, { ...DEFAULTS, ...opts, name });
 
   breaker.on("open", () =>
-    console.warn(chalk.red(`[circuit:${name}] OPEN — refusing calls for ${(opts.resetTimeout ?? DEFAULTS.resetTimeout) / 1000}s`)));
+    logger.warn("circuit OPEN — refusing calls", {
+      circuit: name, resetSeconds: (opts.resetTimeout ?? DEFAULTS.resetTimeout) / 1000,
+    }));
   breaker.on("halfOpen", () =>
-    console.log(chalk.yellow(`[circuit:${name}] HALF-OPEN — probing`)));
+    logger.info("circuit HALF-OPEN — probing", { circuit: name }));
   breaker.on("close", () =>
-    console.log(chalk.green(`[circuit:${name}] CLOSED — healthy`)));
+    logger.info("circuit CLOSED — healthy", { circuit: name }));
 
   // Fail-open when the breaker rejects so callers can decide a fallback
   breaker.fallback((...args) => {

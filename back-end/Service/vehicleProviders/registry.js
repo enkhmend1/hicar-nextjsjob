@@ -8,7 +8,7 @@
  *   3. Set VEHICLE_PROVIDER=<name> in .env
  */
 
-import chalk from "chalk";
+import { logger } from "../../Config/logger.js";
 import garageAdapter from "./garage.adapter.js";
 
 /** @type {Record<string, import("./types.js").VehicleProvider>} */
@@ -22,9 +22,9 @@ const requested = (process.env.VEHICLE_PROVIDER || "garage").trim().toLowerCase(
 const active = ADAPTERS[requested] || garageAdapter;
 
 if (!ADAPTERS[requested]) {
-  console.warn(chalk.yellow(`VEHICLE_PROVIDER="${requested}" not found, falling back to "${active.name}"`));
+  logger.warn("VEHICLE_PROVIDER not found, falling back", { requested, fallback: active.name });
 }
-console.log(chalk.green.bold(`Vehicle provider: ${active.displayName} (${active.name})`));
+logger.info("Vehicle provider selected", { provider: active.displayName, name: active.name });
 
 /** Currently configured adapter (set at boot via env). */
 export const getActiveProvider = () => active;

@@ -43,7 +43,7 @@
  *   • Cost tracking / per-user budgets (Phase M future)
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import { aiConfig } from "../Config/openai.js";
 
 // ────────────────────────────────────────────────────────────────────
@@ -251,9 +251,9 @@ export const chatWithFallback = async ({ chain, body, signal }) => {
         label: entry.label, model: entry.model, ok: false,
         skipped: "token-cap", estTokens, cap,
       });
-      console.warn(chalk.dim(
-        `[aiFallback] skipping ${entry.label} (${entry.model}) — ~${estTokens}t exceeds ${cap}t cap`,
-      ));
+      logger.debug("aiFallback skipping entry (token cap)", {
+        label: entry.label, model: entry.model, estTokens, cap,
+      });
       continue;
     }
 
@@ -265,10 +265,9 @@ export const chatWithFallback = async ({ chain, body, signal }) => {
       attempts.push({ label: entry.label, model: entry.model, ok: true });
       if (i > 0) {
         // We had to fall back — log loud so ops sees how often it happens.
-        console.warn(chalk.yellow(
-          `[aiFallback] succeeded on entry ${i + 1}/${chain.length} ` +
-          `(${entry.label}) after ${i} 429/503 failure(s)`,
-        ));
+        logger.warn("aiFallback succeeded after fallback", {
+          entry: i + 1, total: chain.length, label: entry.label, priorFailures: i,
+        });
       }
       return { response, usedEntry: entry, attempts };
     } catch (err) {
@@ -285,10 +284,11 @@ export const chatWithFallback = async ({ chain, body, signal }) => {
         throw err;
       }
       // Fallbackable + we have more entries → continue the loop.
-      console.warn(chalk.yellow(
-        `[aiFallback] ${entry.label} (${entry.model}) hit ${err.status || err.code} ` +
-        `— ${i + 1 < chain.length ? `falling back to entry ${i + 2}` : "no more entries"}`,
-      ));
+      logger.warn("aiFallback entry failed", {
+        label: entry.label, model: entry.model,
+        status: err.status || err.code,
+        next: i + 1 < chain.length ? i + 2 : null,
+      });
     }
   }
 

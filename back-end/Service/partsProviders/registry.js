@@ -11,7 +11,7 @@
  * PARTS_PROVIDER" footgun in production.
  */
 
-import chalk from "chalk";
+import { logger } from "../../Config/logger.js";
 import partsouqAdapter from "./partsouq.adapter.js";
 import amayamaAdapter from "./amayama.adapter.js";
 import mockAdapter from "./mock.adapter.js";
@@ -28,7 +28,7 @@ const pickActive = () => {
   // 1. explicit env wins (if configured)
   if (requested && ADAPTERS[requested]?.configured) return ADAPTERS[requested];
   if (requested && ADAPTERS[requested] && !ADAPTERS[requested].configured) {
-    console.warn(chalk.yellow(`PARTS_PROVIDER="${requested}" registered but credentials missing`));
+    logger.warn("PARTS_PROVIDER registered but credentials missing", { requested });
   }
   // 2. first configured wins (excluding mock)
   for (const a of Object.values(ADAPTERS)) {
@@ -39,7 +39,10 @@ const pickActive = () => {
 };
 
 const active = pickActive();
-console.log(chalk.green.bold(`Parts provider: ${active.displayName} (${active.name})${active.name === "mock" ? " — no external lookups" : ""}`));
+logger.info("Parts provider selected", {
+  provider: active.displayName, name: active.name,
+  externalLookups: active.name !== "mock",
+});
 
 export const getActivePartsProvider = () => active;
 export const getPartsProviderByName = (name) => ADAPTERS[name] || null;
