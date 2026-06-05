@@ -17,7 +17,7 @@
  *                          (default 30s — gives connections time to settle).
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 import { register, enqueue } from "../Service/jobQueue.service.js";
 import { reconcileAll } from "../Service/disputeReconciliation.service.js";
@@ -30,12 +30,13 @@ const BOOT_DELAY_MS       = Number(process.env.RECON_BOOT_DELAY_MS) || 30 * 1000
 register(RECONCILIATION_QUEUE, async (job) => {
   const summary = await reconcileAll();
   if (summary.total > 0) {
-    console.log(chalk.cyan(
-      `[reconcile] reason=${job.data?.reason || "tick"} healed=${summary.total} ` +
-      `(orphan=${summary.orphanLocks.length} ` +
-      `deadlines=${summary.missedDeadlines.length} ` +
-      `schedules=${summary.lostSchedules.length})`,
-    ));
+    logger.info("reconcile run", {
+      reason: job.data?.reason || "tick",
+      healed: summary.total,
+      orphanLocks: summary.orphanLocks.length,
+      missedDeadlines: summary.missedDeadlines.length,
+      lostSchedules: summary.lostSchedules.length,
+    });
   }
   return summary;
 }, { concurrency: 1 });
@@ -61,21 +62,19 @@ export const startReconciliationScheduler = ({
   // Fire-and-forget boot run.
   bootHandle = setTimeout(() => {
     enqueue(RECONCILIATION_QUEUE, { reason: "boot" }).catch((e) =>
-      console.warn(chalk.yellow(`[reconcile] boot enqueue failed: ${e.message}`)));
+      logger.warn("reconcile boot enqueue failed", { err: e }));
   }, bootDelayMs);
   if (bootHandle.unref) bootHandle.unref();
 
   // Recurring tick.
   intervalHandle = setInterval(() => {
     enqueue(RECONCILIATION_QUEUE, { reason: "tick" }).catch((e) =>
-      console.warn(chalk.yellow(`[reconcile] tick enqueue failed: ${e.message}`)));
+      logger.warn("reconcile tick enqueue failed", { err: e }));
   }, intervalMs);
   // Don't block process exit on this timer.
   if (intervalHandle.unref) intervalHandle.unref();
 
-  console.log(chalk.green.bold(
-    `Reconciliation scheduler started — boot+${bootDelayMs}ms, then every ${intervalMs}ms`,
-  ));
+  logger.info("Reconciliation scheduler started", { bootDelayMs, intervalMs });
   return true;
 };
 

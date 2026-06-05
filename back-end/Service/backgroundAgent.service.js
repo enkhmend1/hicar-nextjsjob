@@ -35,7 +35,7 @@
  *   • Anonymous / missing recipient rows are dropped silently.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import User                from "../Model/user.model.js";
 import Notification        from "../Model/notification.model.js";
 import BackgroundAgentLog  from "../Model/backgroundAgentLog.model.js";
@@ -121,7 +121,7 @@ const sellerDeadstockAlert = async () => {
       });
       sent++;
     } catch (e) {
-      console.warn(chalk.yellow(`[bg-agent] deadstock check failed for seller ${seller._id}: ${e.message}`));
+      logger.warn("bg-agent deadstock check failed", { err: e, sellerId: seller._id });
     }
   }
   return sent;
@@ -165,7 +165,7 @@ const sellerLowStockAlert = async () => {
       });
       sent++;
     } catch (e) {
-      console.warn(chalk.yellow(`[bg-agent] low-stock check failed for seller ${seller._id}: ${e.message}`));
+      logger.warn("bg-agent low-stock check failed", { err: e, sellerId: seller._id });
     }
   }
   return sent;
@@ -183,7 +183,7 @@ const adminMarketGapDigest = async () => {
   try {
     gaps = await getMarketGaps({ daysLookback: 7, minOccurrences: 2, limit: 10 });
   } catch (e) {
-    console.warn(chalk.yellow(`[bg-agent] market-gap query failed: ${e.message}`));
+    logger.warn("bg-agent market-gap query failed", { err: e });
     return 0;
   }
 
@@ -219,7 +219,7 @@ const adminFinancialSummary = async () => {
   try {
     metrics = await getFinancialMetrics({ period: "week", topN: 1 });
   } catch (e) {
-    console.warn(chalk.yellow(`[bg-agent] financial summary query failed: ${e.message}`));
+    logger.warn("bg-agent financial summary query failed", { err: e });
     return 0;
   }
 
@@ -318,7 +318,7 @@ export const runAllBackgroundChecks = async () => {
       perCheck[check.name] = n;
       totalSent += n;
     } catch (e) {
-      console.error(chalk.red(`[bg-agent] check "${check.name}" failed: ${e.message}`));
+      logger.error("bg-agent check failed", { err: e, check: check.name });
       errored.push({ name: check.name, error: e.message });
       perCheck[check.name] = 0;
     }

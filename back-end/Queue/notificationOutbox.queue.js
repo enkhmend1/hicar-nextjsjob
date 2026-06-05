@@ -18,7 +18,7 @@
  *   OUTBOX_BOOT_MS    — wait this long after boot before first tick (default 5s)
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 import { register, enqueue } from "../Service/jobQueue.service.js";
 import { deliverBatch } from "../Service/notificationOutbox.service.js";
@@ -31,10 +31,11 @@ const BOOT_MS = Number(process.env.OUTBOX_BOOT_MS) || 5_000;
 register(NOTIFICATION_OUTBOX_QUEUE, async () => {
   const result = await deliverBatch();
   if (result.delivered + result.failed + result.deadLettered > 0) {
-    console.log(chalk.cyan(
-      `[outbox] delivered=${result.delivered} ` +
-      `failed=${result.failed} dead_letter=${result.deadLettered}`,
-    ));
+    logger.info("outbox drain", {
+      delivered: result.delivered,
+      failed: result.failed,
+      deadLettered: result.deadLettered,
+    });
   }
   return result;
 }, { concurrency: 1 });
@@ -51,19 +52,17 @@ export const startOutboxWorker = ({
 
   bootHandle = setTimeout(() => {
     enqueue(NOTIFICATION_OUTBOX_QUEUE, { reason: "boot" }).catch((e) =>
-      console.warn(chalk.yellow(`[outbox] boot enqueue failed: ${e.message}`)));
+      logger.warn("outbox boot enqueue failed", { err: e }));
   }, bootDelayMs);
   if (bootHandle.unref) bootHandle.unref();
 
   intervalHandle = setInterval(() => {
     enqueue(NOTIFICATION_OUTBOX_QUEUE, { reason: "tick" }).catch((e) =>
-      console.warn(chalk.yellow(`[outbox] tick enqueue failed: ${e.message}`)));
+      logger.warn("outbox tick enqueue failed", { err: e }));
   }, intervalMs);
   if (intervalHandle.unref) intervalHandle.unref();
 
-  console.log(chalk.green.bold(
-    `Notification outbox worker started — drain every ${intervalMs}ms`,
-  ));
+  logger.info("Notification outbox worker started", { intervalMs });
   return true;
 };
 
