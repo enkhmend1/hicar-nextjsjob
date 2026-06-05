@@ -37,8 +37,10 @@ export default function CategoryCard({ id, imageUrl, icon, name, count }: Props)
 
   return (
     <div className="group relative bg-white border border-gray-200 rounded-2xl p-4 text-center cursor-pointer hover:border-blue-400 hover:shadow-lg hover:shadow-blue-100/50 hover:-translate-y-0.5 transition-all duration-200">
-      {/* Icon tile — larger, gradient-tinted by category family. */}
-      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-2.5 ring-1 ring-inset transition-colors overflow-hidden ${
+      {/* Icon tile — larger, gradient-tinted by category family.
+          Responsive: 64px on phones (fits the 3-col grid without overflow),
+          80px from sm up so uploaded category photos read clearly. */}
+      <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mx-auto mb-2.5 ring-1 ring-inset transition-colors overflow-hidden ${
         imageUrl
           ? "bg-gray-100 ring-gray-200/50"
           : tone
@@ -49,14 +51,14 @@ export default function CategoryCard({ id, imageUrl, icon, name, count }: Props)
           <Image
             src={imageUrl}
             alt={name}
-            width={56}
-            height={56}
+            width={96}
+            height={96}
             className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110"
           />
         ) : Icon ? (
-          <Icon size={26} strokeWidth={1.75} className={`${tone?.icon ?? "text-blue-700"} transition-transform duration-200 group-hover:scale-110`} />
+          <Icon size={36} strokeWidth={1.75} className={`${tone?.icon ?? "text-blue-700"} transition-transform duration-200 group-hover:scale-110`} />
         ) : (
-          <span className="block w-7 h-7 transition-transform duration-200 group-hover:scale-110">{icon}</span>
+          <span className="block w-9 h-9 transition-transform duration-200 group-hover:scale-110">{icon}</span>
         )}
       </div>
       <div className="text-[13px] font-semibold text-gray-900 leading-tight">{name}</div>

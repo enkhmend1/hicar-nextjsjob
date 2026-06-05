@@ -2,6 +2,51 @@ import SiteContent from "../Model/siteContent.model.js";
 import Product from "../Model/product.model.js";
 import { validateAttributeDefinition } from "./productSchema.service.js";
 
+// ── Category-tree cache (for shop category expansion) ────────────────
+// The shop expands a parent category to all its descendants. Re-reading
+// the SiteContent doc on every request would hammer Mongo, so we cache a
+// flattened parent→children adjacency map in process memory for a short
+// TTL. Building the map is O(N) over categories; a descendant lookup is
+// O(N) worst-case via iterative DFS — no recursion, no per-request DB hit.
+const TREE_TTL_MS = 60_000;
+let _treeCache = { at: 0, childrenOf: new Map() };
+const _bustTreeCache = () => { _treeCache = { at: 0, childrenOf: new Map() }; };
+
+const _ensureTree = async () => {
+  if (_treeCache.at && Date.now() - _treeCache.at < TREE_TTL_MS) return _treeCache;
+  const content = await loadSiteContent();
+  const childrenOf = new Map();
+  for (const c of content.categories || []) {
+    const pid = String(c.parentId || "").toLowerCase();
+    if (!childrenOf.has(pid)) childrenOf.set(pid, []);
+    childrenOf.get(pid).push(String(c.id).toLowerCase());
+  }
+  _treeCache = { at: Date.now(), childrenOf };
+  return _treeCache;
+};
+
+/**
+ * Resolve a category id to itself + ALL its descendant ids (any depth).
+ * Returns a flat lowercase array, e.g. "engine" → ["engine", "timing_belt",
+ * "turbo", ...]. A leaf or unknown id returns just [id]. Cached (TTL above)
+ * so the shop's category filter never triggers a per-request tree read.
+ */
+export const getCategoryWithDescendants = async (catId) => {
+  const id = String(catId || "").trim().toLowerCase();
+  if (!id || id === "all") return [];
+  const { childrenOf } = await _ensureTree();
+  const out = [id];
+  const seen = new Set([id]);
+  const stack = [id];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const kid of childrenOf.get(cur) || []) {
+      if (!seen.has(kid)) { seen.add(kid); out.push(kid); stack.push(kid); }
+    }
+  }
+  return out;
+};
+
 /**
  * Default seed used when no SiteContent doc exists yet (fresh install).
  * Categories mirror the historical hardcoded list — admin can edit
@@ -73,15 +118,36 @@ export const getCategoriesWithCounts = async () => {
   ]);
 
   const countById = new Map(agg.map((r) => [r._id, r.count]));
-  return content.categories
+
+  // Products live on LEAF categories (product.category = a leaf id), so a
+  // parent's own count is usually 0. Roll descendant counts up the tree so
+  // a main category like "Хөдөлгүүр" shows the sum of all its sub-parts.
+  // Built over the FULL list (incl. hidden) so totals stay correct even if
+  // a child is temporarily hidden; the visible filter is applied on output.
+  const all = content.categories;
+  const childrenOf = new Map();
+  for (const c of all) {
+    const pid = String(c.parentId || "").toLowerCase();
+    if (!childrenOf.has(pid)) childrenOf.set(pid, []);
+    childrenOf.get(pid).push(c);
+  }
+  const rolledCount = (id, depth = 0) => {
+    let total = countById.get(id) ?? 0;
+    if (depth > 20) return total; // cycle guard (save-time validation prevents these)
+    for (const kid of childrenOf.get(id) || []) total += rolledCount(kid.id, depth + 1);
+    return total;
+  };
+
+  return all
     .filter((c) => c.visible !== false)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((c) => ({
       id: c.id,
+      parentId: String(c.parentId || ""),
       name: c.name,
       iconPath: c.iconPath || "",
       imageUrl: c.imageUrl || "",
-      count: countById.get(c.id) ?? 0,
+      count: rolledCount(c.id),
       // Surface the attribute schema so seller forms can render dynamic
       // fields directly from this payload (no second round-trip).
       attributesSchema: Array.isArray(c.attributesSchema) ? c.attributesSchema : [],
@@ -110,6 +176,7 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
     categories.forEach((c, idx) => {
       const id = String(c?.id || "").trim().toLowerCase();
       const name = String(c?.name || "").trim();
+      const parentId = String(c?.parentId || "").trim().toLowerCase();
       const iconPath = String(c?.iconPath || "").trim();
       const imageUrl = String(c?.imageUrl || "").trim();
       if (!id || !name) {
@@ -153,7 +220,7 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
       });
 
       normalised.push({
-        id, name, iconPath, imageUrl,
+        id, parentId, name, iconPath, imageUrl,
         order: Number.isFinite(Number(c.order)) ? Number(c.order) : 0,
         visible: c.visible !== false,
         attributesSchema: cleanedAttrs,
@@ -166,6 +233,32 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
       err.details = errors;
       throw err;
     }
+
+    // Parent-link integrity. The admin UI only offers existing ids as
+    // parents, so rather than reject the whole save we DEGRADE any broken
+    // link to "" (top-level): a dangling reference, a self-reference, or a
+    // cycle just promotes that node to a main category instead of corrupting
+    // the tree. Forgiving by design — same spirit as skipping blank rows.
+    const idSet = new Set(normalised.map((c) => c.id));
+    const parentOf = new Map(normalised.map((c) => [c.id, c.parentId]));
+    const formsCycle = (startId) => {
+      const seenChain = new Set();
+      let cur = parentOf.get(startId);
+      while (cur) {
+        if (cur === startId || seenChain.has(cur)) return true;
+        seenChain.add(cur);
+        cur = parentOf.get(cur);
+      }
+      return false;
+    };
+    for (const c of normalised) {
+      if (!c.parentId) continue;
+      if (c.parentId === c.id || !idSet.has(c.parentId) || formsCycle(c.id)) {
+        c.parentId = "";
+        parentOf.set(c.id, "");
+      }
+    }
+
     doc.categories = normalised;
   }
 
@@ -175,5 +268,6 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
 
   if (updatedBy) doc.updatedBy = updatedBy;
   await doc.save();
+  _bustTreeCache(); // category structure changed → drop the descendant cache
   return doc.toObject();
 };

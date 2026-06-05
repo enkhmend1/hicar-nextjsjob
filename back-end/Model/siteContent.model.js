@@ -56,6 +56,13 @@ const categorySchema = new mongoose.Schema(
   {
     /** Stable id used in URLs (e.g. /shop?cat=brake). lowercase. */
     id:        { type: String, required: true, trim: true, lowercase: true, maxlength: 40 },
+    /**
+     * Parent category id for nesting (Parent → Child tree). "" = top-level
+     * (main) category. References another category's `id` in this same array.
+     * Reference integrity, self-reference, and cycles are enforced in
+     * siteContent.service.updateSiteContent (invalid links degrade to "").
+     */
+    parentId:  { type: String, default: "", trim: true, lowercase: true, maxlength: 40 },
     /** Display name shown to users — locale-free for now (Mongolian only). */
     name:      { type: String, required: true, trim: true, maxlength: 60 },
     /** Raw SVG path-d attribute. Kept inline so the homepage doesn't need separate icon hosting. */

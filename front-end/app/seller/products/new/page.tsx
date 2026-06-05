@@ -38,8 +38,8 @@ import {
   type KnownCategory,
 } from "@/app/lib/productSchema";
 import {
-  CheckCircle2, ChevronLeft, ChevronRight, Loader2, Plus, Trash2, Upload, X,
-  AlertCircle,
+  AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronRight, CornerDownRight,
+  FolderTree, Loader2, Plus, Search, Trash2, Upload, X,
 } from "lucide-react";
 
 // Shared form-API type so child components and the parent agree on the
@@ -223,54 +223,185 @@ export default function NewProductPage() {
 // Step 1 — basics
 // ─────────────────────────────────────────────────────────────────────
 function Step1Basics({ form }: { form: ProductForm }) {
-  const { register, formState: { errors } } = form;
-  // Live category list from /api/site-content/categories — same source the
-  // homepage + admin editor read from. A category the admin adds (and
-  // marks visible) is IMMEDIATELY available here without a code change.
-  // The dynamic-attributes panel in Step 2 still uses
-  // CATEGORY_ATTRIBUTE_SCHEMAS for known categories; admin-added cats
-  // without a schema get the "no extra fields" fallback.
+  const { register, setValue, watch, formState: { errors } } = form;
+  // Live category tree from /api/site-content/categories (same source as the
+  // homepage + admin editor). Admin-added categories — and their sub-parts —
+  // are available here instantly, no code change.
   const { categories, loading: catsLoading } = useCategories();
+  const category = watch("category") || "";
+
+  const mains = categories.filter((c) => !c.parentId);
+  const known = categories.find((c) => c.id === category);
+
+  // Step-by-step picker. pickedMain = the main the seller drilled into;
+  // manualOn = the free-text "Бусад / гараас бичих" path. The active view is
+  // derived so returning to this step (category already chosen) restores it.
+  const [pickedMain, setPickedMain] = useState("");
+  const [manualOn, setManualOn] = useState(false);
+  const [subQuery, setSubQuery] = useState("");
+  const [manualText, setManualText] = useState(() => category);
+
+  const activeMain = pickedMain || (known ? (known.parentId || known.id) : "");
+  const activeMainCat = categories.find((c) => c.id === activeMain);
+  const manualActive = manualOn || (!!category && !known && !catsLoading);
+  const subs = activeMain ? categories.filter((c) => c.parentId === activeMain) : [];
+  const sq = subQuery.trim().toLowerCase();
+  const filteredSubs = sq
+    ? subs.filter((s) => s.name.toLowerCase().includes(sq) || s.id.includes(sq))
+    : subs;
+
+  const slugify = (s: string) =>
+    s.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+  const choose = (id: string) => {
+    setManualOn(false);
+    setValue("category", id, { shouldValidate: true, shouldDirty: true });
+  };
+  // "Өөрчлөх" clears the selection and returns to the main grid.
+  const resetPick = () => {
+    setPickedMain(""); setManualOn(false); setSubQuery("");
+    setValue("category", "", { shouldDirty: true });
+  };
+
+  const inputCls = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans";
+
   return (
     <div className="space-y-4">
       <Field label="Нэр" hint="Каталоги дээр харагдах гарчиг" error={errors.name?.message}>
-        <input {...register("name")}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans"
+        <input {...register("name")} className={inputCls}
           placeholder="Жнь: Toyota Crown 2010 бамперын фар" />
       </Field>
 
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Брэнд" error={errors.brand?.message}>
-          <input {...register("brand")}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans"
-            placeholder="Toyota OEM, Bosch, …" />
+          <input {...register("brand")} className={inputCls} placeholder="Toyota OEM, Bosch, …" />
         </Field>
-        <Field label="OEM код" hint="Заавал биш — гадна жагсаалттай байх ёсгүй" error={errors.oem?.message}>
-          <input {...register("oem")}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-mono"
-            placeholder="04465-0E010" />
+        <Field label="OEM код" hint="Заавал биш" error={errors.oem?.message}>
+          <input {...register("oem")} className={`${inputCls} font-mono`} placeholder="04465-0E010" />
         </Field>
       </div>
 
-      <Field
-        label="Категори"
-        hint={catsLoading
-          ? "Категори жагсаалт ачаалж байна..."
-          : "Зэрэгцээ талбарууд категорийн дагуу хувирна. Жагсаалт admin → Сайтын контент-аас удирдагдана."}
-        error={errors.category?.message}>
-        <select {...register("category")} disabled={catsLoading}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans disabled:opacity-60">
-          <option value="">— Сонгох —</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-          {/* "other" категори нь зориудаар үлдсэн — schema-гүй ангиллын
-              нөөц утга. Жагсаалтад давхардахгүй бол үргэлж сонголтонд гарна. */}
-          {!categories.some((c) => c.id === "other") && (
-            <option value="other">{CATEGORY_LABELS.other}</option>
-          )}
-        </select>
-      </Field>
+      {/* ── Step-by-step category picker ───────────────────────── */}
+      <div>
+        <label className="block text-[12px] font-medium text-gray-700 mb-1.5">
+          Категори <span className="text-red-500">*</span>
+        </label>
+
+        {catsLoading ? (
+          <div className="text-[12px] text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+            Категори ачаалж байна…
+          </div>
+        ) : (!activeMain && !manualActive) ? (
+          /* Stage A — choose a MAIN category */
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {mains.map((m) => {
+                const subCount = categories.filter((c) => c.parentId === m.id).length;
+                return (
+                  <button key={m.id} type="button" onClick={() => setPickedMain(m.id)}
+                    className="flex items-center gap-2 text-left bg-white border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 rounded-xl p-3 cursor-pointer transition-colors group">
+                    <span className="w-9 h-9 shrink-0 rounded-lg bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center overflow-hidden">
+                      {m.imageUrl
+                        ? <Image src={m.imageUrl} alt={m.name} width={36} height={36} className="w-full h-full object-cover" />
+                        : m.iconPath
+                          ? <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={m.iconPath} /></svg>
+                          : <FolderTree size={16} className="text-blue-600" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold text-gray-900 truncate">{m.name}</span>
+                      <span className="block text-[10px] text-gray-400">{subCount > 0 ? `${subCount} дэд төрөл` : "Шууд сонгох"}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => { setManualText(""); setManualOn(true); }}
+              className="mt-2 inline-flex items-center gap-1 text-[12px] text-gray-500 hover:text-blue-700 bg-transparent border-none cursor-pointer font-sans">
+              <Plus size={12} /> Бусад / гараас бичих
+            </button>
+          </div>
+        ) : (
+          /* Stage B — drilled into a main (or manual entry) */
+          <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/40">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-700 min-w-0">
+                <FolderTree size={13} className="text-blue-600 shrink-0" />
+                <span className="truncate">{manualActive ? "Гараас бичих" : activeMainCat?.name || "Категори"}</span>
+              </div>
+              <button type="button" onClick={resetPick}
+                className="inline-flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-800 bg-transparent border-none cursor-pointer font-semibold shrink-0">
+                <ChevronLeft size={12} /> Өөрчлөх
+              </button>
+            </div>
+
+            {manualActive ? (
+              <input
+                value={manualText}
+                onChange={(e) => { setManualText(e.target.value); setValue("category", slugify(e.target.value), { shouldValidate: true, shouldDirty: true }); }}
+                placeholder="Сэлбэгийн төрлөө бичнэ үү (Жнь: Турбо хоолой)"
+                className={inputCls} autoFocus />
+            ) : (
+              <>
+                {subs.length > 6 && (
+                  <div className="relative mb-2">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input value={subQuery} onChange={(e) => setSubQuery(e.target.value)}
+                      placeholder="Дэд төрөл хайх…"
+                      className="w-full pl-8 pr-3 py-2 text-[12px] bg-white border border-gray-200 rounded-lg focus:border-blue-500 outline-none transition-colors" />
+                  </div>
+                )}
+
+                {subs.length === 0 ? (
+                  <button type="button" onClick={() => choose(activeMain)}
+                    className={`w-full text-left rounded-lg px-3 py-2.5 text-[13px] border cursor-pointer transition-colors ${
+                      category === activeMain ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-200 hover:border-blue-400"
+                    }`}>
+                    {category === activeMain && <Check size={13} className="inline mr-1.5" />}
+                    «{activeMainCat?.name}»-г сонгох
+                    <span className="block text-[10px] opacity-70 mt-0.5">Энэ категорид дэд төрөл алга.</span>
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-0.5">
+                    {filteredSubs.map((s) => {
+                      const sel = category === s.id;
+                      return (
+                        <button key={s.id} type="button" onClick={() => choose(s.id)}
+                          className={`flex items-center gap-2 text-left rounded-lg px-3 py-2 text-[12px] border cursor-pointer transition-colors ${
+                            sel ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50/50"
+                          }`}>
+                          {sel
+                            ? <Check size={13} className="shrink-0" />
+                            : <CornerDownRight size={13} className="shrink-0 text-gray-300" />}
+                          <span className="truncate flex-1">{s.name}</span>
+                        </button>
+                      );
+                    })}
+                    {filteredSubs.length === 0 && (
+                      <p className="col-span-full text-[11px] text-gray-400 italic px-1 py-2">Илэрц алга.</p>
+                    )}
+                  </div>
+                )}
+
+                <button type="button" onClick={() => { setManualText(""); setManualOn(true); }}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-blue-700 bg-transparent border-none cursor-pointer font-sans">
+                  <Plus size={12} /> Жагсаалтад алга — гараас бичих
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* selected summary + error */}
+        {category && (
+          <div className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">
+            <Check size={12} /> Сонгосон: <strong>{known?.name || category}</strong>
+          </div>
+        )}
+        {errors.category?.message && (
+          <p className="mt-1 text-[10px] text-red-500 inline-flex items-center gap-1">
+            <AlertCircle size={10} /> {errors.category.message}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

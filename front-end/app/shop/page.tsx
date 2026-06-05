@@ -418,6 +418,19 @@ function FilterContent({
   const update = (patch: Partial<ShopFilters>) =>
     onChange((p) => ({ ...p, ...patch }));
 
+  // Nested category accordion: split the flat list into MAIN categories and
+  // their sub-parts. Selecting a main filters by [main + all descendants]
+  // (the backend expands it); selecting a sub narrows to that sub only.
+  const mains = categories.filter((c) => c.id !== "all" && !c.parentId);
+  const subsOf = (id: string) => categories.filter((c) => c.parentId === id);
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set());
+  const toggleCat = (id: string) => setOpenCats((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const openCat = (id: string) => setOpenCats((prev) => new Set(prev).add(id));
+
   return (
     <div className="space-y-4">
       {/* ── Phase AG: VEHICLE FILTER ──────────────────────────────
@@ -493,30 +506,74 @@ function FilterContent({
         )}
       </FilterSection>
 
-      {/* CATEGORY — scrollable since the dynamic list can grow */}
+      {/* CATEGORY — nested accordion (Main → Sub), scrollable */}
       <FilterSection title="Ангилал">
-        <div className="space-y-0.5 max-h-72 overflow-y-auto pr-1 -mr-1">
-          {categories.map((c) => (
-            <button key={c.id} onClick={() => update({ cat: c.id })}
-              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[12.5px] cursor-pointer border-none font-sans transition-colors flex items-center justify-between gap-2 ${
-                filters.cat === c.id
-                  ? "bg-blue-50 text-blue-700 font-semibold"
-                  : "bg-transparent text-gray-600 hover:bg-gray-50"
-              }`}>
-              <span className="flex items-center gap-1.5 truncate">
-                {c.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.imageUrl} alt="" className="w-4 h-4 rounded object-cover shrink-0" />
+        <div className="space-y-0.5 max-h-80 overflow-y-auto pr-1 -mr-1">
+          {/* Бүгд */}
+          <button onClick={() => update({ cat: "all" })}
+            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[12.5px] cursor-pointer border-none font-sans transition-colors ${
+              filters.cat === "all" ? "bg-blue-50 text-blue-700 font-semibold" : "bg-transparent text-gray-600 hover:bg-gray-50"
+            }`}>
+            Бүгд
+          </button>
+
+          {mains.map((m) => {
+            const subs = subsOf(m.id);
+            const selfActive  = filters.cat === m.id;
+            const childActive = subs.some((s) => s.id === filters.cat);
+            const open = openCats.has(m.id) || childActive;
+            return (
+              <div key={m.id}>
+                <div className="flex items-center gap-0.5">
+                  {subs.length > 0 ? (
+                    <button onClick={() => toggleCat(m.id)} aria-label="Дэлгэх/Хумих"
+                      className="shrink-0 w-6 h-7 flex items-center justify-center text-gray-400 hover:text-blue-700 cursor-pointer bg-transparent border-none">
+                      <ChevronDown size={13} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
+                    </button>
+                  ) : (
+                    <span className="shrink-0 w-6" />
+                  )}
+                  <button onClick={() => { update({ cat: m.id }); if (subs.length) openCat(m.id); }}
+                    className={`flex-1 min-w-0 text-left px-2 py-1.5 rounded-lg text-[12.5px] cursor-pointer border-none font-sans transition-colors flex items-center justify-between gap-2 ${
+                      selfActive ? "bg-blue-50 text-blue-700 font-semibold"
+                      : childActive ? "text-blue-700 font-medium hover:bg-gray-50"
+                      : "bg-transparent text-gray-600 hover:bg-gray-50"
+                    }`}>
+                    <span className="flex items-center gap-1.5 truncate">
+                      {m.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.imageUrl} alt="" className="w-4 h-4 rounded object-cover shrink-0" />
+                      )}
+                      <span className="truncate">{m.name}</span>
+                    </span>
+                    {m.count > 0 && (
+                      <span className="shrink-0 text-[10px] text-gray-400 font-mono">{m.count}</span>
+                    )}
+                  </button>
+                </div>
+
+                {/* sub-parts */}
+                {open && subs.length > 0 && (
+                  <div className="ml-6 mt-0.5 mb-1 space-y-0.5 border-l border-gray-100 pl-1.5">
+                    {subs.map((s) => {
+                      const active = filters.cat === s.id;
+                      return (
+                        <button key={s.id} onClick={() => update({ cat: s.id })}
+                          className={`w-full text-left px-2 py-1 rounded-lg text-[12px] cursor-pointer border-none font-sans transition-colors flex items-center justify-between gap-2 ${
+                            active ? "bg-blue-50 text-blue-700 font-semibold" : "bg-transparent text-gray-500 hover:bg-gray-50"
+                          }`}>
+                          <span className="truncate">{s.name}</span>
+                          {s.count > 0 && (
+                            <span className="shrink-0 text-[10px] text-gray-400 font-mono">{s.count}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-                <span className="truncate">{c.name}</span>
-              </span>
-              {c.id !== "all" && c.count > 0 && (
-                <span className="shrink-0 text-[10px] text-gray-400 font-mono">
-                  {c.count}
-                </span>
-              )}
-            </button>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </FilterSection>
 

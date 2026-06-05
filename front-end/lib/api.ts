@@ -97,12 +97,27 @@ export const api = {
   uploadImage: async (file: File): Promise<{ url: string }> => {
     const fd = new FormData();
     fd.append("image", file);
-    const token = getToken();
-    const headers: Record<string, string> = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${BASE}/upload`, {
-      method: "POST", headers, body: fd, credentials: "include",
-    });
+    // NB: do NOT set Content-Type — the browser adds the multipart boundary.
+    const send = (token: string | null) => {
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      return fetch(`${BASE}/upload`, {
+        method: "POST", headers, body: fd, credentials: "include",
+      });
+    };
+    let res = await send(getToken());
+    // Mirror request()'s refresh-on-401: a short-lived access token may have
+    // expired while the admin was editing the form. Without this, uploads
+    // 401'd silently even though every other call transparently refreshed.
+    if (res.status === 401) {
+      const newToken = await attemptRefresh();
+      if (newToken) {
+        res = await send(newToken);
+      } else {
+        setToken(null);
+        onSessionLost?.();
+      }
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new ApiError(data.message || `HTTP ${res.status}`, res.status, data);
     return data;

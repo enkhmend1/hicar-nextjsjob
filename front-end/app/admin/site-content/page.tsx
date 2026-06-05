@@ -24,8 +24,8 @@ import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 import { invalidateCategoriesCache } from "@/app/lib/useCategories";
 import {
-  AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Eye, EyeOff,
-  ImagePlus, LayoutTemplate, Loader2, Plus, Save, Sliders, Trash2, X,
+  AlertCircle, Check, ChevronDown, ChevronRight, CornerDownRight, Eye, EyeOff,
+  FolderTree, ImagePlus, LayoutTemplate, Loader2, Plus, Save, Search, Sliders, Trash2, X,
 } from "lucide-react";
 
 interface AttributeDef {
@@ -37,6 +37,8 @@ interface AttributeDef {
 }
 interface SiteCategory {
   id: string;
+  /** Parent category id for nesting. "" = top-level (main) category. */
+  parentId: string;
   name: string;
   iconPath: string;
   imageUrl: string;
@@ -78,7 +80,7 @@ const HERO_FIELDS: { key: keyof SiteHero; label: string; placeholder?: string; m
 ];
 
 const EMPTY_CATEGORY: SiteCategory = {
-  id: "", name: "", iconPath: "", imageUrl: "", order: 999, visible: true, attributesSchema: [],
+  id: "", parentId: "", name: "", iconPath: "", imageUrl: "", order: 999, visible: true, attributesSchema: [],
 };
 const EMPTY_ATTRIBUTE: AttributeDef = {
   key: "", label: "", type: "text", options: [], required: false,
@@ -100,6 +102,15 @@ export default function AdminSiteContentPage() {
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   // Which category rows are showing their attributesSchema editor.
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Category tree search — filters mains + subs by id/name.
+  const [catQuery, setCatQuery] = useState("");
+  // Collapsed main categories in the tree (default: all expanded).
+  const [catCollapsed, setCatCollapsed] = useState<Set<string>>(new Set());
+  const toggleMain = (id: string) => setCatCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   // Per-row image upload state: index → uploading boolean
   const [uploadingIdx, setUploadingIdx] = useState<Set<number>>(new Set());
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -117,8 +128,9 @@ export default function AdminSiteContentPage() {
     try {
       const r = await api.uploadImage(file);
       updateCategory(idx, { imageUrl: r.url });
-    } catch {
-      setErr("Зураг upload хийж чадсангүй");
+    } catch (e) {
+      const msg = (e as ApiError)?.message;
+      setErr(msg ? `Зураг upload хийж чадсангүй: ${msg}` : "Зураг upload хийж чадсангүй");
     } finally {
       setUploadingIdx((prev) => { const next = new Set(prev); next.delete(idx); return next; });
     }
@@ -151,38 +163,144 @@ export default function AdminSiteContentPage() {
     } : c);
   };
 
-  const moveCategory = (idx: number, delta: -1 | 1) => {
-    setContent((c) => {
-      if (!c) return c;
-      const next = [...c.categories];
-      const target = idx + delta;
-      if (target < 0 || target >= next.length) return c;
-      [next[idx], next[target]] = [next[target], next[idx]];
-      // Re-stamp order so the DB persists the new sequence
-      return { ...c, categories: next.map((cat, i) => ({ ...cat, order: i + 1 })) };
-    });
-  };
-
+  // Add a top-level (main) category at the end.
   const addCategory = () => {
     setContent((c) => c ? {
       ...c,
       categories: [
         ...c.categories,
-        { ...EMPTY_CATEGORY, order: c.categories.length + 1 },
+        { ...EMPTY_CATEGORY, parentId: "", order: c.categories.length + 1 },
       ],
     } : c);
   };
 
-  const removeCategory = (idx: number) => {
+  // Add a sub-category under a given parent. The new row inherits parentId
+  // so the tree groups it immediately; the admin then fills id + name.
+  const addSubCategory = (parentId: string) => {
     setContent((c) => c ? {
       ...c,
-      categories: c.categories.filter((_, i) => i !== idx).map((cat, i) => ({ ...cat, order: i + 1 })),
+      categories: [
+        ...c.categories,
+        { ...EMPTY_CATEGORY, parentId, order: c.categories.length + 1 },
+      ],
     } : c);
+  };
+
+  // Delete a row by array index. If it's a MAIN with children, the children
+  // are promoted to top-level (parentId="") rather than orphaned — deleting
+  // a parent should never silently swallow its sub-parts.
+  const removeCategory = (idx: number) => {
+    setContent((c) => {
+      if (!c) return c;
+      const removedId = c.categories[idx]?.id;
+      const kept = c.categories
+        .filter((_, i) => i !== idx)
+        .map((cat) => (removedId && cat.parentId === removedId ? { ...cat, parentId: "" } : cat))
+        .map((cat, i) => ({ ...cat, order: i + 1 }));
+      return { ...c, categories: kept };
+    });
   };
 
   const updateHero = (key: keyof SiteHero, value: string) => {
     setContent((c) => c ? { ...c, hero: { ...c.hero, [key]: value } } : c);
   };
+
+  // ── Shared category row controls ──────────────────────────────────
+  // Inline editor cells reused by BOTH main and sub rows in the tree:
+  // image/icon tile + upload, name, id, live count, visibility, attribute
+  // toggle, delete. The attributesSchema editor itself renders separately
+  // (below the row) keyed by the same array index.
+  const rowControls = (cat: SiteCategory) => {
+    const idx = content ? content.categories.indexOf(cat) : -1;
+    return (
+      <>
+        {/* image / icon tile + upload */}
+        <div className="relative shrink-0">
+          <input
+            ref={(el) => { fileInputRefs.current[idx] = el; }}
+            type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCategoryImage(idx, f); e.target.value = ""; }}
+          />
+          {cat.imageUrl ? (
+            <div className="relative w-9 h-9 rounded-lg overflow-hidden border border-gray-200 group/img">
+              <Image src={cat.imageUrl} alt={cat.name || "category"} fill className="object-cover" sizes="36px" />
+              <button type="button" onClick={() => updateCategory(idx, { imageUrl: "" })}
+                className="absolute inset-0 bg-black/50 hidden group-hover/img:flex items-center justify-center cursor-pointer border-none">
+                <X size={12} className="text-white" />
+              </button>
+            </div>
+          ) : (
+            <button type="button" disabled={uploadingIdx.has(idx)} onClick={() => fileInputRefs.current[idx]?.click()}
+              title="Зураг оруулах"
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer bg-white border border-dashed border-blue-300 transition-colors disabled:opacity-50">
+              {uploadingIdx.has(idx)
+                ? <Loader2 size={13} className="animate-spin" />
+                : cat.iconPath
+                  ? <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={cat.iconPath} /></svg>
+                  : <ImagePlus size={13} />}
+            </button>
+          )}
+        </div>
+
+        {/* display name */}
+        <input value={cat.name}
+          onChange={(e) => updateCategory(idx, { name: e.target.value })}
+          placeholder="Нэр (Жнь: Духны ремень)"
+          className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors" />
+
+        {/* stable id */}
+        <input value={cat.id}
+          onChange={(e) => updateCategory(idx, { id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
+          placeholder="id"
+          className="w-24 shrink-0 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-[11px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors" />
+
+        {/* live count */}
+        <div className="shrink-0 w-10 text-center bg-slate-50 rounded-lg h-9 flex items-center justify-center text-[12px] font-semibold text-slate-700"
+          title="Approved барааны тоо">
+          {counts[cat.id] ?? 0}
+        </div>
+
+        {/* visibility */}
+        <button type="button" onClick={() => updateCategory(idx, { visible: !cat.visible })}
+          title={cat.visible ? "Ил байна" : "Нуугдсан"}
+          className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border cursor-pointer transition-colors ${
+            cat.visible ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                        : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200"
+          }`}>
+          {cat.visible ? <Eye size={13} /> : <EyeOff size={13} />}
+        </button>
+
+        {/* attributesSchema toggle */}
+        <button type="button" onClick={() => toggleExpanded(idx)}
+          title="Шинж чанар тохируулах"
+          className={`shrink-0 h-9 px-2 inline-flex items-center gap-1 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+            expanded.has(idx) ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-white text-gray-500 border-gray-200 hover:border-blue-300"
+          }`}>
+          <Sliders size={11} /><span>{(cat.attributesSchema || []).length}</span>
+        </button>
+
+        {/* delete */}
+        <button type="button" onClick={() => removeCategory(idx)}
+          title="Устгах"
+          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 cursor-pointer bg-transparent border border-transparent hover:border-red-200 transition-colors">
+          <Trash2 size={13} />
+        </button>
+      </>
+    );
+  };
+
+  // attributesSchema editor block for a category at array index `idx`.
+  const attrEditorFor = (cat: SiteCategory, idx: number) =>
+    expanded.has(idx) ? (
+      <AttributeSchemaEditor
+        category={cat}
+        catIdx={idx}
+        onAddAttribute={() => addAttribute(idx)}
+        onUpdateAttribute={(ai, p) => updateAttribute(idx, ai, p)}
+        onRemoveAttribute={(ai) => removeAttribute(idx, ai)}
+      />
+    ) : null;
 
   // ── attributesSchema sub-array helpers ────────────────────────────
   const addAttribute = (catIdx: number) => {
@@ -333,144 +451,122 @@ export default function AdminSiteContentPage() {
         </div>
       )}
 
-      {/* ── Categories ────────────────────────────────────────────── */}
+      {/* ── Categories — nested tree (Main → Sub) ───────────────── */}
       <section className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[14px] font-semibold text-gray-900">
-            Категори жагсаалт <span className="text-[11px] text-gray-400 font-normal">({content.categories.length})</span>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-[14px] font-semibold text-gray-900 inline-flex items-center gap-1.5">
+            <FolderTree size={15} className="text-blue-600" /> Категори бүтэц
+            <span className="text-[11px] text-gray-400 font-normal">({content.categories.length})</span>
           </h2>
-          <button type="button" onClick={addCategory}
-            className="inline-flex items-center gap-1 text-[12px] text-blue-700 hover:text-blue-800 bg-transparent border-none cursor-pointer font-semibold">
-            <Plus size={12} /> Категори нэмэх
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {content.categories.map((cat, idx) => (
-            <div key={idx} className="rounded-xl border border-gray-100 bg-gray-50/40 p-2">
-            <div className="grid grid-cols-[28px_2fr_2fr_1fr_80px_80px_72px_80px_70px_64px] gap-1.5 items-center">
-              {/* Reorder */}
-              <div className="flex flex-col items-center justify-center gap-px">
-                <button type="button" onClick={() => moveCategory(idx, -1)} disabled={idx === 0}
-                  className="w-5 h-4 flex items-center justify-center text-gray-400 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none transition-colors">
-                  <ArrowUp size={12} />
-                </button>
-                <button type="button" onClick={() => moveCategory(idx, 1)} disabled={idx === content.categories.length - 1}
-                  className="w-5 h-4 flex items-center justify-center text-gray-400 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none transition-colors">
-                  <ArrowDown size={12} />
-                </button>
-              </div>
-
-              <input value={cat.id}
-                onChange={(e) => updateCategory(idx, { id: e.target.value.toLowerCase() })}
-                placeholder="id (brake)" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors" />
-
-              <input value={cat.name}
-                onChange={(e) => updateCategory(idx, { name: e.target.value })}
-                placeholder="Дэлгэцэн нэр" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors" />
-
-              <input value={cat.iconPath}
-                onChange={(e) => updateCategory(idx, { iconPath: e.target.value })}
-                placeholder="SVG path d…" className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[11px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors truncate" />
-
-              {/* Icon preview */}
-              <div className="flex items-center justify-center bg-blue-50 rounded-lg h-9">
-                {cat.iconPath ? (
-                  <svg className="w-4 h-4 fill-blue-600" viewBox="0 0 24 24"><path d={cat.iconPath} /></svg>
-                ) : <span className="text-[10px] text-gray-400">—</span>}
-              </div>
-
-              {/* Image upload */}
-              <div className="relative flex items-center justify-center h-9">
-                <input
-                  ref={(el) => { fileInputRefs.current[idx] = el; }}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadCategoryImage(idx, file);
-                    e.target.value = "";
-                  }}
-                />
-                {cat.imageUrl ? (
-                  <div className="relative w-9 h-9 rounded-lg overflow-hidden border border-gray-200 group/img">
-                    <Image src={cat.imageUrl} alt={cat.name || "category"} fill className="object-cover" sizes="36px" />
-                    <button
-                      type="button"
-                      onClick={() => updateCategory(idx, { imageUrl: "" })}
-                      className="absolute inset-0 bg-black/50 hidden group-hover/img:flex items-center justify-center cursor-pointer border-none"
-                    >
-                      <X size={12} className="text-white" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={uploadingIdx.has(idx)}
-                    onClick={() => fileInputRefs.current[idx]?.click()}
-                    className="inline-flex items-center justify-center h-9 w-full rounded-lg text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer bg-white border border-dashed border-blue-300 transition-colors disabled:opacity-50"
-                    title="Зураг upload"
-                  >
-                    {uploadingIdx.has(idx)
-                      ? <Loader2 size={12} className="animate-spin" />
-                      : <ImagePlus size={12} />}
-                  </button>
-                )}
-              </div>
-
-              {/* Live count */}
-              <div className="text-center bg-slate-50 rounded-lg h-9 flex items-center justify-center text-[12px] font-semibold text-slate-700">
-                {counts[cat.id] ?? 0}
-              </div>
-
-              {/* Visibility toggle */}
-              <button type="button" onClick={() => updateCategory(idx, { visible: !cat.visible })}
-                className={`inline-flex items-center justify-center h-9 rounded-lg text-[11px] font-semibold cursor-pointer border transition-colors font-sans ${
-                  cat.visible
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                    : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
-                }`}>
-                {cat.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                <span className="ml-1">{cat.visible ? "Ил" : "Нуу"}</span>
-              </button>
-
-              {/* Attribute schema expand toggle */}
-              <button type="button" onClick={() => toggleExpanded(idx)}
-                className={`inline-flex items-center justify-center h-9 rounded-lg text-[11px] cursor-pointer border transition-colors font-sans gap-1 ${
-                  expanded.has(idx)
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
-                }`}
-                title="Шинж чанар тохируулах">
-                <Sliders size={11} />
-                <span>{(cat.attributesSchema || []).length}</span>
-                {expanded.has(idx) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-              </button>
-
-              <button type="button" onClick={() => removeCategory(idx)}
-                className="inline-flex items-center justify-center h-9 rounded-lg text-[11px] text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer bg-transparent border border-transparent hover:border-red-200 transition-colors">
-                <Trash2 size={12} /> <span className="ml-1">Устга</span>
-              </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={catQuery} onChange={(e) => setCatQuery(e.target.value)} placeholder="Хайх…"
+                className="w-40 pl-8 pr-2.5 py-1.5 text-[12px] bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-blue-500 outline-none transition-colors" />
             </div>
-
-            {/* Expandable attributesSchema builder */}
-            {expanded.has(idx) && (
-              <AttributeSchemaEditor
-                category={cat}
-                catIdx={idx}
-                onAddAttribute={() => addAttribute(idx)}
-                onUpdateAttribute={(ai, p) => updateAttribute(idx, ai, p)}
-                onRemoveAttribute={(ai) => removeAttribute(idx, ai)}
-              />
-            )}
+            <button type="button" onClick={addCategory}
+              className="inline-flex items-center gap-1 text-[12px] text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-3 py-1.5 cursor-pointer border-none font-semibold transition-colors shadow-sm shadow-blue-200">
+              <Plus size={13} /> Үндсэн категори
+            </button>
           </div>
-          ))}
         </div>
+
+        {(() => {
+          const cats = content.categories;
+          const q = catQuery.trim().toLowerCase();
+          const byOrder = (a: SiteCategory, b: SiteCategory) => (a.order ?? 0) - (b.order ?? 0);
+          const mains = cats.filter((c) => !c.parentId).sort(byOrder);
+          const subsOf = (id: string) => cats.filter((c) => c.parentId === id).sort(byOrder);
+          const nameOfId = (id: string) => cats.find((c) => c.id === id)?.name || id;
+
+          // ── Search view: flat list of matches with parent context ──
+          if (q) {
+            const hits = cats.filter((c) => c.id.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
+            if (hits.length === 0) {
+              return <p className="text-[12px] text-gray-400 py-6 text-center">&ldquo;{catQuery}&rdquo; — илэрц алга.</p>;
+            }
+            return (
+              <div className="space-y-1.5">
+                {hits.map((cat) => {
+                  const idx = cats.indexOf(cat);
+                  return (
+                    <div key={`h-${idx}`} className="rounded-xl border border-gray-200 bg-white">
+                      {cat.parentId && (
+                        <div className="px-3 pt-1.5 text-[10px] text-gray-400 truncate">{nameOfId(cat.parentId)} →</div>
+                      )}
+                      <div className="flex items-center gap-1.5 p-2">{rowControls(cat)}</div>
+                      <div className="px-2 pb-2 empty:hidden">{attrEditorFor(cat, idx)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          // ── Tree view ──
+          if (mains.length === 0) {
+            return (
+              <p className="text-[12px] text-gray-400 py-6 text-center">
+                Үндсэн категори алга. Дээрх &ldquo;Үндсэн категори&rdquo; товчоор эхэл.
+              </p>
+            );
+          }
+
+          return (
+            <div className="space-y-2.5">
+              {mains.map((main) => {
+                const mIdx = cats.indexOf(main);
+                const subs = subsOf(main.id);
+                const open = !catCollapsed.has(main.id);
+                return (
+                  <div key={`m-${mIdx}`} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    {/* main header row */}
+                    <div className="flex items-center gap-1.5 p-2 bg-gray-50/70">
+                      <button type="button" onClick={() => toggleMain(main.id)} disabled={!main.id}
+                        title={open ? "Хумих" : "Дэлгэх"}
+                        className="shrink-0 w-6 h-9 flex items-center justify-center text-gray-400 hover:text-blue-700 cursor-pointer bg-transparent border-none disabled:opacity-30 disabled:cursor-not-allowed">
+                        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </button>
+                      {rowControls(main)}
+                    </div>
+                    <div className="px-2 pb-2 border-t border-gray-100 empty:hidden">{attrEditorFor(main, mIdx)}</div>
+
+                    {/* sub categories */}
+                    {open && (
+                      <div className="border-t border-gray-100 px-3 py-2 space-y-1.5">
+                        {subs.map((sub) => {
+                          const sIdx = cats.indexOf(sub);
+                          return (
+                            <div key={`s-${sIdx}`}>
+                              <div className="flex items-center gap-1.5 rounded-lg bg-gray-50/40 border border-gray-100 px-2 py-1.5">
+                                <CornerDownRight size={13} className="shrink-0 text-gray-300" />
+                                {rowControls(sub)}
+                              </div>
+                              <div className="mt-1 ml-5 empty:hidden">{attrEditorFor(sub, sIdx)}</div>
+                            </div>
+                          );
+                        })}
+                        {subs.length === 0 && (
+                          <p className="text-[11px] text-gray-400 italic px-1">Дэд категори алга — доороос нэмнэ үү.</p>
+                        )}
+                        <button type="button" onClick={() => main.id && addSubCategory(main.id)} disabled={!main.id}
+                          title={!main.id ? "Эхлээд үндсэн категорийн id бөглөнө үү" : ""}
+                          className="inline-flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-800 bg-transparent border-none cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+                          <Plus size={12} /> Дэд категори нэмэх
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         <p className="mt-3 text-[10px] text-gray-400 leading-snug">
-          Тоо (live count) нь DB-аас тооцогддог — Mongo дахь approved бараагаар автомат шинэчлэгдэнэ.
-          Шинэ категори нэмэхэд эхлээд тоо 0 байх ба сэллэр энэ category-д бараа байршуулангуут өсөх болно.
+          Үндсэн категори (Жнь: <strong>Хөдөлгүүр</strong>) дотор дэд категори (сэлбэгийн нэр — Духны ремень, Турбо…) нэмнэ.
+          Тоо нь approved бараагаар автоматаар бодогдоно; үндсэн категорийн тоо нь дэд категориудынхаа нийлбэр.
+          <strong>id</strong> давхардахгүй, жижиг үсэг/тоо/_ зөвшөөрнө.
         </p>
       </section>
 
