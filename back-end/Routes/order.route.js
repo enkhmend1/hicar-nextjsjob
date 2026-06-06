@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createOrder, myOrders, listOrders, updateStatus, buyerConfirmDelivery,
+  adminReleaseEscrow, adminHoldEscrow,
 } from "../Controller/order.controller.js";
 import { protect, adminOnly } from "../Middleware/auth.middleware.js";
 import { userLimit } from "../Middleware/rateLimit.middleware.js";
@@ -24,5 +25,9 @@ router.post(
 
 router.get("/", protect, adminOnly, listOrders);
 router.patch("/:id/status", protect, adminOnly, updateStatus);
+
+// Admin manual escrow overrides (release now / hold the auto-release).
+router.post("/:id/escrow/release", protect, adminOnly, adminReleaseEscrow);
+router.post("/:id/escrow/hold",    protect, adminOnly, adminHoldEscrow);
 
 export default router;

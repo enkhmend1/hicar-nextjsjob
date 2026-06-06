@@ -4,6 +4,7 @@ import User from "../Model/user.model.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
 import { scheduleRelease, cancelScheduledRelease } from "../Queue/escrowRelease.queue.js";
+import { releaseEscrow } from "../Service/escrowRelease.service.js";
 import { logger } from "../Config/logger.js";
 
 // Platform-default delivery fees (MNT). Used as the fallback when a seller
@@ -448,6 +449,64 @@ export const buyerConfirmDelivery = async (req, res) => {
     }
 
     return res.json({ order });
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+// ────────────────────────────────────────────────────────────────────
+// Admin manual escrow controls — override the automatic release timer.
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/orders/:id/escrow/release  (admin)
+ * Force-release escrow to the seller NOW, regardless of the scheduled
+ * hold window. Cancels any pending auto-release job first, then runs the
+ * same releaseEscrow path (PAID_OUT + payout + audit). Refuses if a
+ * dispute is open or the order isn't in a releasable money state.
+ */
+export const adminReleaseEscrow = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: "Захиалга олдсонгүй" });
+    if (order.hasOpenDispute) {
+      return res.status(409).json({ message: "Нээлттэй маргаантай — эхлээд шийдвэрлэнэ үү" });
+    }
+    if (!["PAID", "PARTIAL_REFUND"].includes(order.paymentStatus)) {
+      return res.status(400).json({ message: `Энэ төлбөрийн төлөвт release хийх боломжгүй: ${order.paymentStatus}` });
+    }
+    await cancelScheduledRelease(order).catch(() => {});
+    const result = await releaseEscrow(order._id);
+    if (!result.released) {
+      return res.status(400).json({ message: `Release амжилтгүй: ${result.reason}` });
+    }
+    logger.info("admin manual escrow release", {
+      orderId: String(order._id), admin: String(req.user._id), amount: result.amount,
+    });
+    const fresh = await Order.findById(order._id).populate("user", "name email phone");
+    return res.json({ order: fresh, released: result });
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+/**
+ * POST /api/orders/:id/escrow/hold  (admin)
+ * Pause the automatic release: cancel the scheduled job so the money stays
+ * held in escrow until an admin manually releases it (or a dispute resolves).
+ * Idempotent — safe when nothing is scheduled.
+ */
+export const adminHoldEscrow = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: "Захиалга олдсонгүй" });
+    if (!["PAID", "PARTIAL_REFUND"].includes(order.paymentStatus)) {
+      return res.status(400).json({ message: `Зөвхөн escrow-д байгаа захиалгыг hold хийнэ (одоо: ${order.paymentStatus})` });
+    }
+    await cancelScheduledRelease(order).catch(() => {});
+    logger.info("admin escrow hold", { orderId: String(order._id), admin: String(req.user._id) });
+    const fresh = await Order.findById(order._id).populate("user", "name email phone");
+    return res.json({ order: fresh });
   } catch (err) {
     return res.status(400).json({ message: err.message });
   }
