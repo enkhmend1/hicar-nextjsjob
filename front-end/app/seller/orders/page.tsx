@@ -32,6 +32,16 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "bg-red-50 text-red-700",
 };
 
+// Escrow/payout state badge — tells the seller whether their money is
+// being held, has been released, or is locked by a dispute.
+const PAYOUT_BADGE: Record<string, { label: string; cls: string }> = {
+  PAID:           { label: "Escrow-д хадгалагдсан", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  PARTIAL_REFUND: { label: "Хэсэгчилсэн буцаалт",   cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  PAID_OUT:       { label: "Төлбөр шилжсэн",         cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  DISPUTED:       { label: "Маргаантай",             cls: "bg-red-50 text-red-700 border-red-200" },
+  REFUNDED:       { label: "Буцаагдсан",             cls: "bg-gray-100 text-gray-600 border-gray-300" },
+};
+
 const FILTERS: Array<{ key: "all" | Order["status"]; label: string }> = [
   { key: "all",        label: "Бүгд" },
   { key: "paid",       label: "Шинэ" },
@@ -162,6 +172,11 @@ export default function SellerOrdersPage() {
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[o.status]}`}>
                       {STATUS_LABEL[o.status]}
                     </span>
+                    {o.paymentStatus && PAYOUT_BADGE[o.paymentStatus] && (
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${PAYOUT_BADGE[o.paymentStatus].cls}`}>
+                        🛡 {PAYOUT_BADGE[o.paymentStatus].label}
+                      </span>
+                    )}
                   </div>
 
                   {/* Inline action buttons (visible without expanding) */}
