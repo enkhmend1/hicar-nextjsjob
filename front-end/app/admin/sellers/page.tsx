@@ -241,13 +241,6 @@ export default function AdminSellersPage() {
                     <div className="flex flex-wrap gap-3 mt-1 text-[11px] text-gray-400">
                       {sp.appliedAt && <span>📅 {new Date(sp.appliedAt).toLocaleDateString("mn-MN")}</span>}
                       {sp.platformFeePercent !== undefined && <span>💸 {sp.platformFeePercent}%</span>}
-                      {sp.trustScore !== undefined && (
-                        <span className={
-                          sp.trustScore >= 70 ? "text-emerald-600"
-                          : sp.trustScore <= 30 ? "text-rose-600"
-                          : "text-amber-600"
-                        }>🛡️ Trust {Math.round(sp.trustScore)}/100</span>
-                      )}
                       {sp.bankName && sp.bankAccount && (
                         <span className="font-mono">🏦 {sp.bankName} · {sp.bankAccount}</span>
                       )}
