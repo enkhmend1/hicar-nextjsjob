@@ -16,7 +16,11 @@ export const createOrderInvoice = async (req, res) => {
     const { orderId } = req.body;
     const order = await Order.findOne({ _id: orderId, user: req.user._id });
     if (!order) return res.status(404).json({ message: "Захиалга олдсонгүй" });
-    if (order.paymentMethod !== "qpay") return res.status(400).json({ message: "QPay захиалга биш" });
+    // Both "qpay" and "card" settle through QPay (its payment page accepts
+    // Visa/Mastercard), so both are valid here. Wallet/other methods are not.
+    if (!["qpay", "card"].includes(order.paymentMethod)) {
+      return res.status(400).json({ message: "QPay-аар төлөх захиалга биш" });
+    }
     if (order.status !== "pending") return res.status(400).json({ message: "Захиалга төлсөн эсвэл цуцалсан" });
 
     // If we already have an invoice id, return cached payload
