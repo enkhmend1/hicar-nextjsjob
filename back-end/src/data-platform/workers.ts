@@ -6,8 +6,7 @@
  *   dp:normalize raw → normalized   (M1 stub; real pipeline in M2)
  */
 
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
 import { unlink } from "node:fs/promises";
 import { connectMongo } from "./shared/mongo.js";

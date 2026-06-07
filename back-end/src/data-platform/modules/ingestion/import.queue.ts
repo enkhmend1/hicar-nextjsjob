@@ -7,7 +7,7 @@
 
 import { makeQueue } from "../../shared/queues.js";
 
-export const IMPORT_QUEUE = "dp:import";
+export const IMPORT_QUEUE = "dp-import";
 
 export interface ImportJobData {
   importJobId: string;

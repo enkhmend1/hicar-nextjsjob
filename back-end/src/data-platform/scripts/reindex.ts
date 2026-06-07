@@ -4,8 +4,7 @@
  * `npm run dp:reindex` (requires Mongo + Typesense up).
  */
 
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
 import { connectMongo, disconnectMongo } from "../shared/mongo.js";
 import { ensureCollection, searchEnabled } from "../modules/search/typesense.client.js";
