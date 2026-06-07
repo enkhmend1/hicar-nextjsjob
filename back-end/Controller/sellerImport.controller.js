@@ -20,7 +20,7 @@
 
 import * as XLSX from "xlsx";
 import Product from "../Model/product.model.js";
-import { upload } from "../Middleware/upload.middleware.js";
+import { csvUpload } from "../Middleware/upload.middleware.js";
 import { enrichProduct, enrichBulk } from "../Service/productEnricher.service.js";
 import { buildPreview } from "../Service/importPreview.service.js";
 // ocrHandler does image OCR — it MUST go through the vision client.
@@ -47,6 +47,7 @@ const enrichedToProductDoc = (e, sellerId) => ({
   source:      "local",
   stockQty:    num(e.stock, 0),
   inStock:     num(e.stock, 0) > 0,
+  warehouseLocation: String(e.location || "").trim().slice(0, 60),
   description: [
     e.display_name_en ? `EN: ${e.display_name_en}` : null,
     e.condition_grade ? `Grade: ${e.condition_grade}` : null,
@@ -94,7 +95,7 @@ export const enrichBulkHandler = async (req, res) => {
 
 // ── 3. CSV / XLSX upload — multer reads file into req.file ────────────
 export const parseUploadedFile = [
-  upload.single("file"),
+  csvUpload.single("file"),
   async (req, res) => {
     try {
       if (!req.file) return res.status(400).json({ message: "file шаардлагатай" });
@@ -108,22 +109,29 @@ export const parseUploadedFile = [
       const sheet = wb.Sheets[sheetName];
       const json = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
 
-      // Header heuristic — accept Mongolian or English headers
+      // Header heuristic — accept Mongolian or English headers. Matching is
+      // space/punctuation-insensitive (see normalizeHeader) so "OEM код",
+      // "OEM_Code", "Part No." and "part-number" all resolve to the same key.
       const HEADER_MAP = {
-        name:       ["raw_name", "name", "нэр", "barааны нэр", "барааны нэр", "product"],
-        input_code: ["input_code", "oem", "код", "code", "part_number", "part no"],
-        brand:      ["brand", "брэнд"],
-        price:      ["price", "үнэ", "unit price"],
-        stock:      ["stock", "qty", "ширхэг", "үлдэгдэл"],
-        location:   ["location", "салбар", "branch", "warehouse"],
+        name:       ["raw_name", "name", "title", "product", "нэр", "барааны нэр", "бараа", "бүтээгдэхүүн"],
+        input_code: ["input_code", "oem", "oem code", "oem код", "oem no", "oem дугаар",
+                     "code", "код", "part number", "part no", "partnumber",
+                     "дугаар", "сэлбэгийн код", "каталог", "catalog"],
+        brand:      ["brand", "брэнд", "make", "марк", "үйлдвэрлэгч"],
+        price:      ["price", "unit price", "үнэ", "нэгж үнэ", "зарах үнэ", "борлуулах үнэ"],
+        stock:      ["stock", "qty", "quantity", "ширхэг", "үлдэгдэл", "тоо ширхэг", "тоо хэмжээ", "нөөц"],
+        location:   ["location", "warehouse", "branch", "байршил", "салбар", "агуулах",
+                     "хаяг", "тавиур", "тавцан", "склад"],
       };
-      const headerKey = (raw) => {
-        const k = String(raw || "").trim().toLowerCase();
-        for (const [target, opts] of Object.entries(HEADER_MAP)) {
-          if (opts.some((o) => o.toLowerCase() === k)) return target;
-        }
-        return null;
-      };
+      // Collapse whitespace + separators so spelling/format variations of the
+      // same header all normalize to one lookup key.
+      const normalizeHeader = (raw) =>
+        String(raw || "").trim().toLowerCase().replace(/[\s._\-/]+/g, " ").trim();
+      const ALIAS_LOOKUP = new Map();
+      for (const [target, opts] of Object.entries(HEADER_MAP)) {
+        for (const o of opts) ALIAS_LOOKUP.set(normalizeHeader(o), target);
+      }
+      const headerKey = (raw) => ALIAS_LOOKUP.get(normalizeHeader(raw)) || null;
 
       // The first row is already turned into keys by sheet_to_json — map them.
       const rows = json.map((row) => {

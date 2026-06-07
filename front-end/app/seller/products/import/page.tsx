@@ -20,9 +20,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
+import { useCategories } from "@/app/lib/useCategories";
 import {
   Upload, FileSpreadsheet, ScanLine, ArrowLeft, ArrowRight, Loader2,
-  CheckCircle2, AlertTriangle, Trash2, Plus, X, Sparkles,
+  CheckCircle2, AlertTriangle, Trash2, Plus, X, Sparkles, Info, ChevronDown,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -89,6 +90,10 @@ interface EnrichedRow {
   conflict?:       RowConflict | null;
   requiresReview?: boolean;
   action?:         RowAction;
+
+  /** Editable free-text mirror of compatible_vehicles (comma-separated),
+   *  used by the preview's inline editor and kept in sync with the array. */
+  compatibleText?: string;
 }
 
 interface PreviewSummary {
@@ -113,10 +118,22 @@ const SOURCE_COLOR: Record<string, string> = {
 
 const EMPTY_ROW: RawRow = { raw_name: "", input_code: "", brand: "", price: 0, stock: 0, location: "" };
 
+// Compatible-vehicle <→ free-text helpers for the preview's inline editor.
+// Round-trips losslessly: each comma chunk maps to { make:"", model:chunk },
+// which the backend re-joins back to the same string.
+const vehiclesToText = (vehicles: CompatVehicle[] = []): string =>
+  vehicles
+    .map((v) => [v.make, v.model, v.chassis, v.engine, v.years].filter(Boolean).join(" ").trim())
+    .filter(Boolean)
+    .join(", ");
+const textToVehicles = (text: string): CompatVehicle[] =>
+  text.split(",").map((s) => s.trim()).filter(Boolean).map((s) => ({ make: "", model: s }));
+
 type Step = "source" | "preview" | "result";
 
 export default function ImportWizardPage() {
   const router = useRouter();
+  const { categories } = useCategories();
   const [step, setStep] = useState<Step>("source");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -149,6 +166,22 @@ export default function ImportWizardPage() {
     }, {} as Record<string, number>);
     return { total, withWarn, grades };
   }, [enrichedRows]);
+
+  // Marketplace category tree (Mongolian) for the per-row category dropdown —
+  // same source of truth as the homepage + manual create flow. Mains first,
+  // each followed by its sub-categories (rendered indented).
+  const catOptions = useMemo(() => {
+    const mains = categories.filter((c) => !c.parentId);
+    const ordered: { id: string; label: string; depth: number }[] = [];
+    for (const m of mains) {
+      ordered.push({ id: m.id, label: m.name, depth: 0 });
+      for (const s of categories.filter((c) => c.parentId === m.id)) {
+        ordered.push({ id: s.id, label: s.name, depth: 1 });
+      }
+    }
+    return ordered;
+  }, [categories]);
+  const catIds = useMemo(() => new Set(catOptions.map((o) => o.id)), [catOptions]);
 
   // ── Source step handlers ──────────────────────────────────────────
   const onFile = async (f: File | null) => {
@@ -324,6 +357,7 @@ export default function ImportWizardPage() {
       {/* ── SOURCE ─────────────────────────────────────────────────── */}
       {step === "source" && (
         <div className="space-y-4">
+          <ImportGuide />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <SourceCard
               icon={FileSpreadsheet} color="emerald"
@@ -486,9 +520,10 @@ export default function ImportWizardPage() {
                     <th className="text-left px-3 py-2 font-medium">Ангилал</th>
                     <th className="text-left px-3 py-2 font-medium">Брэнд</th>
                     <th className="text-center px-3 py-2 font-medium">Чанар</th>
-                    <th className="text-center px-3 py-2 font-medium">Тохирох</th>
+                    <th className="text-left px-3 py-2 font-medium">Тохирох машин</th>
                     <th className="text-right px-3 py-2 font-medium">Үнэ</th>
                     <th className="text-right px-3 py-2 font-medium">Тоо</th>
+                    <th className="text-left px-3 py-2 font-medium">Байршил</th>
                     <th className="text-center px-3 py-2 font-medium">AI</th>
                     {/* Phase D — action / conflict column. Hidden when no
                         row has /preview decorations (legacy path). */}
@@ -524,7 +559,21 @@ export default function ImportWizardPage() {
                           <InputCell value={r.display_name_mn} onChange={(v) => updateEnriched(i, { display_name_mn: v })} />
                           <div className="text-[10px] text-gray-400 mt-0.5 italic">{r.display_name_en}</div>
                         </td>
-                        <td className="px-2 py-1 text-gray-600 font-mono text-[10px]">{r.standard_category || "—"}</td>
+                        <td className="px-2 py-1">
+                          <select
+                            value={catIds.has(r.standard_category) ? r.standard_category : "other"}
+                            onChange={(e) => updateEnriched(i, { standard_category: e.target.value })}
+                            className={`w-full max-w-[160px] text-[11px] px-1.5 py-1 rounded border bg-white outline-none cursor-pointer font-sans transition-colors ${
+                              catIds.has(r.standard_category) ? "border-gray-200 focus:border-blue-500" : "border-amber-300 text-amber-700"
+                            }`}
+                            title={r.standard_category ? `AI: ${r.standard_category}` : undefined}
+                          >
+                            <option value="other">Бусад / сонгох…</option>
+                            {catOptions.map((o) => (
+                              <option key={o.id} value={o.id}>{o.depth ? "— " : ""}{o.label}</option>
+                            ))}
+                          </select>
+                        </td>
                         <td className="px-2 py-1 text-gray-700">{r.brand}</td>
                         <td className="px-2 py-1 text-center">
                           <select value={r.condition_grade}
@@ -535,15 +584,16 @@ export default function ImportWizardPage() {
                             <option value="Standard Aftermarket">Standard</option>
                           </select>
                         </td>
-                        <td className="px-2 py-1 text-center">
-                          {r.compatible_vehicles.length > 0 ? (
-                            <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full" title={r.compatible_vehicles.map(v => `${v.make} ${v.model} ${v.chassis ?? ""}`).join(", ")}>
-                              {r.compatible_vehicles.length} fitments
-                            </span>
-                          ) : <span className="text-gray-300">—</span>}
+                        <td className="px-2 py-1 min-w-[160px]">
+                          <InputCell
+                            value={r.compatibleText ?? vehiclesToText(r.compatible_vehicles)}
+                            onChange={(v) => updateEnriched(i, { compatibleText: v, compatible_vehicles: textToVehicles(v) })}
+                            placeholder="Toyota Camry 2012-2018, Lexus ES…"
+                          />
                         </td>
                         <td className="px-2 py-1"><InputCell type="number" value={String(r.price)} onChange={(v) => updateEnriched(i, { price: Number(v) || 0 })} align="right" /></td>
                         <td className="px-2 py-1"><InputCell type="number" value={String(r.stock)} onChange={(v) => updateEnriched(i, { stock: Number(v) || 0 })} align="right" /></td>
+                        <td className="px-2 py-1"><InputCell value={r.location || ""} onChange={(v) => updateEnriched(i, { location: v })} /></td>
                         <td className="px-2 py-1 text-center">
                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${SOURCE_COLOR[r._meta?.enriched_by || ""] ?? "bg-gray-100 text-gray-600"}`} title={(r._meta?.warnings || []).join(", ")}>
                             {r._meta?.enriched_by ?? "?"}
@@ -660,6 +710,79 @@ export default function ImportWizardPage() {
 }
 
 // ── Reusable bits ─────────────────────────────────────────────────────
+
+/** Collapsible Mongolian how-to guide shown above the source step. */
+function ImportGuide() {
+  const [open, setOpen] = useState(true);
+  const HEADERS = ["Нэр", "OEM код", "Брэнд", "Үнэ", "Тоо ширхэг", "Байршил", "Тохирох машин"];
+  return (
+    <div className="bg-blue-50/50 border border-blue-100 rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 cursor-pointer bg-transparent border-none text-left font-sans"
+      >
+        <span className="flex items-center gap-2 text-[14px] font-semibold text-blue-900">
+          <Info size={16} className="text-blue-600" /> AI Bulk Import — хэрхэн ашиглах вэ?
+        </span>
+        <ChevronDown size={16} className={`text-blue-500 transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-1 text-[12.5px] text-gray-700 leading-relaxed space-y-3">
+          <p className="text-gray-600">
+            Олон барааг нэг дор оруулж, AI автоматаар цэвэрлэн ангилж, тохирох машиныг тааруулна.
+            Та зөвхөн шалгаад баталгаажуулна.
+          </p>
+
+          <div>
+            <div className="font-semibold text-gray-900 mb-1">1. Оруулах 3 арга</div>
+            <ul className="list-disc list-inside space-y-0.5 marker:text-blue-400">
+              <li><strong>Excel / CSV</strong> — олон барааг файлаар (хамгийн хурдан).</li>
+              <li><strong>Зураг (OCR)</strong> — баглааны зургийг AI уншиж OEM код, нэрийг авна.</li>
+              <li><strong>Гараар</strong> — нэг бараа нэмж туршихад тохиромжтой.</li>
+            </ul>
+          </div>
+
+          <div>
+            <div className="font-semibold text-gray-900 mb-1">2. Excel-ийн баганын нэр</div>
+            <p className="text-gray-600 mb-1.5">
+              Дараах нэрсийг (Монгол эсвэл Англи) автоматаар таниана. Жижиг/том үсэг, зай, доогуур зураас хамаагүй:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {HEADERS.map((h) => (
+                <span key={h} className="bg-white border border-blue-200 text-blue-700 rounded-md px-2 py-0.5 text-[11px] font-medium">
+                  {h}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="font-semibold text-gray-900 mb-1">3. Дараагийн 3 алхам</div>
+            <ol className="list-decimal list-inside space-y-0.5 marker:text-blue-400">
+              <li><strong>Эх сурвалж</strong> — файл, зураг эсвэл гар оруулалт.</li>
+              <li><strong>Урьдчилан харах</strong> — AI цэвэрлэсэн мөрүүдийг шалгаж, ангилал, үнэ, тохирох машиныг засна.</li>
+              <li><strong>Үр дүн</strong> — баталгаажуулсны дараа бараа “Хүлээгдэж буй” төлөвт орж, шалгагдсаны дараа нийтлэгдэнэ.</li>
+            </ol>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+            <div className="font-semibold text-amber-900 mb-1 flex items-center gap-1.5">
+              <Sparkles size={13} /> Зөвлөмж
+            </div>
+            <ul className="list-disc list-inside space-y-0.5 text-amber-900/90 marker:text-amber-500">
+              <li><strong>Шар өнгөтэй мөр</strong> = AI итгэл багатай — нэр, кодыг сайн шалгаарай.</li>
+              <li>Ангиллыг Монгол жагсаалтаас сонгож баталгаажуул.</li>
+              <li>Тохирох машиныг таслалаар бич: <span className="font-mono text-[11px]">Toyota Camry 2012-2018, Lexus ES</span></li>
+              <li>Хадгалахаасаа өмнө бүх мөрийг шалгаарай — буруу мэдээлэл худалдан авагчдыг төөрөгдүүлнэ.</li>
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Stepper({ step }: { step: Step }) {
   const steps: { id: Step; label: string }[] = [
     { id: "source",  label: "1. Эх сурвалж" },
@@ -704,13 +827,14 @@ function SourceCard({ icon: Icon, color, title, body, onClick }: {
   );
 }
 
-function InputCell({ value, onChange, mono, type = "text", align = "left" }: {
-  value: string; onChange: (v: string) => void; mono?: boolean; type?: string; align?: "left" | "right";
+function InputCell({ value, onChange, mono, type = "text", align = "left", placeholder }: {
+  value: string; onChange: (v: string) => void; mono?: boolean; type?: string; align?: "left" | "right"; placeholder?: string;
 }) {
   return (
     <input
       type={type}
       value={value}
+      placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       className={`w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white rounded px-1.5 py-1 text-[12px] outline-none transition-colors ${mono ? "font-mono text-[11px]" : ""}`}
       style={{ textAlign: align }}
