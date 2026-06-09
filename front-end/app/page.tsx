@@ -65,20 +65,20 @@ export default function Home() {
           where they don't compete for the user's attention. */}
       <section className="hero-bg px-5 pt-12 pb-10">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-[11px] font-semibold px-3 py-1.5 rounded-full mb-6 tracking-wide border border-blue-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{t("home.badge")}
+          <div className="inline-flex items-center gap-1.5 bg-cyan-400/10 text-cyan-200 text-[11px] font-semibold px-3 py-1.5 rounded-full mb-6 tracking-wide border border-cyan-400/30 backdrop-blur">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]" />{t("home.badge")}
           </div>
 
-          <h1 className="text-[clamp(32px,5.5vw,52px)] font-semibold text-gray-900 leading-[1.1] tracking-tight mb-4 max-w-3xl mx-auto">
+          <h1 className="text-[clamp(32px,5.5vw,52px)] font-semibold text-white leading-[1.1] tracking-tight mb-4 max-w-3xl mx-auto [text-shadow:0_0_30px_rgba(56,189,248,0.25)]">
             {t("home.title1")}{" "}
-            <em className="text-blue-700 not-italic relative inline-block">
+            <em className="text-cyan-300 not-italic relative inline-block [text-shadow:0_0_18px_rgba(34,211,238,0.6)]">
               {t("home.titleAi")}
               {/* Amber underline accent — small dose, big visual weight. */}
-              <span className="absolute -bottom-1 left-0 right-0 h-1 bg-amber-400/60 rounded" />
+              <span className="absolute -bottom-1 left-0 right-0 h-1 bg-amber-400 rounded shadow-[0_0_10px_rgba(245,158,11,0.7)]" />
             </em>
             {t("home.title3")} {t("home.title4")}
           </h1>
-          <p className="text-[15px] text-gray-500 leading-relaxed mb-8 max-w-xl mx-auto">
+          <p className="text-[15px] text-slate-300/80 leading-relaxed mb-8 max-w-xl mx-auto">
             {t("home.subtitle")}
           </p>
 
@@ -94,8 +94,8 @@ export default function Home() {
               { icon: <Truck size={12} />,  text: t("home.trust2") },
               { icon: <Star size={12} />,   text: t("home.trust3") },
             ].map(({ icon, text }) => (
-              <div key={text} className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-white/80 backdrop-blur border border-gray-200/80 rounded-full px-3 py-1">
-                <span className="text-amber-600">{icon}</span>{text}
+              <div key={text} className="flex items-center gap-1.5 text-[11px] text-slate-200 bg-white/5 backdrop-blur border border-white/10 rounded-full px-3 py-1">
+                <span className="text-amber-400">{icon}</span>{text}
               </div>
             ))}
           </div>
@@ -104,8 +104,8 @@ export default function Home() {
               don't need to be sold on signing up. */}
           {!user && (
             <Link href="/auth/register"
-              className="inline-flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-700 transition-colors">
-              {t("home.btnRegister")} <span className="text-blue-700">→</span>
+              className="inline-flex items-center gap-1.5 text-[13px] text-slate-400 hover:text-cyan-300 transition-colors">
+              {t("home.btnRegister")} <span className="text-cyan-300">→</span>
             </Link>
           )}
         </div>

@@ -23,6 +23,7 @@ import Product from "../Model/product.model.js";
 import { csvUpload } from "../Middleware/upload.middleware.js";
 import { enrichProduct, enrichBulk } from "../Service/productEnricher.service.js";
 import { buildPreview } from "../Service/importPreview.service.js";
+import { resolveCompatibility } from "../Service/compatibilityResolver.service.js";
 // ocrHandler does image OCR — it MUST go through the vision client.
 // aiConfig.vision points at Gemini by default (OpenAI-compat endpoint)
 // and falls back gracefully when GEMINI_API_KEY is unset.
@@ -201,6 +202,7 @@ export const commitHandler = async (req, res) => {
           continue;
         }
 
+        doc.compatibility = await resolveCompatibility({ fitments: r.compatible_vehicles, oem: doc.oem });
         const item = await Product.create(doc);
         createdIds.push(String(item._id));
         created++;
@@ -359,6 +361,7 @@ export const commitV2Handler = async (req, res) => {
 
         if (action === "create") {
           if (existing) throw new Error("OEM аль хэдийн бүртгэлтэй — merge_stock эсвэл overwrite_all сонгоно уу");
+          doc.compatibility = await resolveCompatibility({ fitments: r.compatible_vehicles, oem: doc.oem });
           const item = await Product.create(doc);
           created++;
           outcomes.push({ oem: doc.oem, name: doc.name, action, result: "created", productId: String(item._id) });
@@ -387,6 +390,7 @@ export const commitV2Handler = async (req, res) => {
           existing.description = doc.description;
           existing.tags        = doc.tags;
           existing.compatible  = doc.compatible;
+          existing.compatibility = await resolveCompatibility({ fitments: r.compatible_vehicles, oem: doc.oem });
           if (doc.warehouseLocation) existing.warehouseLocation = doc.warehouseLocation;
           if (doc.costPrice !== undefined && doc.costPrice >= 0) existing.costPrice = doc.costPrice;
           await existing.save();

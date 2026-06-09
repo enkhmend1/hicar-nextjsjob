@@ -39,6 +39,7 @@ import Product from "../Model/product.model.js";
 import { translateSearchQuery } from "./aiTranslator.service.js";
 import { lookupParts } from "./partsGateway.service.js";
 import { findCompatibleParts } from "./compatibility.service.js";
+import { learnEquivalence } from "./oemCross.service.js";
 
 const cleanCode = (s) => String(s || "").trim().toUpperCase().replace(/\s+/g, "");
 const uniq = (arr) => [...new Set(arr)];
@@ -91,10 +92,25 @@ export const smartSearch = async (args) => {
   if (external.error) warnings.push(`parts:${external.error.code}`);
 
   // ── Step 3: Merge + dedupe the OEM bag ──
+  const externalOems = (external.oems || []).map(cleanCode).filter(Boolean);
   const oemBag = uniq([
     ...aiOemSeeds,
-    ...(external.oems || []).map(cleanCode),
+    ...externalOems,
   ]);
+
+  // Self-learning OEM recall: when the parts catalogue returned a real
+  // cross-reference set for this exact part, remember it so future lookups of
+  // any member expand to the whole class. Fire-and-forget — never block or
+  // fail the response on the learn step, and learn ONLY from the trusted
+  // external set (never the LLM's guessed OEM seeds).
+  if (external.hit && externalOems.length >= 2) {
+    learnEquivalence({
+      oems:     externalOems,
+      partName: plan.api_english_name || args.query,
+      category: plan.standard_category || "",
+      source:   "auto",
+    }).catch(() => {});
+  }
 
   // ── Step 4: Match against our DB ──
   //   a) exact OEM match (the strongest signal)

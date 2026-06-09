@@ -3,6 +3,7 @@ import { cacheGet, cacheSet, cacheInvalidate } from "../Config/redis.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
+import { resolveCompatibility } from "../Service/compatibilityResolver.service.js";
 import { getCategoryWithDescendants, bustCategoryCounts } from "../Service/siteContent.service.js";
 import { rememberInputs } from "./seller.controller.js";
 import {
@@ -256,6 +257,10 @@ export const createProduct = async (req, res) => {
     }
     // Instant publish for every role — see policy block above
     payload.status = "approved";
+    // Derive the structured compatibility block from the seller's fitments +
+    // OEM so the compatibility engine can match this part to a buyer's car by
+    // manufacturer / model / engine ref — not only an exact OEM hit.
+    payload.compatibility = await resolveCompatibility({ fitments: payload.fitments, oem: payload.oem });
     const item = await Product.create(payload);
     invalidateProductCache();
 
@@ -319,6 +324,15 @@ export const updateProduct = async (req, res) => {
     }
     // Instant-publish policy: seller edits never bounce back to "pending".
     // Listings stay live; admin moderates only on demand (edit/disable/delete).
+
+    // Re-derive structured compatibility only when fitments or OEM changed,
+    // so a partial edit (e.g. just price) never wipes the existing block.
+    if (update.fitments !== undefined || update.oem !== undefined) {
+      update.compatibility = await resolveCompatibility({
+        fitments: update.fitments ?? existing.fitments ?? [],
+        oem:      update.oem ?? existing.oem ?? "",
+      });
+    }
 
     const item = await Product.findByIdAndUpdate(req.params.id, update, {
       returnDocument: "after", runValidators: true,

@@ -3,31 +3,73 @@
 
 body { font-family: "DM Sans", sans-serif; color: #0f172a; }
 
-/* Phase N — automotive palette: deep blue primary, amber accent.
-   #eff6ff = blue-50 (Tailwind), matches the bg-blue-50 class used
-   across the rest of the UI so the hero blends with section chrome. */
-.hero-bg {
-  background: linear-gradient(160deg, #eff6ff 0%, #fff 55%);
-}
-
-/* Subtle dot grid for hero — gives visual texture without being noisy.
-   Used as an additional ::before layer on the hero so it stacks under
-   the gradient. Toggled via the .hero-bg class. */
+/* Hero — "AI cyberpunk": deep-navy base with a neon-blue grid floor and a
+   blue + amber glow. Stays on-brand (blue + amber, no violet/fuchsia).
+   NOTE: hero content must use LIGHT text colours — see app/page.tsx. */
 .hero-bg {
   position: relative;
   overflow: hidden;
+  background:
+    radial-gradient(ellipse 75% 55% at 50% -8%, rgba(37, 99, 235, 0.40), transparent 60%),
+    radial-gradient(ellipse 45% 45% at 88% 8%, rgba(245, 158, 11, 0.14), transparent 60%),
+    linear-gradient(180deg, #060b1c 0%, #0a1226 55%, #0b1020 100%);
 }
+/* 3D perspective "synthwave floor" — a tilted neon grid receding into the
+   distance, scrolling toward the viewer. Anchored to the lower half. */
 .hero-bg::before {
   content: "";
   position: absolute;
-  inset: 0;
+  left: -25%;
+  right: -25%;
+  bottom: 0;
+  height: 78%;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(30, 58, 138, 0.08) 1px, transparent 0);
-  background-size: 24px 24px;
+    linear-gradient(to right,  rgba(56, 189, 248, 0.45) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.45) 1px, transparent 1px);
+  background-size: 50px 50px;
+  transform: perspective(280px) rotateX(60deg);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0,0,0,0.35) 40%, transparent 80%);
+  mask-image: linear-gradient(to top, #000 0%, rgba(0,0,0,0.35) 40%, transparent 80%);
+  animation: hero-grid-move 5s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Faint CRT scanlines for the "screen" feel. */
+.hero-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px);
   pointer-events: none;
   z-index: 0;
 }
 .hero-bg > * { position: relative; z-index: 1; }
+@keyframes hero-grid-move {
+  from { background-position: 0 0; }
+  to   { background-position: 0 50px; }
+}
+
+/* ── Brand marquee ──────────────────────────────────────────────────────
+   Seamless auto-scroll: the track holds TWO identical brand groups and
+   slides by exactly one group width (-50%), so it loops with no jump.
+   Pauses on hover; edge-faded via the mask container. */
+.brand-marquee { animation: brand-marquee 32s linear infinite; }
+.brand-marquee:hover { animation-play-state: paused; }
+@keyframes brand-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.brand-marquee-mask {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-bg::before { animation: none; }
+  .brand-marquee   { animation: none; }
+}
 
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { scrollbar-width: none; }

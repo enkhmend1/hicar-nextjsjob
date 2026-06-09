@@ -82,6 +82,69 @@ export const upsertCross = async (payload, addedBy = null) => {
   return saved;
 };
 
+/**
+ * Self-learning recall booster. Given a set of OEMs known to be
+ * cross-references of one another (e.g. the bag a parts API returned for a
+ * single part), merge them into ONE equivalence class so any future lookup
+ * of any member expands to all of them.
+ *
+ * Safe + idempotent:
+ *   • anchors on the first existing class a member already belongs to, so we
+ *     GROW classes rather than spawn competing ones;
+ *   • never downgrades a manually-curated row — it only ADDS new equivalents;
+ *   • no-ops (no write, no cache bust) when it would add nothing.
+ *
+ * NOTE: only feed this TRUSTED cross-refs (a real parts-catalogue hit), not
+ * raw LLM guesses — over-linking hurts precision.
+ *
+ * @param {{ oems?: string[], brand?: string, partName?: string, category?: string, source?: string }} input
+ */
+export const learnEquivalence = async ({ oems = [], brand = "", partName = "", category = "", source = "auto" } = {}) => {
+  const set = [...new Set((oems || []).map(norm).filter(Boolean))];
+  if (set.length < 2) return null;
+  if (set.length > 24) set.length = 24; // bound pathological inputs
+
+  // Anchor on the first existing class any member already belongs to.
+  let anchor = null;
+  for (const o of set) {
+    const row = await lookupCross(o);
+    if (row) { anchor = row; break; }
+  }
+
+  const primary = anchor ? norm(anchor.primaryOem) : set[0];
+  const existingEquivs = anchor?.equivalents || [];
+  const known = new Set([primary, ...existingEquivs.map((e) => norm(e.oem))]);
+  const additions = set.filter((o) => !known.has(o));
+  if (anchor && additions.length === 0) return anchor; // nothing new
+
+  const safeBrand = (b) => String(b || "").trim() || "Auto";
+  const mergedEquivalents = [
+    ...existingEquivs.map((e) => ({ brand: safeBrand(e.brand), oem: norm(e.oem), note: e.note || "" })),
+    ...additions.map((o) => ({ brand: safeBrand(brand), oem: o, note: `auto:${source}` })),
+  ];
+
+  const isManual = anchor?.source === "manual";
+  const setFields = {
+    primaryOem: primary,
+    equivalents: mergedEquivalents,
+    // Preserve manually-curated metadata; only fill it for auto/empty rows.
+    ...(isManual ? {} : {
+      primaryBrand: anchor?.primaryBrand || safeBrand(brand),
+      partName:     anchor?.partName || String(partName || "").trim(),
+      category:     anchor?.category || String(category || "").trim().toLowerCase(),
+      source:       anchor?.source || source,
+    }),
+  };
+
+  const saved = await OemCross.findOneAndUpdate(
+    { primaryOem: primary },
+    { $set: setFields },
+    { returnDocument: "after", upsert: true, runValidators: true },
+  );
+  await cacheInvalidate("oemx:*");
+  return saved;
+};
+
 export const removeCross = async (id) => {
   const r = await OemCross.findByIdAndDelete(id);
   await cacheInvalidate("oemx:*");
