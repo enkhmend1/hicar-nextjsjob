@@ -45,7 +45,7 @@ import {
 import {
   Save, ImagePlus, Loader2, Bell, Package,
   Store, ExternalLink, Copy, Check, Image as ImageIcon, Trash2,
-  Award, Star, ShoppingBag, Shield, Truck, Clock,
+  Star, ShoppingBag, Shield, Truck, Clock,
 } from "lucide-react";
 
 type Tab = "branding" | "payouts" | "inventory" | "delivery";
@@ -320,17 +320,10 @@ export default function SellerProfilePage() {
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-mono" />
                 </Field>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pt-4 border-t border-gray-100">
+                <div className="grid grid-cols-3 gap-3 mt-2 pt-4 border-t border-gray-100">
                   <Stat label="Хураамж" value={`${user.sellerProfile?.platformFeePercent ?? 5}%`} />
-                  <Stat label="Trust"   value={`${Math.round(user.sellerProfile?.trustScore ?? 50)}/100`} />
                   <Stat label="Үнэлгээ" value={user.sellerProfile?.rating ? `${user.sellerProfile.rating.toFixed(1)} (${user.sellerProfile.ratingCount ?? 0})` : "—"} />
                   <Stat label="Нийт бор." value={`₮${(user.sellerProfile?.totalSales ?? 0).toLocaleString()}`} />
-                </div>
-
-                <div className="mt-3 bg-blue-50/40 border border-blue-100 rounded-xl p-3 text-[11px] text-blue-900 leading-relaxed">
-                  <strong>Trust score</strong> нь escrow төлбөрийн хадгалалтын хугацааг тодорхойлно — өндөр оноо
-                  шуурхай төлбөр (3 хоног), бага оноо удаан хадгалалт (14 хоног). Бүрэн буцаалт −3,
-                  хэсэгчилсэн буцаалт −1.5, маргаан гарсан боловч таны талд шийдэгдвэл +0.5 / +1.5.
                 </div>
               </Card>
 
@@ -469,7 +462,6 @@ export default function SellerProfilePage() {
               coverImage={branding.coverImage}
               rating={user.sellerProfile?.rating ?? 0}
               ratingCount={user.sellerProfile?.ratingCount ?? 0}
-              trustScore={user.sellerProfile?.trustScore ?? 50}
               totalSales={user.sellerProfile?.totalSales ?? 0}
             />
             <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
@@ -534,12 +526,12 @@ function SaveButton({ busy }: { busy: boolean }) {
  */
 function StorePreview({
   shopName, description, logo, coverImage,
-  rating, ratingCount, trustScore, totalSales,
+  rating, ratingCount, totalSales,
 }: {
   shopName: string; description: string;
   logo: string; coverImage: string;
   rating: number; ratingCount: number;
-  trustScore: number; totalSales: number;
+  totalSales: number;
 }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
@@ -581,9 +573,6 @@ function StorePreview({
               <span>({ratingCount})</span>
             </span>
           )}
-          <span className="inline-flex items-center gap-0.5">
-            <Award size={9} /> {trustScore}/100
-          </span>
         </div>
 
         {description && (
@@ -591,11 +580,7 @@ function StorePreview({
         )}
 
         {/* Mini stat row */}
-        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100">
-          <div className="bg-blue-50 rounded-lg p-2">
-            <div className="text-[9px] text-blue-700 uppercase tracking-wider">Trust</div>
-            <div className="text-[13px] font-bold text-gray-900">{trustScore}/100</div>
-          </div>
+        <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="bg-amber-50 rounded-lg p-2">
             <div className="text-[9px] text-amber-700 uppercase tracking-wider">Зарагдсан</div>
             <div className="text-[13px] font-bold text-gray-900">{totalSales.toLocaleString()}</div>

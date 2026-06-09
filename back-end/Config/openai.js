@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import chalk from "chalk";
+import { logger } from "./logger.js";
 
 /**
  * Smart Hybrid AI Router — Configuration Layer
@@ -74,9 +74,7 @@ const CLIENT_MAX_RETRIES = Number(env("AI_REQUEST_MAX_RETRIES", "4")) || 4;
 const buildClient = (role, { apiKey, baseURL, model }) => {
   if (!apiKey) {
     const envKey = role === "text" ? "GROQ_API_KEY" : "GEMINI_API_KEY";
-    console.log(chalk.yellow(
-      `AI (${role}) disabled — set ${envKey} to enable`,
-    ));
+    logger.warn(`AI (${role}) disabled — set ${envKey} to enable`);
     return null;
   }
   try {
@@ -86,14 +84,10 @@ const buildClient = (role, { apiKey, baseURL, model }) => {
       timeout: CLIENT_TIMEOUT_MS,
       maxRetries: CLIENT_MAX_RETRIES,
     });
-    console.log(chalk.green.bold(
-      `AI (${role}) enabled — model=${model}, baseURL=${baseURL}`,
-    ));
+    logger.info(`AI (${role}) enabled`, { model, baseURL });
     return client;
   } catch (err) {
-    console.error(chalk.red(
-      `AI (${role}) init failed: ${err.message}`,
-    ));
+    logger.error(`AI (${role}) init failed`, { err });
     return null;
   }
 };

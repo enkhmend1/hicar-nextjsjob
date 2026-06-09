@@ -25,9 +25,24 @@ import mongoose from "mongoose";
 import Product from "../Model/product.model.js";
 import { expandOemBag } from "./oemCross.service.js";
 
-const TIER = { OEM: 100, ENGINE: 80, MODEL: 60, MANUFACTURER: 40 };
+// TEXT_* tiers rank free-text "compatible"/"tags" hits BELOW the matching
+// structured tier (a typed model ref is more trustworthy than a free-text
+// model name) but a free-text MODEL hit still beats a structured MAKE-only
+// hit, since model-level is more specific than make-level.
+const TIER = { OEM: 100, ENGINE: 80, MODEL: 60, TEXT_MODEL: 55, MANUFACTURER: 40, TEXT_MAKE: 35 };
 
 const oid = (v) => (v instanceof mongoose.Types.ObjectId ? v : new mongoose.Types.ObjectId(v));
+
+// Vehicle make/model display names (snapshot first, then top-level fallback).
+const vehMake  = (v) => String(v.snapshot?.manuname  || v.manuname  || "").trim();
+const vehModel = (v) => String(v.snapshot?.modelname || v.modelname || "").trim();
+const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Case-insensitive substring test against any element of a string array.
+const textIncludes = (arr, needle) => {
+  const n = String(needle || "").toLowerCase();
+  if (!n) return false;
+  return (arr || []).some((s) => String(s || "").toLowerCase().includes(n));
+};
 
 const projectMatch = (matchScore, why) => ({
   $addFields: { _matchScore: { $literal: matchScore }, _matchReason: { $literal: why } },
@@ -56,6 +71,22 @@ const baseFilter = (vehicle, expandedOemBag) => {
   }
   if (vehicle.manufacturer) {
     or.push({ "compatibility.manufacturers": oid(vehicle.manufacturer) });
+  }
+
+  // Free-text fallback so seller-entered "тохирох машин" is actually
+  // searchable. Sellers + bulk import fill the free-text `compatible`
+  // array (and vehicle terms leak into `tags`), but nothing populates the
+  // structured `compatibility.*` refs — so without this a part is findable
+  // ONLY by exact OEM. Match the vehicle make/model name against both.
+  const makeName = vehMake(vehicle);
+  const modelName = vehModel(vehicle);
+  if (modelName) {
+    const rx = new RegExp(escapeRx(modelName), "i");
+    or.push({ compatible: rx }, { tags: rx });
+  }
+  if (makeName) {
+    const rx = new RegExp(escapeRx(makeName), "i");
+    or.push({ compatible: rx }, { tags: rx });
   }
 
   return {
@@ -88,8 +119,19 @@ const scoreProduct = (p, vehicle, oemBag) => {
   if (vehicle.model && (p.compatibility?.models || []).some((id) => String(id) === String(vehicle.model))) {
     return { score: TIER.MODEL, reason: `Model match` };
   }
+  // Free-text fallback (compatible[] + tags[]) — ranked just under the
+  // structured equivalents.
+  const makeName = vehMake(vehicle);
+  const modelName = vehModel(vehicle);
+  const hay = [...(p.compatible || []), ...(p.tags || [])];
+  if (modelName && textIncludes(hay, modelName)) {
+    return { score: TIER.TEXT_MODEL, reason: `Compatible-list model (${modelName})` };
+  }
   if (vehicle.manufacturer && (p.compatibility?.manufacturers || []).some((id) => String(id) === String(vehicle.manufacturer))) {
     return { score: TIER.MANUFACTURER, reason: `Manufacturer match` };
+  }
+  if (makeName && textIncludes(hay, makeName)) {
+    return { score: TIER.TEXT_MAKE, reason: `Compatible-list make (${makeName})` };
   }
   return { score: 0, reason: "no-match" };
 };
@@ -130,7 +172,9 @@ export const findCompatibleParts = async (vehicle, opts = {}) => {
         p._matchScore === TIER.OEM          ? "oem" :
         p._matchScore === TIER.ENGINE       ? "engine" :
         p._matchScore === TIER.MODEL        ? "model" :
-        p._matchScore === TIER.MANUFACTURER ? "manufacturer" : "other";
+        p._matchScore === TIER.TEXT_MODEL   ? "text_model" :
+        p._matchScore === TIER.MANUFACTURER ? "manufacturer" :
+        p._matchScore === TIER.TEXT_MAKE    ? "text_make" : "other";
       acc[tier] = (acc[tier] || 0) + 1;
       return acc;
     },

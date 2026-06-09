@@ -23,7 +23,7 @@
  */
 
 import { ProxyAgent } from "undici";
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 const FAIL_COOLDOWN_MS = 60_000;       // 1 minute
 const FAIL_THRESHOLD   = 3;            // consecutive failures before cooldown
@@ -52,9 +52,9 @@ const pool = RAW
 
 export const proxyPoolEnabled = pool.length > 0;
 if (proxyPoolEnabled) {
-  console.log(chalk.green.bold(`Proxy pool enabled — ${pool.length} endpoint(s) (undici ProxyAgent)`));
+  logger.info("Proxy pool enabled", { endpoints: pool.length });
 } else {
-  console.log(chalk.gray("Proxy pool disabled (PROXY_URLS empty) — direct connect"));
+  logger.info("Proxy pool disabled (PROXY_URLS empty) — direct connect");
 }
 
 let cursor = -1;
@@ -98,7 +98,9 @@ export const reportProxyResult = (info, success) => {
     if (p.failures >= FAIL_THRESHOLD) {
       p.cooldownUntil = Date.now() + FAIL_COOLDOWN_MS;
       p.failures = 0;
-      console.warn(chalk.yellow(`Proxy cooled down: ${redact(p.url)} (until ${new Date(p.cooldownUntil).toISOString()})`));
+      logger.warn("Proxy cooled down", {
+        proxy: redact(p.url), until: new Date(p.cooldownUntil).toISOString(),
+      });
     }
   }
 };

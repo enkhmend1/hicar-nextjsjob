@@ -19,8 +19,8 @@ interface QPayInvoice {
 }
 
 type Step = "info" | "payment" | "qpay" | "done";
-// Wallet removed in Phase 1 — money flow goes through QPay (card is a stub
-// route that will be wired to a real processor later).
+// Wallet removed in Phase 1. Both methods settle through QPay: "qpay" = pay
+// by bank app QR, "card" = pay by Visa/Mastercard on QPay's hosted page.
 type PayMethod = "qpay" | "card";
 
 // Stable QR pattern keyed by total amount — does NOT regenerate on tick
@@ -121,62 +121,59 @@ export default function CheckoutPage() {
 
   const submitPayment = async () => {
     setErr("");
-    if (payMethod === "qpay") {
-      // Create the order first (status=pending), then ask backend for a real QPay invoice
-      setBusy(true);
-      try {
-        const payload = {
-          items: items.map(i => ({
-            product: i.product._id ?? i.product.id,
-            quantity: i.quantity,
-            deliveryType: i.deliveryType,
-          })),
-          address, phone, paymentMethod: "qpay" as const,
-        };
-        const { order } = await api.post<{ order: Order }>("/orders", payload);
-        const orderId = (order._id ?? order.id) as string;
-        setPendingOrderId(orderId);
+    // QPay and card share ONE settlement path: QPay's hosted payment page
+    // accepts Visa/Mastercard, so "card" is just a QPay invoice the user pays
+    // by card instead of a bank app. Both create the order (status=pending),
+    // mint a QPay invoice, then poll until QPay confirms the payment.
+    setBusy(true);
+    try {
+      const payload = {
+        items: items.map(i => ({
+          product: i.product._id ?? i.product.id,
+          quantity: i.quantity,
+          deliveryType: i.deliveryType,
+        })),
+        address, phone, paymentMethod: payMethod,
+      };
+      const { order } = await api.post<{ order: Order }>("/orders", payload);
+      const orderId = (order._id ?? order.id) as string;
+      setPendingOrderId(orderId);
 
-        // Try to fetch a real QPay invoice
-        try {
-          const { invoice } = await api.post<{ invoice: QPayInvoice }>("/qpay/invoice", { orderId });
-          setQpayInvoice(invoice);
-        } catch (e) {
-          // QPay not configured — show fallback mock screen
-          if ((e as ApiError).status !== 503) throw e;
-        }
-        setStep("qpay");
-        // Countdown
-        const interval = setInterval(() => {
-          setQpayTimer(t => { if (t <= 1) { clearInterval(interval); return 0; } return t - 1; });
-        }, 1000);
-        // Poll backend for payment confirmation
-        pollRef.current = setInterval(async () => {
-          try {
-            const r = await api.get<{ status: string; paid: boolean }>(`/qpay/check/${orderId}`);
-            if (r.paid) {
-              if (pollRef.current) clearInterval(pollRef.current);
-              clearInterval(interval);
-              clearCart();
-              router.push(`/orders?new=${orderId}`);
-            }
-          } catch { /* ignore */ }
-        }, 3000);
+      // Try to fetch a real QPay invoice
+      try {
+        const { invoice } = await api.post<{ invoice: QPayInvoice }>("/qpay/invoice", { orderId });
+        setQpayInvoice(invoice);
       } catch (e) {
-        if (e instanceof ApiError && typeof e.data.missingProductId === "string") {
-          removeItem(e.data.missingProductId);
-          setErr(`${e.message}. Сагснаас автоматаар хасагдлаа.`);
-          setTimeout(() => router.push("/cart"), 1800);
-        } else {
-          setErr((e as Error).message || "Алдаа гарлаа");
-        }
-      } finally {
-        setBusy(false);
+        // QPay not configured — show fallback mock screen
+        if ((e as ApiError).status !== 503) throw e;
       }
-    } else {
-      // "card" → currently routes through the same backend path; real card
-      // processor integration is Phase 2 work.
-      placeOrder("card");
+      setStep("qpay");
+      // Countdown
+      const interval = setInterval(() => {
+        setQpayTimer(t => { if (t <= 1) { clearInterval(interval); return 0; } return t - 1; });
+      }, 1000);
+      // Poll backend for payment confirmation
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await api.get<{ status: string; paid: boolean }>(`/qpay/check/${orderId}`);
+          if (r.paid) {
+            if (pollRef.current) clearInterval(pollRef.current);
+            clearInterval(interval);
+            clearCart();
+            router.push(`/orders?new=${orderId}`);
+          }
+        } catch { /* ignore */ }
+      }, 3000);
+    } catch (e) {
+      if (e instanceof ApiError && typeof e.data.missingProductId === "string") {
+        removeItem(e.data.missingProductId);
+        setErr(`${e.message}. Сагснаас автоматаар хасагдлаа.`);
+        setTimeout(() => router.push("/cart"), 1800);
+      } else {
+        setErr((e as Error).message || "Алдаа гарлаа");
+      }
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -308,7 +305,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex-1">
                   <div className="text-[14px] font-semibold text-gray-900">Банкны карт</div>
-                  <div className="text-[12px] text-gray-500">Visa, Mastercard</div>
+                  <div className="text-[12px] text-gray-500">Visa, Mastercard · QPay-ээр</div>
                 </div>
               </label>
             </div>
@@ -331,8 +328,14 @@ export default function CheckoutPage() {
             <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <QrCode size={24} className="text-blue-600" />
             </div>
-            <h2 className="text-[18px] font-semibold text-gray-900 mb-1">QPay QR код</h2>
-            <p className="text-[13px] text-gray-500 mb-5">Утсандаа QPay app нээж QR скан хийнэ үү</p>
+            <h2 className="text-[18px] font-semibold text-gray-900 mb-1">
+              {payMethod === "card" ? "Картаар төлөх" : "QPay QR код"}
+            </h2>
+            <p className="text-[13px] text-gray-500 mb-5">
+              {payMethod === "card"
+                ? "QPay-ийн төлбөрийн хуудсаар Visa/Mastercard картаар төлнө үү"
+                : "Утсандаа QPay app нээж QR скан хийнэ үү"}
+            </p>
 
             {qpayInvoice ? (
               <div className="w-56 h-56 mx-auto bg-white border-2 border-gray-200 rounded-xl p-3 flex items-center justify-center">
@@ -354,6 +357,15 @@ export default function CheckoutPage() {
                 <div className="text-[11px] text-amber-600 mt-1">⚠ QPay тохируулагдаагүй (mock QR)</div>
               )}
             </div>
+
+            {/* Card payment — open QPay's hosted page where Visa/Mastercard
+                is accepted. Primary CTA when the buyer chose "card". */}
+            {payMethod === "card" && qpayInvoice?.qPay_shortUrl && (
+              <a href={qpayInvoice.qPay_shortUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-3 text-[14px] font-semibold mb-4 transition-colors">
+                <CreditCard size={16} /> Картаар төлөх (QPay хуудас)
+              </a>
+            )}
 
             {/* Bank app deep links (from QPay urls) */}
             {qpayInvoice?.urls && qpayInvoice.urls.length > 0 && (

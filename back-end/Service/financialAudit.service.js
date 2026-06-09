@@ -18,7 +18,7 @@
  */
 
 import FinancialAudit from "../Model/financialAudit.model.js";
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 /**
  * Append a single audit row. Caller is responsible for not lying about the
@@ -66,7 +66,7 @@ export const appendAudit = async (entry) => {
     // The audit log is fire-and-forget at the call site — a corrupt audit
     // write should not crash a refund flow. Log loudly so observability
     // catches it.
-    console.warn(chalk.red(`[audit] append failed type=${entry.type}: ${err.message}`));
+    logger.error("audit append failed", { err, type: entry.type });
     return null;
   }
 };

@@ -50,7 +50,7 @@ import { Product } from "@/app/types";
 import { visualFor, toneStyles, type CategoryTone } from "@/app/lib/categoryIcons";
 import {
   Store, Star, Shield, Package, Calendar, ShoppingBag,
-  ArrowLeft, Award, TrendingUp,
+  ArrowLeft,
 } from "lucide-react";
 
 interface Shop {
@@ -61,7 +61,6 @@ interface Shop {
   /** Optional custom cover banner (16:5). Empty string → render the
    *  default brand gradient instead. */
   coverImage:  string;
-  trustScore:  number;
   rating:      number;
   ratingCount: number;
   totalSales:  number;
@@ -79,15 +78,6 @@ const fmtJoinDate = (iso: string) => {
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleDateString("mn-MN", { year: "numeric", month: "long" });
-};
-
-/** Trust-score colour bands — same logic as the admin sellers list,
- *  duplicated locally to keep this page self-contained. */
-const trustTone = (score: number): { bg: string; text: string; label: string } => {
-  if (score >= 80) return { bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", label: "Маш найдвартай" };
-  if (score >= 60) return { bg: "bg-blue-50 border-blue-200",       text: "text-blue-700",    label: "Найдвартай" };
-  if (score >= 40) return { bg: "bg-amber-50 border-amber-200",     text: "text-amber-700",   label: "Дунд зэргийн" };
-  return                   { bg: "bg-red-50 border-red-200",        text: "text-red-700",     label: "Шинэ / шалгагдаж байна" };
 };
 
 export default function SellerStorefrontPage({ params }: { params: Promise<{ id: string }> }) {
@@ -150,7 +140,6 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
   }
 
   const { shop, products, stats } = data;
-  const trust   = trustTone(shop.trustScore);
   const filtered = cat === "all" ? products : products.filter((p) => p.category === cat);
   const breakdownEntries = Object.entries(stats.categoryBreakdown).sort((a, b) => b[1] - a[1]);
 
@@ -235,9 +224,6 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
                 <span className="inline-flex items-center gap-1">
                   <Calendar size={11} /> {fmtJoinDate(shop.joinedAt)}-аас
                 </span>
-                <span className={`inline-flex items-center gap-1 ${trust.bg} ${trust.text} border px-2 py-0.5 rounded-full font-medium`}>
-                  <Award size={10} /> {trust.label} · {shop.trustScore}
-                </span>
               </div>
             </div>
 
@@ -249,12 +235,11 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
             </div>
           </div>
 
-          {/* ── KPI strip — 4 trust signals at a glance. */}
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* ── KPI strip — trust signals at a glance. */}
+          <div className="mt-5 grid grid-cols-3 gap-3">
             <Kpi icon={Package}   label="Бараа"          value={stats.totalProducts.toString()} tone="blue"    />
             <Kpi icon={ShoppingBag} label="Зарагдсан"   value={shop.totalSales.toLocaleString()} tone="emerald" />
             <Kpi icon={Star}      label="Үнэлгээ"        value={shop.rating > 0 ? `${shop.rating.toFixed(1)}/5` : "—"} tone="amber" />
-            <Kpi icon={TrendingUp} label="Итгэлийн оноо" value={`${shop.trustScore}/100`} tone="indigo" />
           </div>
         </div>
       </div>
@@ -333,12 +318,6 @@ export default function SellerStorefrontPage({ params }: { params: Promise<{ id:
               <div>
                 <div className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Идэвхтэй бараа</div>
                 <div className="font-medium text-gray-900">{stats.totalProducts.toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Итгэлийн оноо</div>
-                <div className={`inline-flex items-center gap-1 ${trust.bg} ${trust.text} border px-2 py-0.5 rounded-full font-semibold`}>
-                  <Award size={10} /> {shop.trustScore}/100
-                </div>
               </div>
               <div>
                 <div className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Платформ</div>

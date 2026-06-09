@@ -32,6 +32,7 @@
  */
 
 import { z } from "zod";
+import { logger } from "../Config/logger.js";
 
 // ────────────────────────────────────────────────────────────────────
 // Common building blocks
@@ -225,7 +226,7 @@ export const resolveCategoryAttributeSchema = async (categoryId) => {
   } catch (err) {
     // SiteContent unreadable (DB outage during boot, etc.) → fall through
     // to legacy. Log loudly so the operator notices.
-    console.warn(`[productSchema] SiteContent lookup failed for "${id}": ${err.message}`);
+    logger.warn("productSchema SiteContent lookup failed", { err, id });
   }
 
   return STATIC_CATEGORY_SCHEMAS[id] || null;

@@ -5,8 +5,7 @@
  * on DP_PORT — a bounded context. Run with `npm run dp:server`.
  */
 
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
 import express from "express";
 import helmet from "helmet";

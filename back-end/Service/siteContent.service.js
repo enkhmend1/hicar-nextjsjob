@@ -1,6 +1,12 @@
 import SiteContent from "../Model/siteContent.model.js";
 import Product from "../Model/product.model.js";
 import { validateAttributeDefinition } from "./productSchema.service.js";
+import { cacheGet, cacheSet, cacheInvalidate } from "../Config/redis.js";
+
+// Homepage categories+counts payload cache. Busted on any product
+// add/remove/moderate (per-category counts change) and on category edits.
+const CATEGORIES_COUNTS_KEY = "categories:counts";
+export const bustCategoryCounts = () => cacheInvalidate(CATEGORIES_COUNTS_KEY);
 
 // ── Category-tree cache (for shop category expansion) ────────────────
 // The shop expands a parent category to all its descendants. Re-reading
@@ -109,6 +115,9 @@ export const loadSiteContent = async () => {
  * Hidden categories are omitted from the response.
  */
 export const getCategoriesWithCounts = async () => {
+  const cached = await cacheGet(CATEGORIES_COUNTS_KEY);
+  if (cached) return cached;
+
   const [content, agg] = await Promise.all([
     loadSiteContent(),
     Product.aggregate([
@@ -138,7 +147,7 @@ export const getCategoriesWithCounts = async () => {
     return total;
   };
 
-  return all
+  const payload = all
     .filter((c) => c.visible !== false)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((c) => ({
@@ -152,6 +161,9 @@ export const getCategoriesWithCounts = async () => {
       // fields directly from this payload (no second round-trip).
       attributesSchema: Array.isArray(c.attributesSchema) ? c.attributesSchema : [],
     }));
+
+  await cacheSet(CATEGORIES_COUNTS_KEY, payload);
+  return payload;
 };
 
 /**
@@ -268,6 +280,7 @@ export const updateSiteContent = async ({ categories, hero, updatedBy }) => {
 
   if (updatedBy) doc.updatedBy = updatedBy;
   await doc.save();
-  _bustTreeCache(); // category structure changed → drop the descendant cache
+  _bustTreeCache();      // category structure changed → drop the descendant cache
+  bustCategoryCounts();  // …and the homepage counts payload (names/order/tree changed)
   return doc.toObject();
 };

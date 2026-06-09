@@ -16,7 +16,7 @@ import { useAuthStore } from "@/store";
 import { dpApi } from "@/app/lib/dpApi";
 import {
   UploadCloud, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle,
-  RotateCcw, Database, Sparkles, Copy, MinusCircle,
+  RotateCcw, Database, Sparkles, Copy, MinusCircle, X,
 } from "lucide-react";
 
 interface ImportJob {
@@ -156,10 +156,18 @@ export default function ImportWizardPage() {
             className="border-2 border-dashed border-gray-200 hover:border-blue-400 rounded-xl p-8 text-center cursor-pointer transition-colors"
           >
             {file ? (
-              <div className="flex flex-col items-center gap-1.5">
+              <div className="relative flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); reset(); }}
+                  aria-label="Файл хасах"
+                  className="absolute -top-3 -right-3 inline-flex items-center justify-center w-7 h-7 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 cursor-pointer transition-colors"
+                >
+                  <X size={15} />
+                </button>
                 <FileSpreadsheet size={32} className="text-emerald-600" />
                 <div className="text-[14px] font-semibold text-gray-900">{file.name}</div>
-                <div className="text-[11px] text-gray-400">{(file.size / 1024).toFixed(0)} KB · дарж солих</div>
+                <div className="text-[11px] text-gray-400">{(file.size / 1024).toFixed(0)} KB · дарж солих эсвэл ✕-ээр хасах</div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1.5 text-gray-500">
@@ -168,7 +176,8 @@ export default function ImportWizardPage() {
                 <div className="text-[11px] text-gray-400">.csv · .xlsx · .xls · max 25MB</div>
               </div>
             )}
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" hidden
+            <input ref={fileRef} type="file" hidden
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
           </div>
 

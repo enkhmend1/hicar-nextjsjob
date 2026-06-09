@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 // Notification + User models are now used only by the outbox service.
 // They live on at top-level via that module's imports; we don't need
 // them here anymore.
@@ -17,9 +17,9 @@ if (emailEnabled) {
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined,
   });
-  console.log(chalk.green.bold(`Email enabled (${SMTP_HOST})`));
+  logger.info("Email enabled", { host: SMTP_HOST });
 } else {
-  console.log(chalk.yellow("Email disabled — set SMTP_HOST to enable"));
+  logger.warn("Email disabled — set SMTP_HOST to enable");
 }
 
 const FROM = process.env.SMTP_FROM || "no-reply@hicar.mn";
@@ -47,7 +47,7 @@ export const notify = async (payload) => {
     // Outbox should NEVER throw on a normal write — if it does, log loudly
     // so we notice. Do not propagate: notify() must stay non-fatal because
     // it sits on the critical path of refund / dispute flows.
-    console.error(chalk.red("Notify (outbox) failed:"), e.message);
+    logger.error("Notify (outbox) failed", { err: e });
     return null;
   }
 };
@@ -58,7 +58,7 @@ export const notifyAdmins = async (payload) => {
     const { enqueueAdmins } = await import("./notificationOutbox.service.js");
     return await enqueueAdmins(payload);
   } catch (e) {
-    console.error(chalk.red("NotifyAdmins (outbox) failed:"), e.message);
+    logger.error("NotifyAdmins (outbox) failed", { err: e });
     return null;
   }
 };
@@ -83,18 +83,14 @@ export const notifyAdmins = async (payload) => {
  */
 export const sendMail = async ({ to, subject, text, html }) => {
   if (!to) {
-    console.warn(chalk.yellow("sendMail called without `to` — skipping"));
+    logger.warn("sendMail called without `to` — skipping");
     return { delivered: false, transport: "failed" };
   }
 
   if (!emailEnabled) {
     // Dev fallback — surface the message in the terminal so the developer
     // can copy the link / code without standing up SMTP.
-    console.log(chalk.cyan("\n[email:dev] " + "─".repeat(60)));
-    console.log(chalk.cyan(`  to:      ${to}`));
-    console.log(chalk.cyan(`  subject: ${subject}`));
-    console.log(chalk.cyan(`  body:    ${text}`));
-    console.log(chalk.cyan("─".repeat(73) + "\n"));
+    logger.info("[email:dev] outbound email (SMTP disabled)", { to, subject, text });
     return { delivered: true, transport: "console" };
   }
 
@@ -106,7 +102,7 @@ export const sendMail = async ({ to, subject, text, html }) => {
     });
     return { delivered: true, transport: "smtp" };
   } catch (e) {
-    console.error(chalk.red(`sendMail to ${to} failed:`), e.message);
+    logger.error("sendMail failed", { err: e, to });
     return { delivered: false, transport: "failed" };
   }
 };

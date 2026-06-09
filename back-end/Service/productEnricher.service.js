@@ -318,10 +318,20 @@ export const enrichProduct = async (raw) => {
     // keep going — controller surfaces this via _meta.warnings
   }
 
-  // Cache lookup
+  // Cache lookup. The cache memoizes only the LLM enrichment (category,
+  // display names, grade, vehicles). Inventory passthrough fields
+  // (price/stock/location) MUST come from the CURRENT row — otherwise
+  // re-importing the same SKU with a new price or warehouse location would
+  // silently restore the stale cached values.
   const key = cacheKey(cleaned);
   const cached = await cacheGet(key);
-  if (cached) return { ...cached, _meta: { ...cached._meta, enriched_by: "cache" } };
+  if (cached) return {
+    ...cached,
+    price:    num(cleaned.price),
+    stock:    num(cleaned.stock),
+    location: cleaned.location || "",
+    _meta: { ...cached._meta, enriched_by: "cache" },
+  };
 
   try {
     const enrich = openaiEnabled ? await llmEnrich(cleaned) : fallbackEnrich(cleaned);

@@ -8,7 +8,7 @@ import LangSwitcher from "./LangSwitcher";
 import NotificationBell from "./NotificationBell";
 import {
   ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car,
-  Search, ChevronDown, Plus, ClipboardList,
+  Search, ChevronDown, Plus, ClipboardList, HelpCircle,
 } from "lucide-react";
 
 /**
@@ -288,7 +288,7 @@ export default function Navbar() {
           <Link href="/shop" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.shop")}</Link>
           <Link href="/lookup" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">Улсын дугаар</Link>
           <Link href="/orders" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.orders")}</Link>
-          <Link href="/#help" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.help")}</Link>
+          <Link href="/help" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.help")}</Link>
           {isSeller && !isAdmin && (
             <Link href="/seller" className="flex items-center gap-1 text-[14px] text-amber-600 font-semibold hover:underline transition-colors">
               <Store size={13} /> {t("nav.seller")}
@@ -484,6 +484,7 @@ export default function Navbar() {
 
           <Link href="/shop" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Package size={16} />{t("nav.shop")}</Link>
           <Link href="/orders" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Package size={16} />{t("nav.orders")}</Link>
+          <Link href="/help" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><HelpCircle size={16} />{t("nav.help")}</Link>
           {isSeller && !isAdmin && (
             <Link href="/seller" className="flex items-center gap-3 text-[15px] text-amber-600 font-semibold py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Store size={16} />{t("nav.seller")}</Link>
           )}

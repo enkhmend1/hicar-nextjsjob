@@ -2,6 +2,7 @@ import Order from "../Model/order.model.js";
 import { createInvoice, checkPayment, qpayEnabled } from "../Service/qpay.service.js";
 import { notify } from "../Service/notification.service.js";
 import { settleOrderPaid } from "../Service/escrow.service.js";
+import { logger } from "../Config/logger.js";
 
 /**
  * POST /api/qpay/invoice
@@ -15,7 +16,11 @@ export const createOrderInvoice = async (req, res) => {
     const { orderId } = req.body;
     const order = await Order.findOne({ _id: orderId, user: req.user._id });
     if (!order) return res.status(404).json({ message: "Захиалга олдсонгүй" });
-    if (order.paymentMethod !== "qpay") return res.status(400).json({ message: "QPay захиалга биш" });
+    // Both "qpay" and "card" settle through QPay (its payment page accepts
+    // Visa/Mastercard), so both are valid here. Wallet/other methods are not.
+    if (!["qpay", "card"].includes(order.paymentMethod)) {
+      return res.status(400).json({ message: "QPay-аар төлөх захиалга биш" });
+    }
     if (order.status !== "pending") return res.status(400).json({ message: "Захиалга төлсөн эсвэл цуцалсан" });
 
     // If we already have an invoice id, return cached payload
@@ -116,7 +121,7 @@ export const callback = async (req, res) => {
     }
     return res.json({ ok: true, paid });
   } catch (err) {
-    console.error("QPay callback error:", err);
+    logger.error("QPay callback error", { err });
     return res.status(500).json({ message: err.message });
   }
 };

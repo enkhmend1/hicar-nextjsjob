@@ -69,14 +69,15 @@ export default function BuyerShell({ children }: { children: React.ReactNode }) 
                 <li><Link href="/lookup" className="text-gray-400 hover:text-amber-400 transition-colors">Улсын дугаар</Link></li>
                 <li><Link href="/orders" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.orders")}</Link></li>
                 <li><Link href="/garage" className="text-gray-400 hover:text-amber-400 transition-colors">Миний машинууд</Link></li>
+                <li><Link href="/help"   className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.help")}</Link></li>
               </ul>
             </div>
 
             <div>
               <div className="text-[12px] font-semibold text-white mb-3 uppercase tracking-wider">{t("home.footerAbout")}</div>
               <ul className="space-y-2 text-[13px]">
-                <li><a href="#" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerShipping")}</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerReturn")}</a></li>
+                <li><Link href="/help#shipping" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerShipping")}</Link></li>
+                <li><Link href="/help#returns" className="text-gray-400 hover:text-amber-400 transition-colors">{t("home.footerReturn")}</Link></li>
                 <li><Link href="/seller/apply" className="text-gray-400 hover:text-amber-400 transition-colors">{t("nav.becomeSeller")}</Link></li>
               </ul>
             </div>

@@ -48,7 +48,7 @@
  *      flagged as applied when the side effect didn't actually land.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import mongoose from "mongoose";
 
 import User from "../Model/user.model.js";
@@ -248,10 +248,9 @@ const releaseLockSafely = async (disputeId) => {
       { $set: { isTrustScoreApplied: false } },
     );
   } catch (e) {
-    console.warn(chalk.red(
-      `[trustScore] CRITICAL: failed to rollback isTrustScoreApplied for ` +
-      `dispute ${disputeId}: ${e.message}`,
-    ));
+    logger.error("trustScore CRITICAL: rollback isTrustScoreApplied failed", {
+      err: e, disputeId,
+    });
   }
 };
 

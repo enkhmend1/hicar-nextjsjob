@@ -7,7 +7,7 @@
 
 import { makeQueue } from "../../shared/queues.js";
 
-export const NORMALIZE_QUEUE = "dp:normalize";
+export const NORMALIZE_QUEUE = "dp-normalize";
 
 export interface NormalizeJobData {
   rawProductId: string;

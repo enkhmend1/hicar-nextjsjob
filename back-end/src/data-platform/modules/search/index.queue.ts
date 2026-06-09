@@ -7,7 +7,7 @@
 
 import { makeQueue } from "../../shared/queues.js";
 
-export const INDEX_QUEUE = "dp:index";
+export const INDEX_QUEUE = "dp-index";
 
 export interface IndexJobData {
   normalizedProductId: string;

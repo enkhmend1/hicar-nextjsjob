@@ -31,6 +31,7 @@
 import crypto from "crypto";
 import mongoose from "mongoose";
 import { redis, redisEnabled } from "../Config/redis.js";
+import { logger } from "../Config/logger.js";
 
 const CALLBACK_SECRET = process.env.QPAY_CALLBACK_SECRET || "";
 const REPLAY_WINDOW_SECONDS = Number(process.env.QPAY_REPLAY_WINDOW_S) || 10;
@@ -67,13 +68,13 @@ export const verifyQpayCallback = async (req, res, next) => {
     // env). In non-production environments, skip the check and log loudly.
     const isProd = process.env.NODE_ENV === "production";
     if (isProd) {
-      console.error(
-        "[qpay.callback] FATAL: QPAY_CALLBACK_SECRET is not set in production — rejecting callback",
+      logger.error(
+        "QPAY_CALLBACK_SECRET is not set in production — rejecting callback",
       );
       return res.status(503).json({ message: "Payment callback misconfigured — contact admin" });
     }
-    console.warn(
-      "[qpay.callback] WARNING: QPAY_CALLBACK_SECRET is not set — callback is unauthenticated (dev only)",
+    logger.warn(
+      "QPAY_CALLBACK_SECRET is not set — callback is unauthenticated (dev only)",
     );
   }
 

@@ -1,5 +1,5 @@
 import Redis from "ioredis";
-import chalk from "chalk";
+import { logger } from "./logger.js";
 
 const url = process.env.REDIS_URL;
 export const redisEnabled = Boolean(url);
@@ -13,16 +13,16 @@ if (redisEnabled) {
     lazyConnect: true,
   });
   client.connect()
-    .then(() => console.log(chalk.green.bold(`Redis connected (TTL ${CACHE_TTL}s)`)))
+    .then(() => logger.info("Redis connected", { ttl: CACHE_TTL }))
     .catch((e) => {
-      console.log(chalk.red.bold("Redis connect failed:"), e.message);
+      logger.error("Redis connect failed", { err: e });
       client = null;
     });
   client.on("error", (e) => {
-    console.log(chalk.red("Redis error:"), e.message);
+    logger.warn("Redis error", { err: e });
   });
 } else {
-  console.log(chalk.yellow.bold("Redis disabled — no caching"));
+  logger.warn("Redis disabled — no caching");
 }
 
 export const redis = client;

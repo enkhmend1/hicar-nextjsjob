@@ -1,0 +1,53 @@
+name: CI
+
+# Runs the project's "definition of done" gates on every push + PR:
+#   front-end  -> tsc --noEmit
+#   back-end   -> unit tests, data-platform tsc --noEmit, legacy JS syntax check
+# No secrets / services needed: the tests are pure and typecheck is offline.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  back-end:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: back-end
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: back-end/package-lock.json
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Data-platform typecheck
+        run: npm run dp:typecheck
+      - name: Legacy JS syntax check
+        # tsc only covers src/ (TypeScript); node --check guards the .js app.
+        working-directory: .
+        run: |
+          for f in $(git ls-files 'back-end/**/*.js' ':!:back-end/node_modules/**' ':!:back-end/src/**'); do
+            node --check "$f"
+          done
+
+  front-end:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front-end
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: front-end/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit

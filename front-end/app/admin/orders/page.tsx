@@ -18,11 +18,32 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "bg-red-50 text-red-700 border-red-200",
 };
 
+// Escrow (money) state — orthogonal to the goods `status` above.
+const PAYMENT_LABEL: Record<string, string> = {
+  PENDING: "Төлбөр хүлээгдэж буй",
+  PAID: "Escrow-д хадгалагдсан",
+  DISPUTED: "Маргаантай · түгжээтэй",
+  PARTIAL_REFUND: "Хэсэгчилсэн буцаалт",
+  REFUNDED: "Буцаагдсан",
+  PAID_OUT: "Худалдагч руу шилжсэн",
+  FAILED: "Төлбөр амжилтгүй",
+};
+const PAYMENT_COLOR: Record<string, string> = {
+  PENDING: "bg-gray-50 text-gray-600 border-gray-200",
+  PAID: "bg-amber-50 text-amber-700 border-amber-200",
+  DISPUTED: "bg-red-50 text-red-700 border-red-200",
+  PARTIAL_REFUND: "bg-orange-50 text-orange-700 border-orange-200",
+  REFUNDED: "bg-gray-100 text-gray-600 border-gray-300",
+  PAID_OUT: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  FAILED: "bg-red-50 text-red-700 border-red-200",
+};
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [busyEscrow, setBusyEscrow] = useState<string | null>(null);
 
   const reload = () => {
     setLoading(true);
@@ -40,6 +61,22 @@ export default function AdminOrdersPage() {
   const updateStatus = async (id: string, status: string) => {
     await api.patch(`/orders/${id}/status`, { status });
     reload();
+  };
+
+  const escrowAction = async (id: string, action: "release" | "hold") => {
+    if (action === "release" &&
+        !confirm("Escrow төлбөрийг худалдагч руу ОДОО шилжүүлэх үү? Энэ үйлдлийг буцаах боломжгүй.")) {
+      return;
+    }
+    setBusyEscrow(id);
+    try {
+      await api.post(`/orders/${id}/escrow/${action}`, {});
+      reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyEscrow(null);
+    }
   };
 
   return (
@@ -94,6 +131,39 @@ export default function AdminOrdersPage() {
                       {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                     </select>
                   </div>
+
+                  {/* Escrow (money) row — status, held amount, release timing
+                      + admin manual Release / Hold overrides. */}
+                  {o.paymentStatus && (
+                    <div className="flex flex-wrap items-center gap-2 mt-2 ml-10 text-[11px]">
+                      <span className={`px-2 py-0.5 rounded-full border font-medium ${PAYMENT_COLOR[o.paymentStatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                        🛡 {PAYMENT_LABEL[o.paymentStatus] ?? o.paymentStatus}
+                      </span>
+                      {(o.escrowAmount ?? 0) > 0 && o.paymentStatus !== "PAID_OUT" && (
+                        <span className="text-gray-500">Дүн: <b className="text-gray-700">₮{o.escrowAmount!.toLocaleString()}</b></span>
+                      )}
+                      {o.paymentStatus !== "PAID_OUT" && o.escrowReleaseScheduledAt && (
+                        <span className="text-gray-400">Release: {new Date(o.escrowReleaseScheduledAt).toLocaleDateString("mn-MN")}</span>
+                      )}
+                      {o.paymentStatus === "PAID_OUT" && o.escrowReleasedAt && (
+                        <span className="text-gray-400">Шилжсэн: {new Date(o.escrowReleasedAt).toLocaleDateString("mn-MN")}</span>
+                      )}
+                      {["PAID", "PARTIAL_REFUND"].includes(o.paymentStatus) && !o.hasOpenDispute && (
+                        <span className="flex items-center gap-1.5 ml-auto">
+                          <button onClick={() => escrowAction(id, "release")} disabled={busyEscrow === id}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border-none transition-colors">
+                            Release
+                          </button>
+                          {o.escrowReleaseScheduledAt && (
+                            <button onClick={() => escrowAction(id, "hold")} disabled={busyEscrow === id}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white text-amber-700 border border-amber-300 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                              Hold
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {isOpen && (
                     <div className="mt-3 ml-10 pt-3 border-t border-gray-100 space-y-2">

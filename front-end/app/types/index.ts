@@ -54,6 +54,8 @@ export interface Product {
   stockQty?: number;
   /** -1 = use seller default. */
   lowStockThreshold?: number;
+  /** Physical shelf/row coordinate, e.g. "B-3". Seller-private. */
+  warehouseLocation?: string;
   description: string;
   compatible: string[];
   deliveryDays: { fast: number; normal: number; cheap: number };

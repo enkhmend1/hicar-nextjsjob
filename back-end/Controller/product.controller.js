@@ -3,8 +3,8 @@ import { cacheGet, cacheSet, cacheInvalidate } from "../Config/redis.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { logSearch } from "../Service/oem.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
-import { requiresReapproval } from "../Service/productPolicy.service.js";
-import { getCategoryWithDescendants } from "../Service/siteContent.service.js";
+import { resolveCompatibility } from "../Service/compatibilityResolver.service.js";
+import { getCategoryWithDescendants, bustCategoryCounts } from "../Service/siteContent.service.js";
 import { rememberInputs } from "./seller.controller.js";
 import {
   validateProductCreate,
@@ -154,7 +154,12 @@ export const listProducts = async (req, res) => {
   }
 };
 
-const invalidateProductCache = () => cacheInvalidate("products:*");
+// Bust the product-list cache AND the homepage category-counts cache —
+// adding/removing/moderating a product changes per-category counts.
+const invalidateProductCache = () => {
+  cacheInvalidate("products:*");
+  bustCategoryCounts();
+};
 
 /** SELLER: own products including pending/rejected. */
 export const listMyProducts = async (req, res) => {
@@ -252,6 +257,10 @@ export const createProduct = async (req, res) => {
     }
     // Instant publish for every role — see policy block above
     payload.status = "approved";
+    // Derive the structured compatibility block from the seller's fitments +
+    // OEM so the compatibility engine can match this part to a buyer's car by
+    // manufacturer / model / engine ref — not only an exact OEM hit.
+    payload.compatibility = await resolveCompatibility({ fitments: payload.fitments, oem: payload.oem });
     const item = await Product.create(payload);
     invalidateProductCache();
 
@@ -312,13 +321,17 @@ export const updateProduct = async (req, res) => {
       if (status !== undefined) update.status = status;
       if (rejectedReason !== undefined) update.rejectedReason = rejectedReason;
       if (seller !== undefined) update.seller = seller;
-    } else if (existing.status === "approved" && requiresReapproval(existing, update)) {
-      // Phase O: re-approval scoped to RISKY field changes only.
-      // See Service/productPolicy.service.js for the risky/safe split.
-      // Image uploads, stock bumps, description tweaks all keep
-      // status="approved" so the listing doesn't yo-yo through
-      // the admin queue every time the seller polishes their page.
-      update.status = "pending";
+    }
+    // Instant-publish policy: seller edits never bounce back to "pending".
+    // Listings stay live; admin moderates only on demand (edit/disable/delete).
+
+    // Re-derive structured compatibility only when fitments or OEM changed,
+    // so a partial edit (e.g. just price) never wipes the existing block.
+    if (update.fitments !== undefined || update.oem !== undefined) {
+      update.compatibility = await resolveCompatibility({
+        fitments: update.fitments ?? existing.fitments ?? [],
+        oem:      update.oem ?? existing.oem ?? "",
+      });
     }
 
     const item = await Product.findByIdAndUpdate(req.params.id, update, {

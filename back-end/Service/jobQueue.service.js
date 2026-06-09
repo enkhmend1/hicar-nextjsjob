@@ -15,7 +15,7 @@
  * worker and returns a synthetic "completed" job.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 const REDIS_URL = process.env.REDIS_URL;
 let queueCtor = null;
@@ -31,9 +31,9 @@ if (REDIS_URL) {
     maxRetriesPerRequest: null, // required by BullMQ
     enableReadyCheck: false,
   });
-  console.log(chalk.green.bold(`BullMQ enabled — ${REDIS_URL.replace(/:[^:@]*@/, ":***@")}`));
+  logger.info("BullMQ enabled", { redis: REDIS_URL.replace(/:[^:@]*@/, ":***@") });
 } else {
-  console.log(chalk.yellow("BullMQ disabled (no REDIS_URL) — jobs run inline"));
+  logger.warn("BullMQ disabled (no REDIS_URL) — jobs run inline");
 }
 
 const registry = new Map(); // name → { queue?, worker?, runner }
@@ -53,7 +53,7 @@ export const register = (name, runner, opts = {}) => {
       { connection, concurrency: opts.concurrency || 5 },
     );
     worker.on("failed", (job, err) =>
-      console.warn(chalk.red(`[queue:${name}] job ${job?.id} failed: ${err?.message}`)));
+      logger.warn("queue job failed", { queue: name, jobId: job?.id, err }));
     registry.set(name, { queue, worker, runner });
   } else {
     registry.set(name, { runner }); // sync mode

@@ -20,7 +20,7 @@
  *   AI_BG_AGENT_DISABLED       "true" to opt out entirely (e.g. test env)
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import { register, enqueue } from "../Service/jobQueue.service.js";
 import { runAllBackgroundChecks } from "../Service/backgroundAgent.service.js";
 
@@ -36,11 +36,12 @@ const SCHEDULER_DISABLED  = String(process.env.AI_BG_AGENT_DISABLED || "").toLow
 register(BACKGROUND_AGENT_QUEUE, async (job) => {
   const summary = await runAllBackgroundChecks();
   if (summary.totalSent > 0 || summary.errored.length > 0) {
-    console.log(chalk.magenta(
-      `[bg-agent] reason=${job.data?.reason || "tick"} sent=${summary.totalSent} ` +
-      `errors=${summary.errored.length} ` +
-      `breakdown=${JSON.stringify(summary.perCheck)}`,
-    ));
+    logger.info("bg-agent run", {
+      reason: job.data?.reason || "tick",
+      sent: summary.totalSent,
+      errors: summary.errored.length,
+      breakdown: summary.perCheck,
+    });
   }
   return summary;
 });
@@ -61,7 +62,7 @@ export const startBackgroundAgentScheduler = ({
   bootDelayMs  = BOOT_DELAY_MS,
 } = {}) => {
   if (SCHEDULER_DISABLED) {
-    console.log(chalk.gray("Background-agent scheduler disabled via AI_BG_AGENT_DISABLED=true"));
+    logger.info("Background-agent scheduler disabled via AI_BG_AGENT_DISABLED=true");
     return false;
   }
   if (intervalHandle) return false;
@@ -69,20 +70,19 @@ export const startBackgroundAgentScheduler = ({
   // Boot run — give DB connections a minute to settle, then fire.
   bootHandle = setTimeout(() => {
     enqueue(BACKGROUND_AGENT_QUEUE, { reason: "boot" }).catch((e) =>
-      console.warn(chalk.yellow(`[bg-agent] boot enqueue failed: ${e.message}`)));
+      logger.warn("bg-agent boot enqueue failed", { err: e }));
   }, bootDelayMs);
   if (bootHandle.unref) bootHandle.unref();
 
   intervalHandle = setInterval(() => {
     enqueue(BACKGROUND_AGENT_QUEUE, { reason: "tick" }).catch((e) =>
-      console.warn(chalk.yellow(`[bg-agent] tick enqueue failed: ${e.message}`)));
+      logger.warn("bg-agent tick enqueue failed", { err: e }));
   }, intervalMs);
   if (intervalHandle.unref) intervalHandle.unref();
 
-  console.log(chalk.green.bold(
-    `Background-agent scheduler started — boot+${bootDelayMs}ms, then every ${intervalMs}ms ` +
-    `(${Math.round(intervalMs / 3600000)}h)`,
-  ));
+  logger.info("Background-agent scheduler started", {
+    bootDelayMs, intervalMs, intervalHours: Math.round(intervalMs / 3600000),
+  });
   return true;
 };
 

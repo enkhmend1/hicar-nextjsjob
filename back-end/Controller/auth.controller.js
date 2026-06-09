@@ -1,6 +1,5 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import chalk from "chalk";
 import User from "../Model/user.model.js";
 import PasswordResetToken from "../Model/passwordResetToken.model.js";
 import { sendMail } from "../Service/notification.service.js";
@@ -9,6 +8,7 @@ import {
   updateProfileSchema, changePasswordSchema,
   validateAuth, AUTH_ERROR_CODES as ERR,
 } from "../Service/authSchema.service.js";
+import { logger } from "../Config/logger.js";
 
 /**
  * Internal helper — sanitize an Error before sending it on the wire.
@@ -47,7 +47,7 @@ const respondSafeError = (res, err) => {
   }
 
   // Default: scrub everything else, log the raw error for ops.
-  console.error(chalk.red("[auth] internal error:"), err?.stack || msg);
+  logger.error("[auth] internal error", { err });
   return res.status(500).json({
     code: ERR.INTERNAL_ERROR,
     message: "Дотоод алдаа гарлаа. Дахин оролдоно уу.",
@@ -346,9 +346,9 @@ export const changePassword = async (req, res) => {
 — HiCar баг`,
     }).catch(() => {});
 
-    console.log(chalk.yellow(
-      `[audit] password-changed-self  user=${user._id}  email=${user.email}  ip=${req.ip}`,
-    ));
+    logger.info("audit: password-changed-self", {
+      userId: user._id, email: user.email, ip: req.ip,
+    });
 
     return res.json({ ok: true, message: "Нууц үг амжилттай шинэчлэгдлээ" });
   } catch (err) {
@@ -449,13 +449,14 @@ ${link}
       `.trim(),
     });
 
-    console.log(chalk.yellow(
-      `[audit] password-reset-requested  user=${user._id}  email=${user.email}  ip=${req.ip}  ua="${(req.headers["user-agent"] || "").slice(0, 80)}"`,
-    ));
+    logger.info("audit: password-reset-requested", {
+      userId: user._id, email: user.email, ip: req.ip,
+      ua: (req.headers["user-agent"] || "").slice(0, 80),
+    });
 
     return respond();
   } catch (err) {
-    console.error(chalk.red("forgotPassword failed:"), err.message);
+    logger.error("forgotPassword failed", { err });
     // Still respond OK — never leak internal state to anonymous callers.
     return respond();
   }
@@ -544,9 +545,9 @@ export const resetPassword = async (req, res) => {
     // stolen refresh cookies from before the reset are useless.
     clearRefreshCookie(res);
 
-    console.log(chalk.yellow(
-      `[audit] password-reset-redeemed   user=${user._id}  email=${user.email}  ip=${req.ip}`,
-    ));
+    logger.info("audit: password-reset-redeemed", {
+      userId: user._id, email: user.email, ip: req.ip,
+    });
 
     // Notify the user that the change was completed (different from the
     // "requested" notification — successful reset = real anomaly trigger).
@@ -565,7 +566,7 @@ export const resetPassword = async (req, res) => {
 
     return res.json({ ok: true, message: "Нууц үг шинэчлэгдлээ. Дахин нэвтэрнэ үү." });
   } catch (err) {
-    console.error(chalk.red("resetPassword failed:"), err.message);
+    logger.error("resetPassword failed", { err });
     return res.status(500).json({ message: "Internal error" });
   }
 };

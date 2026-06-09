@@ -2,7 +2,7 @@ import express from "express";
 import {
   apply, updateProfile, updateSettings, facets,
   dashboard, analytics, analyticsExport, myOrders,
-  publicStorefront,
+  publicStorefront, warehouse, warehouseUpdate,
 } from "../Controller/seller.controller.js";
 import { sellerUpdateOrderStatus } from "../Controller/order.controller.js";
 import { protect, approvedSeller } from "../Middleware/auth.middleware.js";
@@ -28,5 +28,9 @@ router.get("/analytics/export", approvedSeller, analyticsExport);
 router.get("/orders", approvedSeller, myOrders);
 // Phase AQ.1: seller marks own orders processing/shipped (+ tracking).
 router.patch("/orders/:id/status", approvedSeller, sellerUpdateOrderStatus);
+
+// Warehouse / inventory — list own stock + quick-edit a single SKU.
+router.get("/warehouse", approvedSeller, warehouse);
+router.patch("/warehouse/:id", approvedSeller, warehouseUpdate);
 
 export default router;

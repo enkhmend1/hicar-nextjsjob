@@ -41,7 +41,7 @@
  *    UPSTREAM_5XX  | CIRCUIT_OPEN | UPSTREAM_ERROR | PROVIDER_AUTH
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import { wrapBreaker } from "./circuitBreaker.service.js";
 import { pickProxy, reportProxyResult } from "./proxyPool.service.js";
 import { cacheGet, cacheSet } from "../Config/redis.js";
@@ -181,5 +181,5 @@ export const fetchByPlate = async (plate, opts = {}) => {
 };
 
 if (process.env.GARAGE_API_KEY) {
-  console.log(chalk.green.bold("Garage API key configured"));
+  logger.info("Garage API key configured");
 }

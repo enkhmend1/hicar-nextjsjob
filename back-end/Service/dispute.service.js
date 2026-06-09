@@ -19,7 +19,7 @@
  * all flow through this file — controllers stay thin transport adapters.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 import Dispute from "../Model/dispute.model.js";
 import Order from "../Model/order.model.js";
@@ -258,7 +258,7 @@ export const createDispute = async (buyerId, orderId, payload) => {
     await Order.updateOne(
       { _id: order._id, paymentStatus: "DISPUTED" },
       { $set: { hasOpenDispute: false, paymentStatus: restoredStatus } },
-    ).catch((e) => console.error(chalk.red(`[createDispute rollback] ${e.message}`)));
+    ).catch((e) => logger.error("createDispute rollback failed", { err: e, orderId: order._id }));
 
     if (dispute?._id) {
       await Dispute.deleteOne({ _id: dispute._id }).catch(() => {});
@@ -544,7 +544,7 @@ export const withdrawDispute = async (disputeId, buyerId) => {
       && fresh.status === "delivered") {
     const { scheduleRelease } = await import("../Queue/escrowRelease.queue.js");
     await scheduleRelease(fresh).catch((e) =>
-      console.warn(chalk.yellow(`[dispute.withdraw] reschedule failed: ${e.message}`)));
+      logger.warn("dispute.withdraw reschedule failed", { err: e, orderId: fresh._id }));
   }
   return dispute;
 };
@@ -673,7 +673,7 @@ const resolveWithRefund = async (dispute, amount, resolvedBy, extra = {}) => {
   // 500 from the controller, which would be wrong — the dispute itself
   // resolved successfully.
   applyResolutionDelta(dispute._id, dispute.seller, dispute.status).catch((e) =>
-    console.warn(chalk.yellow(`[trustScore] refund delta failed: ${e.message}`)));
+    logger.warn("trustScore refund delta failed", { err: e, disputeId: dispute._id }));
 
   // Notify both sides via the outbox. `idempotencyKey` collapses the
   // notification if THIS function runs twice for the same dispute (which
@@ -758,7 +758,7 @@ const resolveWithRelease = async (dispute, resolvedBy, extra = {}) => {
   // adjudication outcome rather than the dispute's terminal status alone.
   // Idempotency: dispute._id is the CAS key — retries are no-ops.
   applyResolutionDelta(dispute._id, dispute.seller, dispute.resolution.action).catch((e) =>
-    console.warn(chalk.yellow(`[trustScore] release delta failed: ${e.message}`)));
+    logger.warn("trustScore release delta failed", { err: e, disputeId: dispute._id }));
 
   notify({
     user: dispute.buyer,

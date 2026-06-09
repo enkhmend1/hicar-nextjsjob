@@ -18,7 +18,7 @@
  */
 
 import { register, enqueue, cancelJob } from "../Service/jobQueue.service.js";
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 
 export const DISPUTE_DEADLINE_QUEUE = "dispute-deadline";
 
@@ -36,7 +36,9 @@ register(DISPUTE_DEADLINE_QUEUE, async (job) => {
   const { disputeId, expectedStatus } = job.data;
   const result = await handleDeadlineExpired(disputeId, expectedStatus);
   if (result?.transitioned) {
-    console.log(chalk.cyan(`[dispute-deadline] dispute=${disputeId} ${expectedStatus} → ${result.newStatus}`));
+    logger.info("dispute-deadline transition", {
+      disputeId, from: expectedStatus, to: result.newStatus,
+    });
   }
   return result;
 }, { concurrency: 4 });

@@ -3,8 +3,7 @@
  * Run once before normalizing: `npm run dp:seed`.
  */
 
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
 import { connectMongo, disconnectMongo } from "../shared/mongo.js";
 import { seedCatalog } from "../modules/catalog/seed.js";

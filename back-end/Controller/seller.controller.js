@@ -5,6 +5,7 @@ import Order from "../Model/order.model.js";
 import { notifyAdmins } from "../Service/notification.service.js";
 import { getSellerAnalytics, parseRange } from "../Service/analytics.service.js";
 import { FORMATS } from "../Service/export.service.js";
+import { maybeAlertLowStock } from "../Service/inventory.service.js";
 
 const HISTORY_LIMIT = 50;
 
@@ -358,6 +359,117 @@ export const myOrders = async (req, res) => {
     return res.json({ orders });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+};
+
+// ── Warehouse / inventory ────────────────────────────────────────
+/**
+ * GET /api/seller/warehouse
+ *
+ * The seller's own stock sheet — every SKU they own with the three
+ * inventory fields the warehouse page edits (`stockQty`,
+ * `lowStockThreshold`, `warehouseLocation`) plus the identity columns
+ * needed to render a row. Projection is explicit so a future schema
+ * addition can't leak a privileged field (costPrice etc.) to the wire.
+ *
+ * The effective low-stock threshold is resolved server-side: a per-SKU
+ * override (`lowStockThreshold >= 0`) wins, otherwise the seller's
+ * `defaultLowStockThreshold`, otherwise the platform default of 5. The
+ * frontend gets a ready-to-render `effectiveThreshold` so it never has
+ * to re-derive the fallback chain.
+ */
+export const warehouse = async (req, res) => {
+  try {
+    const sellerDefault = req.user.sellerProfile?.defaultLowStockThreshold ?? 5;
+    const products = await Product.find({ seller: req.user._id })
+      .select("name oem brand category images iconPath stockQty lowStockThreshold warehouseLocation inStock updatedAt")
+      .sort({ stockQty: 1, name: 1 }) // lowest stock first — what the seller cares about
+      .limit(500)
+      .lean();
+
+    const items = products.map((p) => {
+      const override = typeof p.lowStockThreshold === "number" && p.lowStockThreshold >= 0;
+      return {
+        ...p,
+        effectiveThreshold: override ? p.lowStockThreshold : sellerDefault,
+      };
+    });
+    return res.json({ items, sellerDefault });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * PATCH /api/seller/warehouse/:id  — quick-edit a single SKU's stock,
+ * threshold, and shelf location from the warehouse table.
+ *
+ * Scope is deliberately narrow: only the three warehouse fields are
+ * accepted, every one optional, so this endpoint can never touch price,
+ * status, or any other moderated field. Ownership is enforced
+ * server-side (a seller can only edit their OWN SKU; admins may edit any).
+ *
+ * `stockQty` is set absolutely here (the seller is typing the counted
+ * value), NOT `$inc`-ed — this is a manual recount, not a sale. The
+ * automatic, race-safe decrement on checkout lives in
+ * order.controller.js and is untouched. Setting stock to 0 flips
+ * `inStock` off; raising it above 0 flips it back on.
+ */
+export const warehouseUpdate = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id).select("seller stockQty inStock");
+    if (!product) return res.status(404).json({ message: "Бараа олдсонгүй" });
+
+    const isOwner = product.seller && String(product.seller) === String(req.user._id);
+    if (!isOwner && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Энэ барааг засах эрхгүй" });
+    }
+
+    const update = {};
+    const { stockQty, lowStockThreshold, warehouseLocation } = req.body;
+
+    if (stockQty !== undefined) {
+      const n = Number(stockQty);
+      if (!Number.isInteger(n) || n < 0 || n > 1_000_000) {
+        return res.status(400).json({ message: "Үлдэгдэл 0-1,000,000 хооронд бүхэл тоо байх ёстой" });
+      }
+      update.stockQty = n;
+      // Keep the inStock flag in sync with the counted quantity.
+      update.inStock = n > 0;
+    }
+
+    if (lowStockThreshold !== undefined) {
+      // -1 is the sentinel for "use the seller default"; otherwise 0..1000.
+      const n = Number(lowStockThreshold);
+      if (!Number.isInteger(n) || n < -1 || n > 1000) {
+        return res.status(400).json({ message: "Анхааруулах босго -1..1000 хооронд байх ёстой" });
+      }
+      update.lowStockThreshold = n;
+    }
+
+    if (warehouseLocation !== undefined) {
+      const loc = String(warehouseLocation).trim().slice(0, 60);
+      update.warehouseLocation = loc;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ message: "Засах талбар алга" });
+    }
+
+    const item = await Product.findByIdAndUpdate(req.params.id, { $set: update }, {
+      returnDocument: "after", runValidators: true,
+    }).select("name oem brand category images stockQty lowStockThreshold warehouseLocation inStock updatedAt").lean();
+
+    // Re-evaluate the low-stock alert if stock or threshold moved.
+    if ("stockQty" in update || "lowStockThreshold" in update) {
+      maybeAlertLowStock(req.params.id).catch(() => {});
+    }
+
+    const sellerDefault = req.user.sellerProfile?.defaultLowStockThreshold ?? 5;
+    const override = typeof item.lowStockThreshold === "number" && item.lowStockThreshold >= 0;
+    return res.json({ item: { ...item, effectiveThreshold: override ? item.lowStockThreshold : sellerDefault } });
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
   }
 };
 

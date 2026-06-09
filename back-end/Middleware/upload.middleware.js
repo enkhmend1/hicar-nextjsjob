@@ -35,4 +35,22 @@ export const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+// Spreadsheet (CSV / Excel) uploads for bulk import. Memory storage so the
+// handler reads `req.file.buffer` directly — never written to disk or pushed
+// to Cloudinary. Filter by extension: CSV mimetypes are inconsistent across
+// browsers/OS (text/csv, application/vnd.ms-excel, octet-stream, text/plain).
+const SPREADSHEET_EXT = /\.(csv|xlsx|xls)$/i;
+const spreadsheetFilter = (_req, file, cb) => {
+  if (!SPREADSHEET_EXT.test(file.originalname || "")) {
+    return cb(new Error("Зөвхөн .csv / .xlsx / .xls файл оруулна уу"));
+  }
+  cb(null, true);
+};
+
+export const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: spreadsheetFilter,
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
+
 export { UPLOAD_DIR };

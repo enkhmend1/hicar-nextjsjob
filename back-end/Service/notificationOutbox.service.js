@@ -22,7 +22,7 @@
  *   After 5 attempts → dead_letter for admin review.
  */
 
-import chalk from "chalk";
+import { logger } from "../Config/logger.js";
 import nodemailer from "nodemailer";
 
 import NotificationOutbox from "../Model/notificationOutbox.model.js";
@@ -206,9 +206,7 @@ export const deliverBatch = async () => {
           },
         );
         deadLettered++;
-        console.warn(chalk.red(
-          `[outbox] dead_letter id=${row._id} type=${row.type} reason=${err.message}`,
-        ));
+        logger.error("outbox dead_letter", { id: row._id, type: row.type, err });
       } else {
         // Schedule a retry with exponential backoff.
         const delay = RETRY_DELAYS_MS[Math.min(row.attempts - 1, RETRY_DELAYS_MS.length - 1)];

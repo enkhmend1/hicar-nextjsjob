@@ -34,7 +34,7 @@ const oemCrossSchema = new mongoose.Schema(
     partName:    { type: String, default: "" },
     category:    { type: String, default: "", index: true },
     equivalents: { type: [equivalentSchema], default: [] },
-    source:      { type: String, default: "manual", enum: ["manual", "tecdoc", "vin-decoder", "import"] },
+    source:      { type: String, default: "manual", enum: ["manual", "tecdoc", "vin-decoder", "import", "auto"] },
     addedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
