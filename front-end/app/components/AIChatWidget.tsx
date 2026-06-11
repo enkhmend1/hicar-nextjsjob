@@ -84,6 +84,12 @@ function downloadXlsx(filename: string, sheets: Record<string, Record<string, un
   XLSX.writeFile(wb, filename);
 }
 
+/** Keep a dragged position fully inside the current viewport (8px margin). */
+const clampToView = (x: number, y: number, w: number, h: number) => ({
+  x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - w - 8)),
+  y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - h - 8)),
+});
+
 export default function HiCarAIChat() {
   const pathname = usePathname();
   const { user } = useAuthStore();
@@ -141,6 +147,7 @@ export default function HiCarAIChat() {
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const fabRef = useRef<HTMLButtonElement>(null);
   const dragRef = useRef<{ sx: number; sy: number; dx: number; dy: number; w: number; h: number; setter: (p: { x: number; y: number }) => void; key: string } | null>(null);
   const movedRef = useRef(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -150,20 +157,35 @@ export default function HiCarAIChat() {
       try { const r = localStorage.getItem(k); return r ? (JSON.parse(r) as { x: number; y: number }) : null; }
       catch { return null; }
     };
+    // Persisted positions are raw pixels from SOME past viewport. Mobile
+    // browsers change innerWidth/innerHeight between visits (URL bar,
+    // keyboard, rotation), so an unclamped restore can park the widget
+    // outside the visible screen with no way to drag it back. Re-clamp
+    // against the CURRENT viewport on restore and on every resize.
+    // Panel size = its md+ footprint (360×600) — custom pos is desktop-only.
+    const fabSize = () => {
+      const r = fabRef.current?.getBoundingClientRect();
+      return { w: r?.width || 160, h: r?.height || 48 };
+    };
+    const clampSaved = (p: { x: number; y: number } | null, w: number, h: number) =>
+      p ? clampToView(p.x, p.y, w, h) : null;
+    const s = fabSize();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFabPos(load("hicar-aichat-fab"));
-    setPanelPos(load("hicar-aichat-panel"));
+    setFabPos(clampSaved(load("hicar-aichat-fab"), s.w, s.h));
+    setPanelPos(clampSaved(load("hicar-aichat-panel"), 360, 600));
+    const reclamp = () => {
+      const cs = fabSize();
+      setFabPos((p) => (p ? clampToView(p.x, p.y, cs.w, cs.h) : p));
+      setPanelPos((p) => (p ? clampToView(p.x, p.y, 360, 600) : p));
+    };
+    window.addEventListener("resize", reclamp);
     const mq = window.matchMedia("(min-width: 768px)");
     const sync = () => setIsDesktop(mq.matches);
     sync();
     mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
+    return () => { window.removeEventListener("resize", reclamp); mq.removeEventListener("change", sync); };
   }, []);
 
-  const clampToView = (x: number, y: number, w: number, h: number) => ({
-    x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - w - 8)),
-    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - h - 8)),
-  });
   const beginDrag = (e: ReactPointerEvent, el: HTMLElement | null, setter: (p: { x: number; y: number }) => void, key: string) => {
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -176,8 +198,11 @@ export default function HiCarAIChat() {
     const d = dragRef.current;
     if (!d) return;
     // Treat as a drag (not a click) only past a 5px dead-zone from the start —
-    // tolerates finger jitter so a plain tap still opens the chat.
-    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) movedRef.current = true;
+    // tolerates finger jitter so a plain tap still opens the chat. Inside the
+    // dead-zone nothing moves or persists: a tap must never trade the
+    // responsive bottom/right anchor for a stale absolute pixel position.
+    if (!movedRef.current && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) <= 5) return;
+    movedRef.current = true;
     const p = clampToView(e.clientX - d.dx, e.clientY - d.dy, d.w, d.h);
     lastPosRef.current = p;
     d.setter(p);
@@ -428,6 +453,7 @@ export default function HiCarAIChat() {
   if (!isOpen || isMinimized) {
     return (
       <button
+        ref={fabRef}
         // Click opens — unless the pointer was dragged (reposition), in which
         // case we swallow the click so a drag never accidentally opens chat.
         onClick={() => { if (movedRef.current) { movedRef.current = false; return; } setIsOpen(true); setIsMinimized(false); }}
