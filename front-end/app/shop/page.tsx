@@ -38,8 +38,8 @@
  *     the fold when there were 30+ categories).
  */
 
-import { useEffect, useMemo, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import BuyerShell from "@/app/components/BuyerShell";
 import ProductCard from "@/app/components/ProductCard";
@@ -92,6 +92,39 @@ const DEFAULTS: ShopFilters = {
   vehicleOnly: false,
 };
 
+/** Serialize NON-DEFAULT filters into a canonical query string. Fixed key
+ *  order makes string comparison deterministic, which is what breaks the
+ *  two-way URL-sync update loop below. */
+const filtersToQuery = (f: ShopFilters): string => {
+  const usp = new URLSearchParams();
+  if (f.cat !== "all")      usp.set("cat", f.cat);
+  if (f.q)                  usp.set("q", f.q);
+  if (f.sort !== "default") usp.set("sort", f.sort);
+  if (f.source !== "all")   usp.set("source", f.source);
+  if (f.brand)              usp.set("brand", f.brand);
+  if (f.priceMin)           usp.set("priceMin", f.priceMin);
+  if (f.priceMax)           usp.set("priceMax", f.priceMax);
+  if (f.minRating > 0)      usp.set("minRating", String(f.minRating));
+  if (f.inStock)            usp.set("inStock", "1");
+  if (f.vehicleOnly)        usp.set("vehicle", "1");
+  return usp.toString();
+};
+
+/** Parse a URL into a FULL filter state — missing params mean defaults. */
+const queryToFilters = (params: { get(name: string): string | null }): ShopFilters => ({
+  ...DEFAULTS,
+  cat:        params.get("cat") || "all",
+  q:          params.get("q") || "",
+  sort:       params.get("sort") || "default",
+  source:     params.get("source") || "all",
+  brand:      params.get("brand") || "",
+  priceMin:   params.get("priceMin") || "",
+  priceMax:   params.get("priceMax") || "",
+  minRating:  Math.max(0, Math.min(5, Number(params.get("minRating")) || 0)),
+  inStock:    params.get("inStock") === "1",
+  vehicleOnly: params.get("vehicle") === "1",
+});
+
 const SORT_OPTIONS = [
   { id: "default",    label: "Шинэ нь түрүүнд" },
   { id: "price_asc",  label: "Үнэ: бага → их" },
@@ -112,12 +145,9 @@ const SOURCE_OPTIONS = [
 
 function ShopInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const t = useT();
-  const [filters, setFilters] = useState<ShopFilters>(() => ({
-    ...DEFAULTS,
-    cat: params.get("cat") || "all",
-    q:   params.get("q")   || "",
-  }));
+  const [filters, setFilters] = useState<ShopFilters>(() => queryToFilters(params));
   const [items,   setItems]   = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -129,6 +159,32 @@ function ShopInner() {
     const t = setTimeout(() => setDebouncedQ(filters.q), 250);
     return () => clearTimeout(t);
   }, [filters.q]);
+
+  // ── Two-way URL sync ─────────────────────────────────────────────
+  // Filters serialize into the URL via router.replace (no history spam),
+  // so the state is shareable AND clearing a chip REALLY clears it.
+  // Previously ?cat=... was read on mount but never written back —
+  // navigating away and coming back kept resurrecting a cleared filter.
+  useEffect(() => {
+    const want = filtersToQuery(filters);
+    if (want !== params.toString()) {
+      router.replace(want ? `/shop?${want}` : "/shop", { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  // Back/forward navigation (or an external /shop?... link) → adopt the
+  // URL's filters. Canonical-string comparison breaks the update loop:
+  // our own replace above lands here as a no-op.
+  const filtersRef = useRef(filters);
+  useEffect(() => { filtersRef.current = filters; }, [filters]);
+  useEffect(() => {
+    if (params.toString() !== filtersToQuery(filtersRef.current)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFilters(queryToFilters(params));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   // Phase AF: dynamic category list. The hook is module-cached so all
   // shop visits share one fetch. Prepend "Бүгд" so the "all" filter
@@ -254,7 +310,7 @@ function ShopInner() {
     if (filters.inStock)  chips.push({ key: "inStock",  label: "Нөөцөнд", clear: () => update({ inStock: false }) });
     if (filters.q)        chips.push({ key: "q",        label: `"${filters.q}"`, clear: () => update({ q: "" }) });
     return chips;
-  }, [filters]);
+  }, [filters, categories, activeVehicle]);
 
   const resetAll = () => setFilters({ ...DEFAULTS });
 
