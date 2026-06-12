@@ -21,10 +21,45 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useCategories } from "@/app/lib/useCategories";
+import * as XLSX from "xlsx";
 import {
   Upload, FileSpreadsheet, ScanLine, ArrowLeft, ArrowRight, Loader2,
   CheckCircle2, AlertTriangle, Trash2, Plus, X, Sparkles, Info, ChevronDown,
+  Download,
 } from "lucide-react";
+
+/**
+ * B2B import template (TecDoc-style 32-column standard).
+ * Columns 1-18 required, 19-24 conditional, 25-32 optional — the backend
+ * header mapper (sellerImport.controller.js) recognises every one of
+ * these plus their Mongolian aliases, so a partially-filled sheet works.
+ */
+const B2B_TEMPLATE_HEADERS = [
+  "SKU", "Brand", "MPN", "GTIN", "Category", "Condition",
+  "Make", "Model", "Generation", "Year_From", "Year_To",
+  "Engine_Code", "Transmission", "Drive_Type",
+  "Price_MNT", "Qty", "Image_URL", "Short_Title",
+  "OE_Part_Number", "Warranty_Months", "Weight_KG", "Dimensions_CM",
+  "Hazardous", "Country_Of_Origin",
+  "MOQ", "Lead_Time_Days", "Gallery_URLs", "Datasheet_URL",
+  "Install_Guide_URL", "Long_Description", "Tags", "Certifications",
+];
+const B2B_TEMPLATE_SAMPLE = [
+  "BOSCH-001234", "BOSCH", "0986423", "4012345678901", "Brake_Pad", "New",
+  "Toyota", "Corolla", "E210", "2018", "9999",
+  "1.8L 2ZR-FAE", "CVT", "FWD",
+  "125000", "50", "https://example.com/main.jpg", "BOSCH тоормосны наклад Corolla E210",
+  "04465-02220", "12", "0.5", "50x30x20",
+  "FALSE", "Germany",
+  "1", "3", "https://example.com/2.jpg,https://example.com/3.jpg", "https://example.com/datasheet.pdf",
+  "https://example.com/install.pdf", "Toyota Corolla E210-д зориулсан өндөр чанарын тоормосны наклад", "тоормос,наклад,toyota,corolla", "ISO,TUV",
+];
+const downloadB2BTemplate = () => {
+  const ws = XLSX.utils.aoa_to_sheet([B2B_TEMPLATE_HEADERS, B2B_TEMPLATE_SAMPLE]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Products");
+  XLSX.writeFile(wb, "hicar-b2b-template.xlsx");
+};
 
 // ── Types ────────────────────────────────────────────────────────────
 interface RawRow {
@@ -340,9 +375,15 @@ export default function ImportWizardPage() {
             Excel/CSV эсвэл зургаар оруулж, AI-аар цэвэрлэгдсэн бараагаа dataset-руу нэгтгэнэ
           </p>
         </div>
-        <Link href="/seller/products" className="text-[12px] text-blue-600 hover:underline">
-          ← Бараа жагсаалт руу буцах
-        </Link>
+        <div className="flex items-center gap-3">
+          <button onClick={downloadB2BTemplate}
+            className="inline-flex items-center gap-1.5 border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-emerald-700 rounded-lg px-3 py-2 text-[12px] font-semibold cursor-pointer bg-white transition-all font-sans">
+            <Download size={13} /> B2B загвар татах (32 багана)
+          </button>
+          <Link href="/seller/products" className="text-[12px] text-blue-600 hover:underline">
+            ← Бараа жагсаалт руу буцах
+          </Link>
+        </div>
       </header>
 
       {/* Stepper */}

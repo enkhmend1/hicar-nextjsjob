@@ -32,6 +32,7 @@ import { Product } from "@/app/types";
 import {
   ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package,
   Store, ChevronRight, Star as StarIcon, Minus, Plus, Tag, Info,
+  FileText, Wrench, BadgeCheck,
 } from "lucide-react";
 import Link from "next/link";
 import Breadcrumbs from "@/app/components/Breadcrumbs";
@@ -302,6 +303,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     {p.oem}
                   </span>
                 )}
+                {p.condition && p.condition !== "new" && (
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-gray-100 text-gray-700 border-gray-200">
+                    {p.condition === "used" ? "Хуучин" : "Сэргээсэн"}
+                  </span>
+                )}
+                {(p.warrantyMonths ?? 0) > 0 && (
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-100">
+                    {p.warrantyMonths} сарын баталгаа
+                  </span>
+                )}
               </div>
 
               {/* Title + brand */}
@@ -393,7 +404,72 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                   </div>
                 )}
+                {p.mpn && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">MPN</div>
+                    <div className="text-[13px] font-mono text-gray-800 break-all">{p.mpn}</div>
+                  </div>
+                )}
+                {p.gtin && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">GTIN / Баркод</div>
+                    <div className="text-[13px] font-mono text-gray-800">{p.gtin}</div>
+                  </div>
+                )}
+                {(p.moq ?? 1) > 1 && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Доод захиалга (MOQ)</div>
+                    <div className="text-[13px] font-semibold text-gray-800">{p.moq} ширхэг</div>
+                  </div>
+                )}
+                {(p.leadTimeDays ?? 0) > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Татан авах хугацаа</div>
+                    <div className="text-[13px] text-gray-800">{p.leadTimeDays} хоног</div>
+                  </div>
+                )}
+                {(p.weightKg ?? 0) > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Жин</div>
+                    <div className="text-[13px] text-gray-800">{p.weightKg} кг</div>
+                  </div>
+                )}
+                {p.dimensionsCm && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Хэмжээ (см)</div>
+                    <div className="text-[13px] text-gray-800">{p.dimensionsCm}</div>
+                  </div>
+                )}
+                {p.countryOfOrigin && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Гарал үүсэл</div>
+                    <div className="text-[13px] text-gray-800">{p.countryOfOrigin}</div>
+                  </div>
+                )}
               </div>
+
+              {/* B2B documents + certifications */}
+              {(p.datasheetUrl || p.installGuideUrl || (p.certifications?.length ?? 0) > 0) && (
+                <div className="mb-5 flex flex-wrap items-center gap-2">
+                  {p.datasheetUrl && (
+                    <a href={p.datasheetUrl} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors">
+                      <FileText size={12} /> Техник үзүүлэлт (PDF)
+                    </a>
+                  )}
+                  {p.installGuideUrl && (
+                    <a href={p.installGuideUrl} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors">
+                      <Wrench size={12} /> Суурилуулах заавар
+                    </a>
+                  )}
+                  {(p.certifications ?? []).map((c) => (
+                    <span key={c} className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">
+                      <BadgeCheck size={11} /> {c}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Compatible vehicles — horizontal scroll-x for long lists */}
               {(p.compatible?.length ?? 0) > 0 && (
