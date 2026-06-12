@@ -37,34 +37,83 @@ const num = (v, dflt = 0) => {
   return Number.isFinite(n) ? n : dflt;
 };
 
-const enrichedToProductDoc = (e, sellerId) => ({
-  seller:      sellerId,
-  status:      "pending",
-  name:        e.display_name_mn || e.raw_name || "Unnamed",
-  oem:         e.cleaned_oem_code || "",
-  price:       num(e.price),
-  category:    (e.standard_category || "other").toLowerCase(),
-  brand:       e.brand || "",
-  source:      "local",
-  stockQty:    num(e.stock, 0),
-  inStock:     num(e.stock, 0) > 0,
-  warehouseLocation: String(e.location || "").trim().slice(0, 60),
-  description: [
-    e.display_name_en ? `EN: ${e.display_name_en}` : null,
-    e.condition_grade ? `Grade: ${e.condition_grade}` : null,
-    e.location ? `Location: ${e.location}` : null,
-  ].filter(Boolean).join("\n"),
-  tags: [
-    e.standard_category,
-    e.condition_grade?.toLowerCase().replace(/\s+/g, "_"),
-    ...(e.compatible_vehicles || []).slice(0, 5).map((v) =>
-      [v.make, v.model, v.chassis].filter(Boolean).join(" ").toLowerCase()
-    ),
-  ].filter(Boolean),
-  compatible: (e.compatible_vehicles || []).map((v) =>
-    [v.make, v.model, v.chassis, v.engine, v.years].filter(Boolean).join(" ")
-  ),
-});
+const httpsUrl = (u) => /^https:\/\/\S+$/i.test(String(u || "").trim()) ? String(u).trim() : "";
+const CONDITIONS = { new: "new", "шинэ": "new", used: "used", "хуучин": "used", refurbished: "refurbished", "сэргээсэн": "refurbished" };
+
+const enrichedToProductDoc = (e, sellerId) => {
+  const b = e.b2b || {};
+
+  // Images: Image_URL first, then up to 10 Gallery_URLs — https only.
+  const images = [httpsUrl(b.imageUrl), ...String(b.galleryUrls || "").split(",").map(httpsUrl)]
+    .filter(Boolean).slice(0, 10);
+
+  // Structured fitment from the sheet's vehicle columns (one per row).
+  const fitments = b.make && b.model ? [{
+    make: b.make.slice(0, 60),
+    model: b.model.slice(0, 60),
+    generation: (b.generation || "").slice(0, 40),
+    ...(b.yearFrom ? { yearStart: b.yearFrom } : {}),
+    // 9999 = "current" per the B2B spec → leave yearEnd open.
+    ...(b.yearTo && b.yearTo < 9999 ? { yearEnd: b.yearTo } : {}),
+    engineCode: (b.engineCode || "").slice(0, 60),
+    transmission: (b.transmission || "").slice(0, 40),
+    driveType: (b.driveType || "").slice(0, 20),
+  }] : [];
+
+  const sheetTags = String(b.tags || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const certifications = String(b.certifications || "").split(",").map((t) => t.trim()).filter(Boolean).slice(0, 10);
+
+  return {
+    seller:      sellerId,
+    status:      "pending",
+    name:        e.display_name_mn || e.raw_name || "Unnamed",
+    oem:         e.cleaned_oem_code || "",
+    price:       num(e.price),
+    category:    (b.category || e.standard_category || "other").toLowerCase().replace(/_/g, " ").trim(),
+    brand:       e.brand || "",
+    source:      "local",
+    stockQty:    num(e.stock, 0),
+    inStock:     num(e.stock, 0) > 0,
+    warehouseLocation: String(e.location || "").trim().slice(0, 60),
+    description: b.longDescription || [
+      e.display_name_en ? `EN: ${e.display_name_en}` : null,
+      e.condition_grade ? `Grade: ${e.condition_grade}` : null,
+      e.location ? `Location: ${e.location}` : null,
+    ].filter(Boolean).join("\n"),
+    tags: [...new Set([
+      ...sheetTags,
+      e.standard_category,
+      e.condition_grade?.toLowerCase().replace(/\s+/g, "_"),
+      ...(e.compatible_vehicles || []).slice(0, 5).map((v) =>
+        [v.make, v.model, v.chassis].filter(Boolean).join(" ").toLowerCase()
+      ),
+    ].filter(Boolean))],
+    compatible: [
+      ...fitments.map((f) => [f.make, f.model, f.generation,
+        f.yearStart ? `${f.yearStart}-${f.yearEnd || "одоог хүртэл"}` : ""].filter(Boolean).join(" ")),
+      ...(e.compatible_vehicles || []).map((v) =>
+        [v.make, v.model, v.chassis, v.engine, v.years].filter(Boolean).join(" ")
+      ),
+    ],
+    ...(images.length ? { images } : {}),
+    ...(fitments.length ? { fitments } : {}),
+    // ── B2B standard fields — all optional, defaults stay harmless. ──
+    sku:  b.sku || "",
+    mpn:  b.mpn || "",
+    gtin: b.gtin || "",
+    condition: CONDITIONS[b.condition] || "new",
+    warrantyMonths:  Math.min(120, num(b.warrantyMonths, 0)),
+    weightKg:        num(b.weightKg, 0),
+    dimensionsCm:    b.dimensionsCm || "",
+    hazardous:       !!b.hazardous,
+    countryOfOrigin: b.countryOfOrigin || "",
+    moq:             Math.max(1, num(b.moq, 1)),
+    leadTimeDays:    Math.min(365, num(b.leadTimeDays, 0)),
+    datasheetUrl:    httpsUrl(b.datasheetUrl),
+    installGuideUrl: httpsUrl(b.installGuideUrl),
+    certifications,
+  };
+};
 
 // ── 1. Single-row enrich ──────────────────────────────────────────────
 export const enrichOne = async (req, res) => {
@@ -113,16 +162,51 @@ export const parseUploadedFile = [
       // Header heuristic — accept Mongolian or English headers. Matching is
       // space/punctuation-insensitive (see normalizeHeader) so "OEM код",
       // "OEM_Code", "Part No." and "part-number" all resolve to the same key.
+      // B2B standard (TecDoc-style, 32 columns) + legacy Mongolian sheets.
+      // NOTE: "Brand" = PARTS brand; "Make" = VEHICLE make (split per the
+      // B2B spec — old sheets that used Make to mean brand must rename).
       const HEADER_MAP = {
-        name:       ["raw_name", "name", "title", "product", "нэр", "барааны нэр", "бараа", "бүтээгдэхүүн"],
+        name:       ["raw_name", "name", "title", "product", "short title", "нэр", "барааны нэр", "бараа", "бүтээгдэхүүн", "богино нэр"],
         input_code: ["input_code", "oem", "oem code", "oem код", "oem no", "oem дугаар",
+                     "oe part number", "oe код", "oe number",
                      "code", "код", "part number", "part no", "partnumber",
                      "дугаар", "сэлбэгийн код", "каталог", "catalog"],
-        brand:      ["brand", "брэнд", "make", "марк", "үйлдвэрлэгч"],
-        price:      ["price", "unit price", "үнэ", "нэгж үнэ", "зарах үнэ", "борлуулах үнэ"],
+        brand:      ["brand", "брэнд", "марк", "үйлдвэрлэгч"],
+        price:      ["price", "price mnt", "unit price", "үнэ", "үнэ mnt", "нэгж үнэ", "зарах үнэ", "борлуулах үнэ"],
         stock:      ["stock", "qty", "quantity", "ширхэг", "үлдэгдэл", "тоо ширхэг", "тоо хэмжээ", "нөөц"],
         location:   ["location", "warehouse", "branch", "байршил", "салбар", "агуулах",
                      "хаяг", "тавиур", "тавцан", "склад"],
+        // ── B2B identity ──
+        sku:          ["sku", "артикул", "ску"],
+        mpn:          ["mpn", "manufacturer part number", "үйлдвэрлэгчийн код"],
+        gtin:         ["gtin", "ean", "upc", "barcode", "баркод", "зураасан код"],
+        category:     ["category", "ангилал"],
+        condition:    ["condition", "төлөв", "барааны төлөв", "байдал"],
+        // ── Vehicle fitment (one row = one fitment) ──
+        make:         ["make", "авто брэнд", "автоны брэнд", "машины брэнд", "машин"],
+        vmodel:       ["model", "загвар", "автоны модель", "модель"],
+        generation:   ["generation", "body code", "generation body code", "боди код", "арал"],
+        year_from:    ["year from", "эхлэх жил", "жил эхлэл"],
+        year_to:      ["year to", "дуусах жил", "жил төгсгөл"],
+        engine_code:  ["engine code", "хөдөлгүүрийн код", "хөдөлгүүр", "имгэний код"],
+        transmission: ["transmission", "хурдны хайрцаг", "кроп"],
+        drive_type:   ["drive type", "хөтлөгч", "хөтлөгчийн төрөл"],
+        // ── Media ──
+        image_url:    ["image url", "image", "зураг", "зургийн url", "үндсэн зураг"],
+        gallery_urls: ["gallery urls", "gallery", "images", "зургууд"],
+        // ── Logistics / commerce ──
+        warranty:     ["warranty months", "warranty", "баталгаа", "баталгаат хугацаа"],
+        weight_kg:    ["weight kg", "weight", "жин"],
+        dimensions:   ["dimensions cm", "dimensions", "хэмжээ", "овор хэмжээ"],
+        hazardous:    ["hazardous", "хортой", "аюултай"],
+        country:      ["country of origin", "origin", "үүсэлт улс", "гарал үүсэл", "улс"],
+        moq:          ["moq", "minimum order quantity", "доод захиалга"],
+        lead_time:    ["lead time days", "lead time", "захиалга ирэх хугацаа", "татан авах хоног"],
+        datasheet:    ["datasheet url", "datasheet", "техник үзүүлэлт"],
+        install_url:  ["install guide url", "installation guide", "суурилуулах заавар"],
+        long_desc:    ["long description", "description", "тайлбар", "дэлгэрэнгүй", "дэлгэрэнгүй тайлбар"],
+        tags_col:     ["tags", "keywords", "түлхүүр үг", "түлхүүр үгс"],
+        certs:        ["certifications", "сертификат", "гэрчилгээ"],
       };
       // Collapse whitespace + separators so spelling/format variations of the
       // same header all normalize to one lookup key.
@@ -141,6 +225,8 @@ export const parseUploadedFile = [
           const k = headerKey(origKey);
           if (k) mapped[k] = val;
         }
+        // Truthy TRUE/Yes/1 → boolean (Hazardous column).
+        const bool = (v) => /^(true|yes|1|тийм)$/i.test(String(v ?? "").trim());
         return {
           raw_name:   mapped.name || "",
           input_code: mapped.input_code || "",
@@ -148,6 +234,38 @@ export const parseUploadedFile = [
           price:      num(mapped.price),
           stock:      num(mapped.stock, 0),
           location:   mapped.location || "",
+          // B2B columns ride along untouched through enrich → commit.
+          // enrichBulk spreads the source row into its output, so this
+          // bag survives the AI step verbatim.
+          b2b: {
+            sku:          String(mapped.sku || "").trim().slice(0, 50),
+            mpn:          String(mapped.mpn || "").trim().slice(0, 60),
+            gtin:         String(mapped.gtin || "").replace(/\D/g, "").slice(0, 14),
+            category:     String(mapped.category || "").trim(),
+            condition:    String(mapped.condition || "").trim().toLowerCase(),
+            make:         String(mapped.make || "").trim(),
+            model:        String(mapped.vmodel || "").trim(),
+            generation:   String(mapped.generation || "").trim(),
+            yearFrom:     num(mapped.year_from, 0) || undefined,
+            yearTo:       num(mapped.year_to, 0) || undefined,
+            engineCode:   String(mapped.engine_code || "").trim(),
+            transmission: String(mapped.transmission || "").trim(),
+            driveType:    String(mapped.drive_type || "").trim(),
+            imageUrl:     String(mapped.image_url || "").trim(),
+            galleryUrls:  String(mapped.gallery_urls || "").trim(),
+            warrantyMonths: num(mapped.warranty, 0),
+            weightKg:     num(mapped.weight_kg, 0),
+            dimensionsCm: String(mapped.dimensions || "").trim().slice(0, 40),
+            hazardous:    bool(mapped.hazardous),
+            countryOfOrigin: String(mapped.country || "").trim().slice(0, 60),
+            moq:          Math.max(1, num(mapped.moq, 1)),
+            leadTimeDays: num(mapped.lead_time, 0),
+            datasheetUrl: String(mapped.datasheet || "").trim().slice(0, 500),
+            installGuideUrl: String(mapped.install_url || "").trim().slice(0, 500),
+            longDescription: String(mapped.long_desc || "").trim().slice(0, 4000),
+            tags:         String(mapped.tags_col || "").trim(),
+            certifications: String(mapped.certs || "").trim(),
+          },
         };
       }).filter((r) => r.raw_name || r.input_code);
 
@@ -183,10 +301,11 @@ export const commitHandler = async (req, res) => {
           throw new Error("Нэр / үнэ буруу");
         }
 
-        // Same-seller dedupe by OEM
-        const existing = doc.oem
-          ? await Product.findOne({ seller: req.user._id, oem: doc.oem })
-          : null;
+        // Same-seller dedupe — SKU is the seller's own unique key (B2B
+        // spec col 1) and beats OEM, which many listings share.
+        const existing =
+          (doc.sku ? await Product.findOne({ seller: req.user._id, sku: doc.sku }) : null)
+          || (doc.oem ? await Product.findOne({ seller: req.user._id, oem: doc.oem }) : null);
 
         if (existing) {
           if (onDuplicate === "skip") { skipped++; continue; }
@@ -197,6 +316,13 @@ export const commitHandler = async (req, res) => {
           existing.description = doc.description;
           existing.tags        = doc.tags;
           existing.compatible  = doc.compatible;
+          for (const k of ["sku", "mpn", "gtin", "condition", "warrantyMonths", "weightKg",
+            "dimensionsCm", "hazardous", "countryOfOrigin", "moq", "leadTimeDays",
+            "datasheetUrl", "installGuideUrl", "certifications"]) {
+            if (doc[k] !== undefined) existing[k] = doc[k];
+          }
+          if (doc.images?.length)   existing.images   = doc.images;
+          if (doc.fitments?.length) existing.fitments = doc.fitments;
           await existing.save();
           updated++;
           continue;

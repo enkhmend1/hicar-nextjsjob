@@ -64,6 +64,37 @@ export interface Product {
   images?: string[];
   rating?: number;
   ratingCount?: number;
+  /** Structured seller-editable vehicle compatibility rows. */
+  fitments?: {
+    make: string;
+    model: string;
+    generation?: string;
+    yearStart?: number;
+    yearEnd?: number;
+    engineCode?: string;
+    transmission?: string;
+    driveType?: string;
+  }[];
+  // ── B2B catalogue standard (all optional — bulk-import populates) ──
+  /** Seller's own unique article code (unique per seller). */
+  sku?: string;
+  /** Manufacturer part number (aftermarket maker's own code). */
+  mpn?: string;
+  /** International barcode: GTIN-8/12/13/14, digits only. */
+  gtin?: string;
+  condition?: "new" | "used" | "refurbished";
+  warrantyMonths?: number;
+  weightKg?: number;
+  /** "LxWxH" in cm, e.g. "50x30x20". */
+  dimensionsCm?: string;
+  hazardous?: boolean;
+  countryOfOrigin?: string;
+  /** Minimum order quantity. */
+  moq?: number;
+  leadTimeDays?: number;
+  datasheetUrl?: string;
+  installGuideUrl?: string;
+  certifications?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

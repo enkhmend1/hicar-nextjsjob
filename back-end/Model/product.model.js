@@ -121,6 +121,10 @@ const productSchema = new mongoose.Schema(
         generation: { type: String, default: "", trim: true, maxlength: 40 },
         yearStart:  { type: Number, min: 1950, max: 2100 },
         yearEnd:    { type: Number, min: 1950, max: 2100 },
+        // B2B standard columns 12-14 — free-text, optional per row.
+        engineCode:   { type: String, default: "", trim: true, maxlength: 60 },
+        transmission: { type: String, default: "", trim: true, maxlength: 40 },
+        driveType:    { type: String, default: "", trim: true, maxlength: 20 },
       }],
       default: [],
       validate: {
@@ -128,6 +132,41 @@ const productSchema = new mongoose.Schema(
         message: "Хамгийн ихдээ 50 fitment row дэмжинэ",
       },
     },
+
+    /**
+     * B2B catalogue standard (TecDoc-style import sheet, 32 columns).
+     * ALL fields optional — small sellers can ignore them entirely; the
+     * bulk-import pipeline populates them from professional price lists.
+     *
+     *   sku   — seller's own unique article code (unique PER SELLER).
+     *   mpn   — manufacturer part number (aftermarket maker's own code);
+     *           distinct from `oem` above, which is the OE (vehicle-maker)
+     *           number the part replaces.
+     *   gtin  — international barcode (GTIN-8/12/13/14, digits only).
+     */
+    sku:  { type: String, trim: true, default: "", maxlength: 50, index: true },
+    mpn:  { type: String, trim: true, default: "", maxlength: 60, index: true },
+    gtin: {
+      type: String, trim: true, default: "",
+      validate: {
+        validator: (v) => !v || /^\d{8}$|^\d{12,14}$/.test(v),
+        message: "GTIN нь 8, 12, 13 эсвэл 14 оронтой тоо байх ёстой",
+      },
+    },
+    condition: { type: String, enum: ["new", "used", "refurbished"], default: "new" },
+    warrantyMonths:  { type: Number, default: 0, min: 0, max: 120 },
+    weightKg:        { type: Number, default: 0, min: 0 },
+    /** "LxWxH" in cm, e.g. "50x30x20" — display-only, parsed lazily if needed. */
+    dimensionsCm:    { type: String, default: "", trim: true, maxlength: 40 },
+    hazardous:       { type: Boolean, default: false },
+    countryOfOrigin: { type: String, default: "", trim: true, maxlength: 60 },
+    /** Minimum order quantity — checkout enforces qty >= moq server-side later. */
+    moq:             { type: Number, default: 1, min: 1 },
+    /** Days until an out-of-stock/backorder item can ship. 0 = in-stock only. */
+    leadTimeDays:    { type: Number, default: 0, min: 0, max: 365 },
+    datasheetUrl:    { type: String, default: "", trim: true, maxlength: 500 },
+    installGuideUrl: { type: String, default: "", trim: true, maxlength: 500 },
+    certifications:  { type: [String], default: [] },
 
     /**
      * Category-dependent dynamic attributes. The Mongoose layer stores
@@ -154,6 +193,12 @@ const productSchema = new mongoose.Schema(
 
 // Searchable text index — name + oem + brand + tags
 productSchema.index({ name: "text", oem: "text", brand: "text", tags: "text" });
+
+// SKU is unique PER SELLER — partial filter skips legacy docs with sku="".
+productSchema.index(
+  { seller: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $type: "string", $gt: "" } } },
+);
 
 // Common compound indexes for catalogue listing
 productSchema.index({ status: 1, category: 1, createdAt: -1 });
