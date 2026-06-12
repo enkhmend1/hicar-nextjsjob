@@ -83,7 +83,7 @@ function NoImagePlaceholder({ name, brand }: { name: string; brand?: string }) {
       </div>
       <div className="relative text-center px-6 max-w-[80%]">
         <div className="text-[13px] font-semibold text-gray-700 line-clamp-2">{name}</div>
-        {brand && <div className="text-[11px] text-gray-400 mt-0.5">{brand}</div>}
+        {brand && <div className="text-[11px] text-gray-500 mt-0.5">{brand}</div>}
         <div className="mt-3 inline-flex items-center gap-1 text-[10px] text-gray-400 bg-white/80 backdrop-blur border border-gray-200 px-2 py-0.5 rounded-full">
           <Package size={10} /> Зураг хараахан байхгүй
         </div>
@@ -149,7 +149,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           <p className="text-[16px] font-medium text-gray-700 mb-1">
             {fetchError === "network" ? "Холболт тасарлаа" : "Бараа олдсонгүй"}
           </p>
-          <p className="text-[13px] text-gray-400 mb-4">
+          <p className="text-[13px] text-gray-500 mb-4">
             {fetchError === "network"
               ? "Интернэт холболтоо шалгаад дахин оролдоно уу."
               : "Бараа устгагдсан эсвэл нийтлэгдээгүй байна."}
@@ -317,7 +317,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     ))}
                   </div>
                   <span className="text-[12px] text-gray-600 font-medium">{(p.rating ?? 0).toFixed(1)}</span>
-                  <span className="text-[12px] text-gray-400">({p.ratingCount})</span>
+                  <span className="text-[12px] text-gray-500">({p.ratingCount})</span>
                 </div>
               )}
 
@@ -338,7 +338,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 {p.originalPrice && p.originalPrice > p.price && (
                   <span className="text-[15px] text-gray-400 line-through">₮{p.originalPrice.toLocaleString()}</span>
                 )}
-                <span className="text-[12px] text-gray-400 ml-auto">/ ширхэг</span>
+                <span className="text-[12px] text-gray-500 ml-auto">/ ширхэг</span>
               </div>
 
               {/* Description (collapsible if very long) */}
@@ -352,19 +352,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div className="grid grid-cols-2 gap-3 mb-5">
                 {p.brand && (
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Брэнд</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Брэнд</div>
                     <div className="text-[13px] font-medium text-gray-800">{p.brand}</div>
                   </div>
                 )}
                 {p.oem && (
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">OEM код</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">OEM код</div>
                     <div className="text-[13px] font-mono text-gray-800">{p.oem}</div>
                   </div>
                 )}
                 {catName && (
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Ангилал</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Ангилал</div>
                     <div className="text-[13px] text-gray-800">{catName}</div>
                   </div>
                 )}
@@ -374,12 +374,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     back to "Эх сурвалж" only for legacy listings with no seller. */}
                 {shopName ? (
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Дэлгүүр</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Дэлгүүр</div>
                     <div className="text-[13px] font-medium text-gray-800 truncate">{shopName}</div>
                   </div>
                 ) : (
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Эх сурвалж</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Эх сурвалж</div>
                     <div className="text-[13px] text-gray-800">{src.flag} {src.label}</div>
                   </div>
                 )}
@@ -387,7 +387,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     scannable in the spec block, not just the header badge. */}
                 {stockNum !== null && (
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Үлдэгдэл</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Үлдэгдэл</div>
                     <div className={`text-[13px] font-semibold ${soldOut ? "text-red-600" : lowStock ? "text-amber-600" : "text-gray-800"}`}>
                       {soldOut ? "Дууссан" : `${stockNum} ширхэг`}
                     </div>
@@ -400,7 +400,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <div className="mb-5">
                   <div className="text-[13px] font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
                     <Shield size={13} className="text-blue-500" /> Тохирох загварууд
-                    <span className="text-[11px] text-gray-400 font-normal">({p.compatible.length})</span>
+                    <span className="text-[11px] text-gray-500 font-normal">({p.compatible.length})</span>
                   </div>
                   <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
                     {(p.compatible ?? []).map((c) => (
@@ -426,7 +426,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       <button key={d} onClick={() => setDelivery(d)}
                         className={`border-2 rounded-xl p-3 text-left cursor-pointer transition-all font-sans ${isActive ? di.active + " shadow-sm" : di.color + " hover:border-blue-300"}`}>
                         <div className={`text-[12px] font-semibold mb-0.5 ${isActive ? "text-gray-900" : "text-gray-700"}`}>{di.label}</div>
-                        <div className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={9} />{formatEta(opt.value, opt.unit)}</div>
+                        <div className="text-[11px] text-gray-500 flex items-center gap-1"><Clock size={10} />{formatEta(opt.value, opt.unit)}</div>
                         <div className={`text-[12px] font-bold mt-1.5 ${isActive ? "text-gray-900" : "text-gray-600"}`}>
                           {opt.price === 0 ? "Үнэгүй" : `+₮${opt.price.toLocaleString()}`}
                         </div>
@@ -439,7 +439,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               {/* Quantity + add-to-cart row (DESKTOP — mobile gets sticky bar below) */}
               <div className="hidden lg:flex items-end justify-between pt-5 border-t border-gray-100 gap-4">
                 <div>
-                  <div className="text-[11px] text-gray-400 mb-1">Тоо ширхэг</div>
+                  <div className="text-[11px] text-gray-500 mb-1">Тоо ширхэг</div>
                   <div className="inline-flex items-center border-2 border-gray-200 rounded-xl overflow-hidden">
                     <button onClick={() => bumpQty(-1)} disabled={qty <= 1}
                       className="w-10 h-11 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none">
@@ -460,10 +460,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 </div>
                 <div className="flex-1 text-right mr-2">
-                  <div className="text-[11px] text-gray-400 mb-0.5">Нийт үнэ (хүргэлттэй)</div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Нийт үнэ (хүргэлттэй)</div>
                   <div className="text-[26px] font-bold text-blue-600 leading-tight">₮{totalPrice.toLocaleString()}</div>
                   {qty > 1 && (
-                    <div className="text-[11px] text-gray-400">{qty} × ₮{p.price.toLocaleString()} + хүргэлт</div>
+                    <div className="text-[11px] text-gray-500">{qty} × ₮{p.price.toLocaleString()} + хүргэлт</div>
                   )}
                 </div>
                 <button onClick={handleAdd} disabled={!p.inStock}
@@ -541,17 +541,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         <div className="px-4 py-3 flex items-center gap-3 max-w-2xl mx-auto">
           <div className="inline-flex items-center border-2 border-gray-200 rounded-lg overflow-hidden shrink-0">
             <button onClick={() => bumpQty(-1)} disabled={qty <= 1}
-              className="w-8 h-9 flex items-center justify-center text-gray-500 disabled:opacity-30 cursor-pointer bg-transparent border-none">
-              <Minus size={12} />
+              className="w-9 h-10 flex items-center justify-center text-gray-600 disabled:opacity-30 cursor-pointer bg-transparent border-none">
+              <Minus size={13} />
             </button>
             <span className="w-7 text-center text-[13px] font-semibold text-gray-900">{qty}</span>
             <button onClick={() => bumpQty(1)} disabled={qty >= stockCap}
-              className="w-8 h-9 flex items-center justify-center text-gray-500 disabled:opacity-30 cursor-pointer bg-transparent border-none">
-              <Plus size={12} />
+              className="w-9 h-10 flex items-center justify-center text-gray-600 disabled:opacity-30 cursor-pointer bg-transparent border-none">
+              <Plus size={13} />
             </button>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] text-gray-400">Нийт</div>
+            <div className="text-[11px] text-gray-500">Нийт</div>
             <div className="text-[16px] font-bold text-blue-600 leading-tight">₮{totalPrice.toLocaleString()}</div>
           </div>
           <button onClick={handleAdd} disabled={!p.inStock}

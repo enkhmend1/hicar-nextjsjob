@@ -241,7 +241,7 @@ function Field({
 }
 
 const inputCls = (invalid: boolean, extra = "") =>
-  `w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[14px] focus:bg-white outline-none transition-colors ${
+  `w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[16px] md:text-[14px] focus:bg-white outline-none transition-colors ${
     invalid
       ? "border-red-300 focus:border-red-500"
       : "border-gray-200 focus:border-blue-500"

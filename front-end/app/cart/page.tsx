@@ -188,7 +188,7 @@ export default function CartPage() {
         <div className="flex items-baseline justify-between mb-5">
           <h1 className="text-[20px] font-semibold text-gray-900">
             Миний сагс
-            <span className="text-[14px] text-gray-400 font-normal ml-2">
+            <span className="text-[14px] text-gray-500 font-normal ml-2">
               {items.length} бараа · {sellerCount} зарагч
             </span>
           </h1>
@@ -221,7 +221,7 @@ export default function CartPage() {
           <h3 className="text-[14px] font-semibold text-gray-900 mb-3 flex items-center justify-between">
             <span>Захиалгын дүн</span>
             {sellerCount > 1 && (
-              <span className="text-[11px] text-gray-400 font-normal">{sellerCount} зарагчид хуваагдана</span>
+              <span className="text-[11px] text-gray-500 font-normal">{sellerCount} зарагчид хуваагдана</span>
             )}
           </h3>
           <div className="space-y-2 mb-4">
@@ -249,7 +249,7 @@ export default function CartPage() {
             className="flex items-center justify-center gap-2 w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3.5 text-[15px] font-semibold transition-colors shadow-lg shadow-blue-200">
             Захиалга үргэлжлүүлэх <ArrowRight size={16} />
           </Link>
-          <Link href="/shop" className="block text-center text-[13px] text-gray-400 hover:text-blue-700 mt-3 transition-colors">
+          <Link href="/shop" className="block text-center text-[13px] text-gray-500 hover:text-blue-700 mt-3 transition-colors">
             ← Сэлбэгүүд рүү буцах
           </Link>
         </div>
@@ -288,7 +288,7 @@ function SellerGroupCard({ group, onRemove, onQty, onDelivery }: SellerGroupProp
             </div>
             <div className="text-[14px] font-semibold text-gray-900 truncate leading-tight">
               {group.shopName}
-              <span className="text-[11px] text-gray-400 font-normal ml-1.5">
+              <span className="text-[11px] text-gray-500 font-normal ml-1.5">
                 ({group.items.length} бараа)
               </span>
             </div>
@@ -365,14 +365,14 @@ function CartItemRow({ item, onRemove, onQty, onDelivery }: RowProps) {
             {item.product.name || "Нэргүй бараа"}
           </div>
           {item.product.oem && (
-            <div className="text-[11px] text-gray-400 font-mono mt-0.5">{item.product.oem}</div>
+            <div className="text-[11px] text-gray-500 font-mono mt-0.5">{item.product.oem}</div>
           )}
           <div className="text-[15px] font-bold text-amber-700 mt-1">
             ₮{(item.product.price ?? 0).toLocaleString()}
           </div>
         </div>
         <button onClick={() => onRemove(id)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors cursor-pointer bg-transparent border-none shrink-0">
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer bg-transparent border-none shrink-0">
           <Trash2 size={15} />
         </button>
       </div>
@@ -384,22 +384,22 @@ function CartItemRow({ item, onRemove, onQty, onDelivery }: RowProps) {
               className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer border-2 transition-all font-sans ${
                 item.deliveryType === d
                   ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-200 text-gray-400 hover:border-blue-300"
+                  : "border-gray-200 text-gray-600 hover:border-blue-300"
               }`}>
               {DEL_LABELS[d]}
-              <span className="ml-1 opacity-60">{compactDeliveryPrice(opts[d].price)}</span>
+              <span className="ml-1 opacity-80">{compactDeliveryPrice(opts[d].price)}</span>
             </button>
           ))}
         </div>
 
         <div className="flex items-center gap-0 border-2 border-gray-200 rounded-xl overflow-hidden">
           <button onClick={() => onQty(id, item.quantity - 1)}
-            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors">
+            className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors">
             <Minus size={13} />
           </button>
           <span className="text-[14px] font-semibold text-gray-900 w-8 text-center">{item.quantity}</span>
           <button onClick={() => onQty(id, item.quantity + 1)}
-            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors">
+            className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border-none transition-colors">
             <Plus size={13} />
           </button>
         </div>

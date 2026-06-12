@@ -284,7 +284,7 @@ function ShopInner() {
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input value={filters.q}
               onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
-              className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-[14px] focus:border-blue-500 outline-none shadow-sm"
+              className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-[16px] md:text-[14px] focus:border-blue-500 outline-none shadow-sm"
               placeholder="Сэлбэг хайх... (нэр, OEM, брэнд)" />
           </div>
           <div className="flex gap-2">
@@ -300,7 +300,7 @@ function ShopInner() {
             <div className="relative">
               <select value={filters.sort}
                 onChange={(e) => setFilters((p) => ({ ...p, sort: e.target.value }))}
-                className="appearance-none bg-white border border-gray-200 rounded-xl pl-3 pr-8 py-2.5 text-[13px] text-gray-700 cursor-pointer focus:border-blue-500 font-sans shadow-sm">
+                className="appearance-none bg-white border border-gray-200 rounded-xl pl-3 pr-8 py-2.5 text-[16px] md:text-[13px] text-gray-700 cursor-pointer focus:border-blue-500 font-sans shadow-sm">
                 {SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
               <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -348,8 +348,8 @@ function ShopInner() {
                     <SlidersHorizontal size={14} /> Шүүлт
                   </h3>
                   <button onClick={() => setMobileFiltersOpen(false)}
-                    className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 cursor-pointer bg-transparent border-none">
-                    <X size={15} />
+                    className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer bg-transparent border-none">
+                    <X size={17} />
                   </button>
                 </div>
                 {FilterPanel}
@@ -379,7 +379,7 @@ function ShopInner() {
               <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
                 <Package2 size={36} className="text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
                 <p className="text-[15px] font-medium text-gray-700 mb-1">Илэрц олдсонгүй</p>
-                <p className="text-[13px] text-gray-400 mb-4">Шүүлтийн утгаа арилгаж эсвэл өөр түлхүүр үг туршаад үзнэ үү</p>
+                <p className="text-[13px] text-gray-500 mb-4">Шүүлтийн утгаа арилгаж эсвэл өөр түлхүүр үг туршаад үзнэ үү</p>
                 {activeChips.length > 0 && (
                   <button onClick={resetAll}
                     className="inline-flex items-center gap-1.5 text-[13px] text-blue-700 hover:text-blue-800 font-medium cursor-pointer bg-transparent border-none font-sans">
@@ -451,7 +451,7 @@ function FilterContent({
             <div className="text-[12px] text-gray-700 font-medium">
               Машинаа сонгох
             </div>
-            <div className="text-[10px] text-gray-400 mt-0.5">
+            <div className="text-[11px] text-gray-500 mt-0.5">
               Plate дугаараар хайх →
             </div>
           </Link>
@@ -468,7 +468,7 @@ function FilterContent({
                 <div className="text-[12px] font-semibold text-gray-900 truncate">
                   {activeVehicle.manufacturer} {activeVehicle.model}
                   {activeVehicle.generation && (
-                    <span className="text-gray-400 font-normal"> · {activeVehicle.generation}</span>
+                    <span className="text-gray-500 font-normal"> · {activeVehicle.generation}</span>
                   )}
                 </div>
                 <div className="text-[10px] text-gray-500 font-mono">{activeVehicle.plate}</div>
@@ -527,7 +527,7 @@ function FilterContent({
                 <div className="flex items-center gap-0.5">
                   {subs.length > 0 ? (
                     <button onClick={() => toggleCat(m.id)} aria-label="Дэлгэх/Хумих"
-                      className="shrink-0 w-6 h-7 flex items-center justify-center text-gray-400 hover:text-blue-700 cursor-pointer bg-transparent border-none">
+                      className="shrink-0 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-blue-700 cursor-pointer bg-transparent border-none">
                       <ChevronDown size={13} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
                     </button>
                   ) : (
@@ -547,7 +547,7 @@ function FilterContent({
                       <span className="truncate">{m.name}</span>
                     </span>
                     {m.count > 0 && (
-                      <span className="shrink-0 text-[10px] text-gray-400 font-mono">{m.count}</span>
+                      <span className="shrink-0 text-[10px] text-gray-500 font-mono">{m.count}</span>
                     )}
                   </button>
                 </div>
@@ -564,7 +564,7 @@ function FilterContent({
                           }`}>
                           <span className="truncate">{s.name}</span>
                           {s.count > 0 && (
-                            <span className="shrink-0 text-[10px] text-gray-400 font-mono">{s.count}</span>
+                            <span className="shrink-0 text-[10px] text-gray-500 font-mono">{s.count}</span>
                           )}
                         </button>
                       );
@@ -582,10 +582,10 @@ function FilterContent({
         <div className="grid grid-cols-2 gap-2">
           <input type="number" min={0} placeholder="0"
             value={filters.priceMin} onChange={(e) => update({ priceMin: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] focus:border-blue-500 outline-none font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
           <input type="number" min={0} placeholder="∞"
             value={filters.priceMax} onChange={(e) => update({ priceMax: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] focus:border-blue-500 outline-none font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
         </div>
         {/* Preset chips for one-tap common ranges */}
         <div className="flex flex-wrap gap-1 mt-2">
@@ -653,7 +653,7 @@ function FilterContent({
                     : "bg-transparent text-gray-600 hover:bg-gray-50"
                 }`}>
                 <span className="text-[12px] truncate">{b.brand}</span>
-                <span className="text-[10px] text-gray-400 shrink-0">{b.count}</span>
+                <span className="text-[10px] text-gray-500 shrink-0">{b.count}</span>
               </button>
             ))}
           </div>

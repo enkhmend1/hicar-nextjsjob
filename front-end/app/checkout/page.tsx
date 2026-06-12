@@ -218,10 +218,10 @@ export default function CheckoutPage() {
         <div className="flex items-center gap-2 mb-6">
           {steps.map((s, i) => (
             <div key={s} className="flex items-center gap-2 flex-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0 ${i < stepIdx ? "bg-emerald-500 text-white" : i === stepIdx ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-400"}`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0 ${i < stepIdx ? "bg-emerald-500 text-white" : i === stepIdx ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}>
                 {i < stepIdx ? <CheckCircle size={14} /> : i + 1}
               </div>
-              <span className={`text-[12px] font-medium ${i === stepIdx ? "text-blue-600" : "text-gray-400"}`}>{s}</span>
+              <span className={`text-[12px] font-medium ${i === stepIdx ? "text-blue-600" : "text-gray-500"}`}>{s}</span>
               {i < 2 && <div className={`flex-1 h-0.5 ${i < stepIdx ? "bg-emerald-400" : "bg-gray-200"}`} />}
             </div>
           ))}
@@ -257,14 +257,14 @@ export default function CheckoutPage() {
                 <div>
                   <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Хүлээн авах хаяг</label>
                   <textarea value={address} onChange={e => { setAddress(e.target.value); setFormErrors(p => ({ ...p, address: undefined })); }}
-                    className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[14px] focus:bg-white transition-colors resize-none h-20 font-sans outline-none ${formErrors.address ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-500"}`}
+                    className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:bg-white transition-colors resize-none h-20 font-sans outline-none ${formErrors.address ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-500"}`}
                     placeholder="Дүүрэг, хороо, байр, орц, тоот..." />
                   {formErrors.address && <p className="text-[11px] text-red-500 mt-1">{formErrors.address}</p>}
                 </div>
                 <div>
                   <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Утасны дугаар</label>
                   <input type="tel" value={phone} onChange={e => { setPhone(e.target.value); setFormErrors(p => ({ ...p, phone: undefined })); }}
-                    className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[14px] focus:bg-white transition-colors outline-none ${formErrors.phone ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-500"}`}
+                    className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:bg-white transition-colors outline-none ${formErrors.phone ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-blue-500"}`}
                     placeholder="99001122" />
                   {formErrors.phone && <p className="text-[11px] text-red-500 mt-1">{formErrors.phone}</p>}
                 </div>
@@ -280,7 +280,7 @@ export default function CheckoutPage() {
         {step === "payment" && (
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <button onClick={() => setStep("info")}
-              className="flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-blue-600 mb-4 cursor-pointer bg-transparent border-none transition-colors">
+              className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-blue-600 mb-4 cursor-pointer bg-transparent border-none transition-colors">
               <ArrowLeft size={13} /> Буцах
             </button>
             <h2 className="text-[16px] font-semibold text-gray-900 mb-4">Төлбөрийн арга</h2>
@@ -312,7 +312,7 @@ export default function CheckoutPage() {
 
             {!user && (
               <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-[13px] text-amber-700">
-                <AlertCircle size={14} /> Төлбөр хийхийн тулд <Link href="/auth/login" className="underline font-semibold" style={{ textDecoration: "underline" }}>нэвтрэх</Link> шаардлагатай.
+                <AlertCircle size={14} className="shrink-0" /> Төлбөр хийхийн тулд <Link href="/auth/login" className="underline font-semibold" style={{ textDecoration: "underline" }}>нэвтрэх</Link> шаардлагатай.
               </div>
             )}
 
@@ -379,7 +379,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            <div className="text-[12px] text-gray-400 mb-4">
+            <div className="text-[12px] text-gray-500 mb-4">
               QR код хүчинтэй байх хугацаа:{" "}
               <span className={`font-bold ${qpayTimer < 60 ? "text-red-500" : "text-gray-700"}`}>{fmtTime(qpayTimer)}</span>
             </div>
@@ -399,7 +399,7 @@ export default function CheckoutPage() {
               if (pollRef.current) clearInterval(pollRef.current);
               setStep("payment");
             }}
-              className="w-full mt-2 text-[13px] text-gray-400 hover:text-blue-600 cursor-pointer bg-transparent border-none py-1.5 transition-colors">
+              className="w-full mt-2 text-[13px] text-gray-500 hover:text-blue-600 cursor-pointer bg-transparent border-none py-1.5 transition-colors">
               ← Буцах
             </button>
           </div>

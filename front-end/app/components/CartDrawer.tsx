@@ -145,7 +145,7 @@ export default function CartDrawer() {
                       : <Store size={11} className="text-blue-700" />}
                   </div>
                   <div className="text-[12px] font-medium text-gray-700 truncate flex-1">{g.shopName}</div>
-                  <span className="text-[10px] text-gray-400">{g.items.length}</span>
+                  <span className="text-[10px] text-gray-500">{g.items.length}</span>
                 </header>
 
                 {/* Items */}
@@ -173,19 +173,19 @@ export default function CartDrawer() {
                           <div className="flex items-center justify-between gap-2 mt-1.5">
                             <div className="inline-flex items-center border border-gray-200 rounded-md overflow-hidden">
                               <button onClick={() => updateQty(id, it.quantity - 1)}
-                                className="w-6 h-6 inline-flex items-center justify-center text-gray-500 hover:bg-gray-50 cursor-pointer bg-transparent border-none">
-                                <Minus size={10} />
+                                className="w-8 h-8 inline-flex items-center justify-center text-gray-600 hover:bg-gray-50 cursor-pointer bg-transparent border-none">
+                                <Minus size={12} />
                               </button>
                               <span className="text-[11px] font-semibold w-6 text-center">{it.quantity}</span>
                               <button onClick={() => updateQty(id, it.quantity + 1)}
-                                className="w-6 h-6 inline-flex items-center justify-center text-gray-500 hover:bg-gray-50 cursor-pointer bg-transparent border-none">
-                                <Plus size={10} />
+                                className="w-8 h-8 inline-flex items-center justify-center text-gray-600 hover:bg-gray-50 cursor-pointer bg-transparent border-none">
+                                <Plus size={12} />
                               </button>
                             </div>
                             <button onClick={() => removeItem(id)}
                               aria-label="Устгах"
-                              className="w-6 h-6 inline-flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 cursor-pointer bg-transparent border-none rounded">
-                              <Trash2 size={11} />
+                              className="w-8 h-8 inline-flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer bg-transparent border-none rounded">
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>

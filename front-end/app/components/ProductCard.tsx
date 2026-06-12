@@ -133,7 +133,7 @@ export default function ProductCard({ p }: { p: Product }) {
         {/* TOP-RIGHT: heart + source chip stacked. */}
         <div className="absolute top-1.5 right-1.5 z-10 flex flex-col items-end gap-1">
           <button onClick={handleFav}
-            className={`w-7 h-7 flex items-center justify-center rounded-full bg-white/95 hover:bg-white shadow-sm border-none cursor-pointer transition-all ${isFav ? "text-red-500" : "text-gray-300 hover:text-red-400"}`}
+            className={`w-8 h-8 flex items-center justify-center rounded-full bg-white/95 hover:bg-white shadow-sm border-none cursor-pointer transition-all ${isFav ? "text-red-500" : "text-gray-400 hover:text-red-400"}`}
             aria-label="favorite">
             <Heart size={14} fill={isFav ? "currentColor" : "none"} />
           </button>
@@ -194,7 +194,7 @@ export default function ProductCard({ p }: { p: Product }) {
         {/* Title + OEM */}
         <div className="text-[13px] font-semibold text-gray-900 mb-0.5 leading-snug line-clamp-2 min-h-[2.5em]">{p.name}</div>
         {p.oem && (
-          <div className="text-[10px] text-gray-400 font-mono mb-2 truncate">{p.oem}</div>
+          <div className="text-[11px] text-gray-500 font-mono mb-2 truncate">{p.oem}</div>
         )}
 
         {/* SELLER CHIP — Phase R: clickable, routes to /store/[id].
@@ -245,7 +245,7 @@ export default function ProductCard({ p }: { p: Product }) {
             )}
           </div>
           <button onClick={handleAdd}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold cursor-pointer border-none transition-all shrink-0 ${
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-2 text-[11px] font-semibold cursor-pointer border-none transition-all shrink-0 ${
               added ? "bg-emerald-500 text-white" :
               p.inStock ? "bg-blue-700 hover:bg-blue-800 text-white shadow-sm shadow-blue-200" :
               "bg-gray-100 text-gray-400 cursor-not-allowed"

@@ -35,9 +35,10 @@ export default function BuyerShell({ children }: { children: React.ReactNode }) 
     <>
       <Navbar />
 
-      {/* pb-16 on mobile = clears the 56px MobileBottomNav. md:pb-0
-          on desktop where the bottom nav is hidden. */}
-      <main className="pb-16 md:pb-0">
+      {/* Mobile bottom padding = 56px MobileBottomNav + iOS safe-area
+          inset, so content is never hidden behind the tab bar on notch
+          devices. md:pb-0 on desktop where the bottom nav is hidden. */}
+      <main className="pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
         {children}
       </main>
 

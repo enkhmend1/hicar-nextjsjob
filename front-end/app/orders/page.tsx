@@ -119,7 +119,7 @@ export default function OrdersPage() {
               return (
                 <div key={o._id ?? o.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-                    <div className="text-[12px] text-gray-400 font-mono">#{(o._id ?? o.id ?? "").toString().slice(-8).toUpperCase()}</div>
+                    <div className="text-[12px] text-gray-500 font-mono">#{(o._id ?? o.id ?? "").toString().slice(-8).toUpperCase()}</div>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUS_COLOR[o.status]}`}>
                         {STATUS_LABEL[o.status]}
@@ -149,7 +149,7 @@ export default function OrdersPage() {
                   {o.trackingNumber && (
                     <div className="mb-3 flex items-center gap-2 text-[12px] text-gray-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
                       <Truck size={13} className="text-indigo-500 shrink-0" />
-                      <span className="text-gray-400 shrink-0">Хяналтын код:</span>
+                      <span className="text-gray-500 shrink-0">Хяналтын код:</span>
                       <span className="font-mono text-gray-700 truncate flex-1">{o.trackingNumber}</span>
                     </div>
                   )}
@@ -163,8 +163,8 @@ export default function OrdersPage() {
                     ))}
                   </div>
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                      <ShieldCheck size={12} className="text-emerald-500" /> Escrow хамгаалалт
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                      <ShieldCheck size={12} className="text-emerald-500 shrink-0" /> Escrow хамгаалалт
                     </div>
                     <span className="text-[15px] font-bold text-blue-600">₮{o.total.toLocaleString()}</span>
                   </div>

@@ -78,7 +78,7 @@ export default function Home() {
             </em>
             {t("home.title3")} {t("home.title4")}
           </h1>
-          <p className="text-[15px] text-slate-300/80 leading-relaxed mb-8 max-w-xl mx-auto">
+          <p className="text-[15px] text-slate-200/90 leading-relaxed mb-8 max-w-xl mx-auto">
             {t("home.subtitle")}
           </p>
 
@@ -104,7 +104,7 @@ export default function Home() {
               don't need to be sold on signing up. */}
           {!user && (
             <Link href="/auth/register"
-              className="inline-flex items-center gap-1.5 text-[13px] text-slate-400 hover:text-cyan-300 transition-colors">
+              className="inline-flex items-center gap-1.5 text-[13px] text-slate-300 hover:text-cyan-300 transition-colors">
               {t("home.btnRegister")} <span className="text-cyan-300">→</span>
             </Link>
           )}
@@ -181,7 +181,7 @@ export default function Home() {
                 ) : (
                   <>
                     Бүх ангилал
-                    <span className="inline-flex items-center bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5">
+                    <span className="inline-flex items-center bg-blue-100 text-blue-700 text-[11px] font-bold px-1.5 py-0.5 rounded-full ml-0.5">
                       {topCategories.length}
                     </span>
                   </>
@@ -207,7 +207,7 @@ export default function Home() {
               ))}
             </div>
           ) : products.length === 0 ? (
-            <div className="text-center py-10 text-[13px] text-gray-400">
+            <div className="text-center py-10 text-[13px] text-gray-500">
               {t("home.empty")}
             </div>
           ) : (

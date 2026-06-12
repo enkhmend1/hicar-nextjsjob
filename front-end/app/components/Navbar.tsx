@@ -164,7 +164,7 @@ export default function Navbar() {
               <span className="font-semibold text-blue-700 truncate">
                 {activeVehicle.manufacturer}
               </span>
-              <span className="text-blue-600/70 truncate">
+              <span className="text-blue-600 truncate">
                 {activeVehicle.model}
               </span>
               <ChevronDown
@@ -191,7 +191,7 @@ export default function Navbar() {
                       <div className="text-[13px] font-semibold text-gray-900 truncate">
                         {activeVehicle.manufacturer} {activeVehicle.model}
                       </div>
-                      <div className="text-[10px] text-gray-500 truncate">
+                      <div className="text-[11px] text-gray-600 truncate">
                         {activeVehicle.plate}
                         {activeVehicle.generation && ` · ${activeVehicle.generation}`}
                         {activeVehicle.engineCode && ` · ${activeVehicle.engineCode}`}
@@ -206,7 +206,7 @@ export default function Navbar() {
                     parent switch товчийг fire хийхээс сэргийлнэ. */}
                 {otherRecents.length > 0 && (
                   <div className="py-1 border-b border-gray-100">
-                    <div className="px-3 pt-1.5 pb-1 text-[9px] text-gray-400 uppercase tracking-wider font-medium">
+                    <div className="px-3 pt-1.5 pb-1 text-[10px] text-gray-500 uppercase tracking-wider font-medium">
                       Сүүлд ашигласан
                     </div>
                     {otherRecents.map((v) => (
@@ -226,7 +226,7 @@ export default function Navbar() {
                             <div className="text-[12px] font-medium text-gray-700 truncate">
                               {v.manufacturer} {v.model}
                             </div>
-                            <div className="text-[9px] text-gray-400 truncate">{v.plate}</div>
+                            <div className="text-[10px] text-gray-500 truncate">{v.plate}</div>
                           </div>
                         </button>
                         <button
@@ -251,7 +251,7 @@ export default function Navbar() {
                           useCarStore.getState().clearRecentVehicles();
                           setVehicleOpen(false);
                         }}
-                        className="w-full text-[10px] text-gray-400 hover:text-red-500 py-1 px-3 text-right cursor-pointer bg-transparent border-none font-sans"
+                        className="w-full text-[10px] text-gray-500 hover:text-red-500 py-1 px-3 text-right cursor-pointer bg-transparent border-none font-sans"
                       >
                         Бүх түүхийг арилгах
                       </button>
@@ -285,10 +285,10 @@ export default function Navbar() {
         )}
 
         <div className="hidden md:flex gap-5">
-          <Link href="/shop" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.shop")}</Link>
-          <Link href="/lookup" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">Улсын дугаар</Link>
-          <Link href="/orders" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.orders")}</Link>
-          <Link href="/help" className="text-[14px] text-gray-500 hover:text-blue-600 transition-colors">{t("nav.help")}</Link>
+          <Link href="/shop" className="text-[14px] text-gray-600 hover:text-blue-600 transition-colors">{t("nav.shop")}</Link>
+          <Link href="/lookup" className="text-[14px] text-gray-600 hover:text-blue-600 transition-colors">Улсын дугаар</Link>
+          <Link href="/orders" className="text-[14px] text-gray-600 hover:text-blue-600 transition-colors">{t("nav.orders")}</Link>
+          <Link href="/help" className="text-[14px] text-gray-600 hover:text-blue-600 transition-colors">{t("nav.help")}</Link>
           {isSeller && !isAdmin && (
             <Link href="/seller" className="flex items-center gap-1 text-[14px] text-amber-600 font-semibold hover:underline transition-colors">
               <Store size={13} /> {t("nav.seller")}
@@ -346,7 +346,7 @@ export default function Navbar() {
                       <div className="text-[13px] font-semibold text-gray-900 truncate">
                         {user.name}
                       </div>
-                      <div className="text-[10px] text-gray-500 truncate">
+                      <div className="text-[11px] text-gray-600 truncate">
                         {user.email}
                       </div>
                       {isAdmin && (
@@ -432,13 +432,25 @@ export default function Navbar() {
           </Link>
         </div>
 
-        <button onClick={() => setOpen(!open)} className="md:hidden p-1.5 cursor-pointer bg-transparent border-none text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+        <button onClick={() => setOpen(!open)} className="md:hidden p-2 cursor-pointer bg-transparent border-none text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
           {open ? <X size={21} /> : <Menu size={21} />}
         </button>
       </div>
 
       {open && (
-        <div className="md:hidden bg-white border-t border-gray-100 px-5 pb-4 pt-3 shadow-lg">
+        <div className="md:hidden bg-white border-t border-gray-100 px-5 pb-4 pt-3 shadow-lg max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain">
+          {/* Mobile search — the desktop bar is hidden below md, and a parts
+              shop without search on the phone is unusable. 16px font prevents
+              iOS Safari's focus auto-zoom. */}
+          <form onSubmit={(e) => { onSearch(e); setOpen(false); }} className="relative mb-3">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              value={navQuery}
+              onChange={(e) => setNavQuery(e.target.value)}
+              placeholder="Сэлбэг хайх... (нэр, OEM, брэнд)"
+              className="w-full bg-gray-50 focus:bg-white border border-gray-200 focus:border-blue-500 rounded-xl pl-9 pr-3 py-2.5 text-[16px] outline-none transition-colors font-sans"
+            />
+          </form>
           {/* Mobile: show identity card at top when signed-in. */}
           {showUserUI && (
             <div className="flex items-center gap-2.5 pb-3 mb-2 border-b border-gray-100">
@@ -464,7 +476,7 @@ export default function Navbar() {
                 <div className="text-[12px] font-semibold text-blue-900 truncate flex-1">
                   {activeVehicle.manufacturer} {activeVehicle.model}
                 </div>
-                <span className="text-[10px] text-blue-700/60">{activeVehicle.plate}</span>
+                <span className="text-[11px] text-blue-700/90">{activeVehicle.plate}</span>
               </div>
               <div className="flex gap-1.5 mt-1.5">
                 <Link href="/garage" onClick={() => setOpen(false)}
