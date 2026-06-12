@@ -84,12 +84,16 @@ interface ShopFilters {
    * fresh visits still see the full catalogue.
    */
   vehicleOnly: boolean;
+  /** B2B roadmap #1 — vehicle-tree browse over structured fitments. */
+  fitMake:  string;
+  fitModel: string;
+  fitYear:  string;
 }
 
 const DEFAULTS: ShopFilters = {
   cat: "all", q: "", sort: "default", source: "all", brand: "",
   priceMin: "", priceMax: "", minRating: 0, inStock: false,
-  vehicleOnly: false,
+  vehicleOnly: false, fitMake: "", fitModel: "", fitYear: "",
 };
 
 /** Serialize NON-DEFAULT filters into a canonical query string. Fixed key
@@ -107,6 +111,9 @@ const filtersToQuery = (f: ShopFilters): string => {
   if (f.minRating > 0)      usp.set("minRating", String(f.minRating));
   if (f.inStock)            usp.set("inStock", "1");
   if (f.vehicleOnly)        usp.set("vehicle", "1");
+  if (f.fitMake)            usp.set("fitMake", f.fitMake);
+  if (f.fitModel)           usp.set("fitModel", f.fitModel);
+  if (f.fitYear)            usp.set("fitYear", f.fitYear);
   return usp.toString();
 };
 
@@ -123,6 +130,9 @@ const queryToFilters = (params: { get(name: string): string | null }): ShopFilte
   minRating:  Math.max(0, Math.min(5, Number(params.get("minRating")) || 0)),
   inStock:    params.get("inStock") === "1",
   vehicleOnly: params.get("vehicle") === "1",
+  fitMake:  params.get("fitMake") || "",
+  fitModel: params.get("fitModel") || "",
+  fitYear:  params.get("fitYear") || "",
 });
 
 const SORT_OPTIONS = [
@@ -232,6 +242,9 @@ function ShopInner() {
           if (filters.priceMax)           usp.set("priceMax", filters.priceMax);
           if (filters.minRating > 0)      usp.set("minRating", String(filters.minRating));
           if (filters.inStock)            usp.set("inStock", "true");
+          if (filters.fitMake)            usp.set("fitMake", filters.fitMake);
+          if (filters.fitMake && filters.fitModel) usp.set("fitModel", filters.fitModel);
+          if (filters.fitMake && filters.fitYear)  usp.set("fitYear", filters.fitYear);
           return api.get<{ items: Product[] }>(`/products?${usp.toString()}`);
         })();
 
@@ -267,6 +280,7 @@ function ShopInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.cat, filters.sort, filters.source, filters.brand, filters.priceMin,
       filters.priceMax, filters.minRating, filters.inStock, filters.vehicleOnly,
+      filters.fitMake, filters.fitModel, filters.fitYear,
       debouncedQ, activeVehicle]);
 
   // ── Derived: brand list (from current results) ──────────────────
@@ -302,6 +316,13 @@ function ShopInner() {
     if (filters.source !== "all") {
       const s = SOURCE_OPTIONS.find((o) => o.id === filters.source);
       chips.push({ key: "source", label: s?.label || filters.source, clear: () => update({ source: "all" }) });
+    }
+    if (filters.fitMake) {
+      chips.push({
+        key: "fitMake",
+        label: `🚙 ${filters.fitMake}${filters.fitModel ? ` ${filters.fitModel}` : ""}${filters.fitYear ? ` · ${filters.fitYear}` : ""}`,
+        clear: () => update({ fitMake: "", fitModel: "", fitYear: "" }),
+      });
     }
     if (filters.brand)    chips.push({ key: "brand",    label: `Брэнд: ${filters.brand}`, clear: () => update({ brand: "" }) });
     if (filters.priceMin) chips.push({ key: "priceMin", label: `≥ ₮${Number(filters.priceMin).toLocaleString()}`, clear: () => update({ priceMin: "" }) });
@@ -459,6 +480,16 @@ function ShopInner() {
 // Filter panel (shared by sidebar + drawer)
 // ─────────────────────────────────────────────────────────────────
 
+/** Vehicle-tree node from GET /products/fitment-tree. */
+interface FitMakeNode {
+  make: string;
+  count: number;
+  models: { model: string; count: number }[];
+}
+// Module cache — the sidebar and the mobile sheet both render
+// FilterContent; one fetch serves both for the whole session.
+let fitTreeCache: FitMakeNode[] | null = null;
+
 interface FilterContentProps {
   filters: ShopFilters;
   onChange: (next: ShopFilters | ((p: ShopFilters) => ShopFilters)) => void;
@@ -473,6 +504,18 @@ function FilterContent({
 }: FilterContentProps) {
   const update = (patch: Partial<ShopFilters>) =>
     onChange((p) => ({ ...p, ...patch }));
+
+  // B2B roadmap #1 — vehicle-tree browse (Make → Model → Year) over the
+  // structured fitments catalogue.
+  const [fitTree, setFitTree] = useState<FitMakeNode[]>(fitTreeCache ?? []);
+  useEffect(() => {
+    if (fitTreeCache) return;
+    api.get<{ tree: FitMakeNode[] }>("/products/fitment-tree")
+      .then((d) => { fitTreeCache = d.tree; setFitTree(d.tree); })
+      .catch(() => { /* tree is optional — panel simply hides */ });
+  }, []);
+  const fitModels =
+    fitTree.find((m) => m.make.toLowerCase() === filters.fitMake.toLowerCase())?.models ?? [];
 
   // Nested category accordion: split the flat list into MAIN categories and
   // their sub-parts. Selecting a main filters by [main + all descendants]
@@ -632,6 +675,42 @@ function FilterContent({
           })}
         </div>
       </FilterSection>
+
+      {/* VEHICLE-TREE BROWSE — Make → Model → Year over fitments */}
+      {fitTree.length > 0 && (
+        <FilterSection title="Машины каталогоор">
+          <div className="space-y-2">
+            <select
+              value={filters.fitMake}
+              onChange={(e) => update({ fitMake: e.target.value, fitModel: "" })}
+              className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[16px] md:text-[12px] text-gray-700 cursor-pointer focus:border-blue-500 outline-none font-sans">
+              <option value="">Бүх машин</option>
+              {fitTree.map((m) => (
+                <option key={m.make} value={m.make}>{m.make} ({m.count})</option>
+              ))}
+            </select>
+            {filters.fitMake && (
+              <select
+                value={filters.fitModel}
+                onChange={(e) => update({ fitModel: e.target.value })}
+                className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[16px] md:text-[12px] text-gray-700 cursor-pointer focus:border-blue-500 outline-none font-sans">
+                <option value="">Бүх загвар</option>
+                {fitModels.map((mo) => (
+                  <option key={mo.model} value={mo.model}>{mo.model} ({mo.count})</option>
+                ))}
+              </select>
+            )}
+            {filters.fitMake && (
+              <input
+                type="number" min={1950} max={2100}
+                placeholder="Он (жишээ: 2018)"
+                value={filters.fitYear}
+                onChange={(e) => update({ fitYear: e.target.value })}
+                className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
+            )}
+          </div>
+        </FilterSection>
+      )}
 
       {/* PRICE RANGE */}
       <FilterSection title="Үнэ (₮)">

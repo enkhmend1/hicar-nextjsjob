@@ -2,7 +2,7 @@ import express from "express";
 import {
   listProducts, listMyProducts, listAllProducts,
   getProduct, createProduct, updateProduct, deleteProduct,
-  moderateProduct, getCategories,
+  moderateProduct, getCategories, fitmentTree,
 } from "../Controller/product.controller.js";
 import {
   listReviews, createReview, updateReview, deleteReview,
@@ -14,6 +14,7 @@ const router = express.Router();
 // Public
 router.get("/", listProducts);
 router.get("/categories", getCategories);
+router.get("/fitment-tree", fitmentTree);
 
 // Authenticated views — must come BEFORE /:id route
 router.get("/mine", protect, approvedSeller, listMyProducts);
