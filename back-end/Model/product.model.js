@@ -160,8 +160,10 @@ const productSchema = new mongoose.Schema(
     dimensionsCm:    { type: String, default: "", trim: true, maxlength: 40 },
     hazardous:       { type: Boolean, default: false },
     countryOfOrigin: { type: String, default: "", trim: true, maxlength: 60 },
-    /** Minimum order quantity — checkout enforces qty >= moq server-side later. */
+    /** Minimum order quantity — enforced server-side at order create. */
     moq:             { type: Number, default: 1, min: 1 },
+    /** Parts sold in fixed packs (2 = pairs, e.g. front shocks). Quantity must be a clean multiple. */
+    orderMultiple:   { type: Number, default: 1, min: 1, max: 100 },
     /** Days until an out-of-stock/backorder item can ship. 0 = in-stock only. */
     leadTimeDays:    { type: Number, default: 0, min: 0, max: 365 },
     datasheetUrl:    { type: String, default: "", trim: true, maxlength: 500 },

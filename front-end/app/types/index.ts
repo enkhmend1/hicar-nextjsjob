@@ -91,6 +91,8 @@ export interface Product {
   countryOfOrigin?: string;
   /** Minimum order quantity. */
   moq?: number;
+  /** Parts sold in fixed packs (2 = pairs). Quantity must be a multiple. */
+  orderMultiple?: number;
   leadTimeDays?: number;
   datasheetUrl?: string;
   installGuideUrl?: string;

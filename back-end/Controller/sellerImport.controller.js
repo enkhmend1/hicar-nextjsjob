@@ -108,6 +108,7 @@ const enrichedToProductDoc = (e, sellerId) => {
     hazardous:       !!b.hazardous,
     countryOfOrigin: b.countryOfOrigin || "",
     moq:             Math.max(1, num(b.moq, 1)),
+    orderMultiple:   Math.min(100, Math.max(1, num(b.orderMultiple, 1))),
     leadTimeDays:    Math.min(365, num(b.leadTimeDays, 0)),
     datasheetUrl:    httpsUrl(b.datasheetUrl),
     installGuideUrl: httpsUrl(b.installGuideUrl),
@@ -201,6 +202,7 @@ export const parseUploadedFile = [
         hazardous:    ["hazardous", "хортой", "аюултай"],
         country:      ["country of origin", "origin", "үүсэлт улс", "гарал үүсэл", "улс"],
         moq:          ["moq", "minimum order quantity", "доод захиалга"],
+        order_multiple: ["order multiple", "pack size", "sales unit", "багц", "багцын тоо", "хосоор"],
         lead_time:    ["lead time days", "lead time", "захиалга ирэх хугацаа", "татан авах хоног"],
         datasheet:    ["datasheet url", "datasheet", "техник үзүүлэлт"],
         install_url:  ["install guide url", "installation guide", "суурилуулах заавар"],
@@ -259,6 +261,7 @@ export const parseUploadedFile = [
             hazardous:    bool(mapped.hazardous),
             countryOfOrigin: String(mapped.country || "").trim().slice(0, 60),
             moq:          Math.max(1, num(mapped.moq, 1)),
+            orderMultiple: Math.max(1, num(mapped.order_multiple, 1)),
             leadTimeDays: num(mapped.lead_time, 0),
             datasheetUrl: String(mapped.datasheet || "").trim().slice(0, 500),
             installGuideUrl: String(mapped.install_url || "").trim().slice(0, 500),
@@ -317,7 +320,7 @@ export const commitHandler = async (req, res) => {
           existing.tags        = doc.tags;
           existing.compatible  = doc.compatible;
           for (const k of ["sku", "mpn", "gtin", "condition", "warrantyMonths", "weightKg",
-            "dimensionsCm", "hazardous", "countryOfOrigin", "moq", "leadTimeDays",
+            "dimensionsCm", "hazardous", "countryOfOrigin", "moq", "orderMultiple", "leadTimeDays",
             "datasheetUrl", "installGuideUrl", "certifications"]) {
             if (doc[k] !== undefined) existing[k] = doc[k];
           }
