@@ -877,7 +877,7 @@ export default function HiCarAIChat() {
           }
           // text-[16px] on mobile prevents iOS Safari's auto-zoom on focus
           // (it zooms any input with font-size < 16px); compact 13px from md up.
-          className={`flex-1 ${inCooldown ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"} border rounded-xl px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors outline-none`} />
+          className={`flex-1 min-w-0 ${inCooldown ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"} border rounded-xl px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors outline-none`} />
         <button onClick={() => send()} disabled={busy || !input.trim()}
           className="w-10 h-10 flex items-center justify-center bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:from-blue-300 disabled:to-amber-300 text-white rounded-xl cursor-pointer border-none transition-colors shrink-0">
           <Send size={14} />

@@ -280,7 +280,7 @@ function ShopInner() {
 
         {/* ── TOP BAR: search + sort + mobile filter toggle ─────── */}
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input value={filters.q}
               onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
@@ -582,10 +582,10 @@ function FilterContent({
         <div className="grid grid-cols-2 gap-2">
           <input type="number" min={0} placeholder="0"
             value={filters.priceMin} onChange={(e) => update({ priceMin: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
+            className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
           <input type="number" min={0} placeholder="∞"
             value={filters.priceMax} onChange={(e) => update({ priceMax: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
+            className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[16px] md:text-[12px] focus:border-blue-500 outline-none font-sans" />
         </div>
         {/* Preset chips for one-tap common ranges */}
         <div className="flex flex-wrap gap-1 mt-2">
