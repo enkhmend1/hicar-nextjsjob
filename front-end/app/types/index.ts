@@ -93,6 +93,8 @@ export interface Product {
   moq?: number;
   /** Parts sold in fixed packs (2 = pairs). Quantity must be a multiple. */
   orderMultiple?: number;
+  /** Tiered unit prices: highest tier with minQty <= qty wins; base `price` = qty-1 unit. */
+  priceTiers?: { minQty: number; price: number }[];
   leadTimeDays?: number;
   datasheetUrl?: string;
   installGuideUrl?: string;

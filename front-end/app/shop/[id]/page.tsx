@@ -22,6 +22,7 @@
  */
 "use client";
 import { use, useEffect, useState } from "react";
+import { tierUnitPrice } from "@/app/lib/price";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import BuyerShell from "@/app/components/BuyerShell";
@@ -195,7 +196,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     : deliveryTiers.length === 2 ? "grid-cols-2"
     : "grid-cols-3";
 
-  const lineSubtotal = p.price * qty;
+  // B2B tiered pricing: the unit price drops once qty crosses a tier.
+  const unitPrice = tierUnitPrice(p, qty);
+  const lineSubtotal = unitPrice * qty;
   const totalPrice = lineSubtotal + deliveryOpts[delivery].price;
   const stockCap = typeof p.stockQty === "number" && p.stockQty > 0 ? p.stockQty : 99;
   // B2B line rules: moq = minimum quantity; orderMultiple = pack size
@@ -242,6 +245,36 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <BuyerShell>
+      {/* SEO — schema.org Product structured data (B2B roadmap #3).
+          Googlebot executes client JS, so client-injected JSON-LD is
+          read and can produce rich results (price, stock, rating). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: p.name,
+          ...(p.images?.length ? { image: p.images } : {}),
+          ...(p.description ? { description: p.description.slice(0, 500) } : {}),
+          ...(p.sku ? { sku: p.sku } : {}),
+          ...(p.mpn ? { mpn: p.mpn } : {}),
+          ...(p.gtin ? { gtin13: p.gtin } : {}),
+          brand: { "@type": "Brand", name: p.brand },
+          ...(p.ratingCount && p.ratingCount > 0
+            ? { aggregateRating: { "@type": "AggregateRating", ratingValue: p.rating ?? 0, reviewCount: p.ratingCount } }
+            : {}),
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "MNT",
+            price: p.price,
+            availability: soldOut ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
+            itemCondition:
+              p.condition === "used" ? "https://schema.org/UsedCondition"
+              : p.condition === "refurbished" ? "https://schema.org/RefurbishedCondition"
+              : "https://schema.org/NewCondition",
+          },
+        }) }}
+      />
       <div className="max-w-6xl mx-auto px-5 py-5 pb-32 lg:pb-10">
         <Breadcrumbs
           className="mb-3"
@@ -381,6 +414,25 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 )}
                 <span className="text-[12px] text-gray-500 ml-auto">/ ширхэг</span>
               </div>
+
+              {/* B2B tier pricing table — active tier highlighted live. */}
+              {(p.priceTiers?.length ?? 0) > 0 && (
+                <div className="mb-5 -mt-2">
+                  <div className="text-[11px] font-semibold text-gray-600 mb-1.5">Бөөний үнэ (их авах тусам хямд)</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[{ minQty: 1, price: p.price }, ...(p.priceTiers ?? [])].map((t) => {
+                      const active = unitPrice === t.price && qty >= t.minQty;
+                      return (
+                        <div key={t.minQty}
+                          className={`rounded-lg border px-2.5 py-1.5 text-center ${active ? "bg-blue-50 border-blue-300" : "bg-gray-50 border-gray-200"}`}>
+                          <div className={`text-[10px] ${active ? "text-blue-700 font-semibold" : "text-gray-500"}`}>{t.minQty}+ ш</div>
+                          <div className={`text-[12px] font-bold ${active ? "text-blue-700" : "text-gray-700"}`}>₮{t.price.toLocaleString()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Description (collapsible if very long) */}
               {p.description && (
@@ -570,7 +622,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <div className="text-[11px] text-gray-500 mb-0.5">Нийт үнэ (хүргэлттэй)</div>
                   <div className="text-[26px] font-bold text-blue-600 leading-tight">₮{totalPrice.toLocaleString()}</div>
                   {qty > 1 && (
-                    <div className="text-[11px] text-gray-500">{qty} × ₮{p.price.toLocaleString()} + хүргэлт</div>
+                    <div className="text-[11px] text-gray-500">{qty} × ₮{unitPrice.toLocaleString()} + хүргэлт</div>
                   )}
                 </div>
                 <button onClick={handleAdd} disabled={!p.inStock}

@@ -63,6 +63,26 @@ const buildFilter = (query) => {
     if (Number.isFinite(max)) f.price.$lte = max;
   }
 
+  // Vehicle-tree browse (B2B roadmap #1): match structured fitments.
+  // fitMake/fitModel are case-insensitive exact; fitYear must fall inside
+  // [yearStart, yearEnd] — открытые ends pass. All best-effort like the rest.
+  const { fitMake, fitModel, fitYear } = query;
+  if (fitMake && String(fitMake).trim()) {
+    const esc = (v) => String(v).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const elem = { make: new RegExp(`^${esc(fitMake)}$`, "i") };
+    if (fitModel && String(fitModel).trim()) {
+      elem.model = new RegExp(`^${esc(fitModel)}$`, "i");
+    }
+    const yr = Number(fitYear);
+    if (Number.isFinite(yr) && yr > 1900 && yr < 2100) {
+      elem.$and = [
+        { $or: [{ yearStart: { $exists: false } }, { yearStart: null }, { yearStart: { $lte: yr } }] },
+        { $or: [{ yearEnd:   { $exists: false } }, { yearEnd:   null }, { yearEnd:   { $gte: yr } }] },
+      ];
+    }
+    f.fitments = { $elemMatch: elem };
+  }
+
   if (brand && String(brand).trim()) {
     // Exact brand match, case-insensitive. Sellers occasionally vary
     // casing ("Toyota" vs "toyota") so anchor the regex.
@@ -148,6 +168,45 @@ export const listProducts = async (req, res) => {
         source: "shop",
       }).catch(() => {});
     }
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * PUBLIC: make → model tree with product counts for the vehicle-browse
+ * filter. Aggregated from approved products' structured fitments.
+ * Cached under products:* so any catalogue mutation busts it.
+ */
+export const fitmentTree = async (_req, res) => {
+  try {
+    const cacheKey = "products:fitment-tree";
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json(cached);
+
+    const rows = await Product.aggregate([
+      { $match: { status: "approved", "fitments.0": { $exists: true } } },
+      { $unwind: "$fitments" },
+      { $group: {
+        _id: { make: { $toLower: "$fitments.make" }, model: { $toLower: "$fitments.model" } },
+        make:  { $first: "$fitments.make" },
+        model: { $first: "$fitments.model" },
+        count: { $sum: 1 },
+      } },
+      { $sort: { count: -1 } },
+    ]);
+
+    const byMake = new Map();
+    for (const r of rows) {
+      const k = r._id.make;
+      if (!byMake.has(k)) byMake.set(k, { make: r.make, count: 0, models: [] });
+      const m = byMake.get(k);
+      m.count += r.count;
+      m.models.push({ model: r.model, count: r.count });
+    }
+    const payload = { tree: [...byMake.values()].sort((a, b) => b.count - a.count) };
+    await cacheSet(cacheKey, payload);
     return res.json(payload);
   } catch (err) {
     return res.status(500).json({ message: err.message });
