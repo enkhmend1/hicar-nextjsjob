@@ -84,7 +84,7 @@ export default function SearchCard() {
               onChange={(e) => { setPlate(e.target.value); resetState(); }}
               onKeyDown={(e) => e.key === "Enter" && searchByPlate()}
               disabled={busy}
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] tracking-wider focus:border-blue-500 focus:bg-white transition-colors outline-none"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[14px] tracking-wider focus:border-blue-500 focus:bg-white transition-colors outline-none"
               placeholder="Жнь: 8083СЭН" />
             <button onClick={searchByPlate} disabled={busy || !plate.trim()}
               className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none flex items-center gap-1.5 transition-colors shrink-0">
@@ -138,7 +138,7 @@ export default function SearchCard() {
               { v: year,  sv: setYear,  p: "Он",       o: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016"] },
             ].map(({ v, sv, p, o }) => (
               <select key={p} value={v} onChange={(e) => sv(e.target.value)}
-                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-700 cursor-pointer focus:border-blue-500 font-sans">
+                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[16px] md:text-[13px] text-gray-700 cursor-pointer focus:border-blue-500 font-sans">
                 <option value="">{p}</option>
                 {o.map((x) => <option key={x}>{x}</option>)}
               </select>
@@ -146,7 +146,7 @@ export default function SearchCard() {
           </div>
           <div className="flex gap-2">
             <input value={partQ} onChange={(e) => setPartQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && goShopSearch(partQ)}
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white transition-colors"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors"
               placeholder="Сэлбэгийн нэр эсвэл OEM дугаар..." />
             <button onClick={() => goShopSearch(partQ)}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-colors shrink-0">
