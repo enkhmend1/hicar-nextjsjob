@@ -41,7 +41,7 @@ const B2B_TEMPLATE_HEADERS = [
   "Price_MNT", "Qty", "Image_URL", "Short_Title",
   "OE_Part_Number", "Warranty_Months", "Weight_KG", "Dimensions_CM",
   "Hazardous", "Country_Of_Origin",
-  "MOQ", "Order_Multiple", "Lead_Time_Days", "Gallery_URLs", "Datasheet_URL",
+  "MOQ", "Order_Multiple", "Price_Tiers", "Lead_Time_Days", "Gallery_URLs", "Datasheet_URL",
   "Install_Guide_URL", "Long_Description", "Tags", "Certifications",
 ];
 const B2B_TEMPLATE_SAMPLE = [
@@ -51,7 +51,7 @@ const B2B_TEMPLATE_SAMPLE = [
   "125000", "50", "https://example.com/main.jpg", "BOSCH тоормосны наклад Corolla E210",
   "04465-02220", "12", "0.5", "50x30x20",
   "FALSE", "Germany",
-  "2", "2", "3", "https://example.com/2.jpg,https://example.com/3.jpg", "https://example.com/datasheet.pdf",
+  "2", "2", "10:110000,50:95000", "3", "https://example.com/2.jpg,https://example.com/3.jpg", "https://example.com/datasheet.pdf",
   "https://example.com/install.pdf", "Toyota Corolla E210-д зориулсан өндөр чанарын тоормосны наклад", "тоормос,наклад,toyota,corolla", "ISO,TUV",
 ];
 const downloadB2BTemplate = () => {

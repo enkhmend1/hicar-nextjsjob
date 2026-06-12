@@ -109,6 +109,12 @@ const enrichedToProductDoc = (e, sellerId) => {
     countryOfOrigin: b.countryOfOrigin || "",
     moq:             Math.max(1, num(b.moq, 1)),
     orderMultiple:   Math.min(100, Math.max(1, num(b.orderMultiple, 1))),
+    // "minQty:price,minQty:price" → sorted tier list, max 5, qty>=2, price>=1.
+    priceTiers: String(b.priceTiers || "").split(",").map((pair) => {
+      const [mq, pr] = pair.split(":").map((x) => num(x, 0));
+      return { minQty: Math.floor(mq), price: Math.floor(pr) };
+    }).filter((t) => t.minQty >= 2 && t.price >= 1)
+      .sort((a, z) => a.minQty - z.minQty).slice(0, 5),
     leadTimeDays:    Math.min(365, num(b.leadTimeDays, 0)),
     datasheetUrl:    httpsUrl(b.datasheetUrl),
     installGuideUrl: httpsUrl(b.installGuideUrl),
@@ -203,6 +209,7 @@ export const parseUploadedFile = [
         country:      ["country of origin", "origin", "үүсэлт улс", "гарал үүсэл", "улс"],
         moq:          ["moq", "minimum order quantity", "доод захиалга"],
         order_multiple: ["order multiple", "pack size", "sales unit", "багц", "багцын тоо", "хосоор"],
+        price_tiers:  ["price tiers", "tier prices", "шатлалт үнэ", "бөөний үнэ"],
         lead_time:    ["lead time days", "lead time", "захиалга ирэх хугацаа", "татан авах хоног"],
         datasheet:    ["datasheet url", "datasheet", "техник үзүүлэлт"],
         install_url:  ["install guide url", "installation guide", "суурилуулах заавар"],
@@ -262,6 +269,7 @@ export const parseUploadedFile = [
             countryOfOrigin: String(mapped.country || "").trim().slice(0, 60),
             moq:          Math.max(1, num(mapped.moq, 1)),
             orderMultiple: Math.max(1, num(mapped.order_multiple, 1)),
+            priceTiers:   String(mapped.price_tiers || "").trim(),
             leadTimeDays: num(mapped.lead_time, 0),
             datasheetUrl: String(mapped.datasheet || "").trim().slice(0, 500),
             installGuideUrl: String(mapped.install_url || "").trim().slice(0, 500),
@@ -320,7 +328,7 @@ export const commitHandler = async (req, res) => {
           existing.tags        = doc.tags;
           existing.compatible  = doc.compatible;
           for (const k of ["sku", "mpn", "gtin", "condition", "warrantyMonths", "weightKg",
-            "dimensionsCm", "hazardous", "countryOfOrigin", "moq", "orderMultiple", "leadTimeDays",
+            "dimensionsCm", "hazardous", "countryOfOrigin", "moq", "orderMultiple", "priceTiers", "leadTimeDays",
             "datasheetUrl", "installGuideUrl", "certifications"]) {
             if (doc[k] !== undefined) existing[k] = doc[k];
           }

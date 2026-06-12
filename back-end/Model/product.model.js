@@ -37,6 +37,23 @@ const productSchema = new mongoose.Schema(
 
     price: { type: Number, required: true, min: 0 },
     originalPrice: { type: Number, min: 0 },
+    /**
+     * B2B tiered pricing. `price` above is the base (qty 1) unit price;
+     * each tier overrides the UNIT price once qty >= minQty. Kept sorted
+     * by minQty at write time; order create resolves the unit price
+     * server-side and never trusts the client.
+     */
+    priceTiers: {
+      type: [{
+        minQty: { type: Number, required: true, min: 2 },
+        price:  { type: Number, required: true, min: 1 },
+      }],
+      default: [],
+      validate: {
+        validator: (arr) => Array.isArray(arr) && arr.length <= 5,
+        message: "Хамгийн ихдээ 5 үнийн шатлал",
+      },
+    },
 
     // Free-form, normalised to trimmed lowercase. Use facets endpoint to enumerate.
     category: { type: String, required: true, trim: true, lowercase: true, maxlength: 60, index: true },

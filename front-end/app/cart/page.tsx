@@ -31,6 +31,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { tierUnitPrice } from "@/app/lib/price";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/store";
@@ -86,7 +87,7 @@ const groupBySeller = (items: CartItem[]): SellerGroup[] => {
   const map = new Map<string, SellerGroup>();
   for (const it of items) {
     const meta = sellerOf(it);
-    const itemSubtotal = (it.product.price ?? 0) * it.quantity;
+    const itemSubtotal = tierUnitPrice(it.product, it.quantity) * it.quantity;
     const itemDelivery = deliveryPriceFor(it.product.seller, it.deliveryType);
     const existing = map.get(meta.id);
     if (existing) {
@@ -368,7 +369,7 @@ function CartItemRow({ item, onRemove, onQty, onDelivery }: RowProps) {
             <div className="text-[11px] text-gray-500 font-mono mt-0.5">{item.product.oem}</div>
           )}
           <div className="text-[15px] font-bold text-amber-700 mt-1">
-            ₮{(item.product.price ?? 0).toLocaleString()}
+            ₮{tierUnitPrice(item.product, item.quantity).toLocaleString()}
           </div>
         </div>
         <button onClick={() => onRemove(id)}

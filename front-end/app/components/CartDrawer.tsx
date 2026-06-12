@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useMemo } from "react";
+import { tierUnitPrice } from "@/app/lib/price";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/store";
@@ -166,7 +167,7 @@ export default function CartDrawer() {
                             {it.product.name || "Нэргүй бараа"}
                           </div>
                           <div className="text-[12px] font-semibold text-amber-700 mt-0.5">
-                            ₮{(it.product.price ?? 0).toLocaleString()}
+                            ₮{tierUnitPrice(it.product, it.quantity).toLocaleString()}
                           </div>
 
                           {/* Qty stepper + delete on the row */}

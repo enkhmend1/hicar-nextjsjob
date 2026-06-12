@@ -51,6 +51,7 @@ Flow: `POST /api/seller/import/parse` (header mapping below) → AI enrich
 |---|--------|---------------|-------|
 | 25 | `MOQ` | `moq` | ≥ 1. Enforced server-side at order create; product page opens at the first valid quantity. |
 | 25b | `Order_Multiple` | `orderMultiple` | Pack size (2 = sold in pairs, e.g. front shocks). Quantity must be a clean multiple — steppers move in whole packs, cart snaps, order create rejects violations. HiCar extension beyond the 32 columns. |
+| 25c | `Price_Tiers` | `priceTiers[]` | `"minQty:price,minQty:price"` e.g. `10:110000,50:95000`. Max 5 tiers, minQty ≥ 2. Order create resolves the unit price server-side (highest tier with minQty ≤ qty); escrow split uses the resolved unit. HiCar extension. |
 | 26 | `Lead_Time_Days` | `leadTimeDays` | 0–365. |
 | 27 | `Gallery_URLs` | `images[1..]` | Comma-separated, max 10 total, `https://` only. |
 | 28 | `Datasheet_URL` | `datasheetUrl` | Rendered as a PDF chip on the product page. |

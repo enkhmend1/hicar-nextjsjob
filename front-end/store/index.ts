@@ -1,5 +1,6 @@
 "use client";
 import { create } from "zustand";
+import { tierUnitPrice } from "@/app/lib/price";
 import { persist } from "zustand/middleware";
 import { CartItem, Product, User } from "@/app/types";
 import { deliveryPriceFor } from "@/app/lib/delivery";
@@ -76,7 +77,7 @@ export const useCartStore = create<CartStore>()(
     // server re-derives the authoritative total at checkout regardless.
     // Price is coerced with ?? 0 so a corrupt/null product.price never
     // produces NaN that propagates through all display totals.
-    total: () => get().items.reduce((s, i) => s + (i.product.price ?? 0) * i.quantity + deliveryPriceFor(i.product.seller, i.deliveryType), 0),
+    total: () => get().items.reduce((s, i) => s + tierUnitPrice(i.product, i.quantity) * i.quantity + deliveryPriceFor(i.product.seller, i.deliveryType), 0),
     count: () => get().items.reduce((s, i) => s + i.quantity, 0),
   }), {
     name: "hicar-cart",

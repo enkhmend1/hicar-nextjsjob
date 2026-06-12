@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { tierUnitPrice } from "@/app/lib/price";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import BuyerShell from "@/app/components/BuyerShell";
@@ -232,7 +233,7 @@ export default function CheckoutPage() {
           {items.map(i => (
             <div key={i.product._id ?? i.product.id} className="flex justify-between text-[13px] text-gray-600 py-0.5">
               <span className="truncate flex-1 mr-3">{i.product.name} ×{i.quantity}</span>
-              <span className="shrink-0">₮{(i.product.price * i.quantity).toLocaleString()}</span>
+              <span className="shrink-0">₮{(tierUnitPrice(i.product, i.quantity) * i.quantity).toLocaleString()}</span>
             </div>
           ))}
           <div className="flex justify-between text-[13px] text-gray-500 mt-1 pt-1 border-t border-blue-100">

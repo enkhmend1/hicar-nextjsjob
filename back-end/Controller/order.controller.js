@@ -23,6 +23,24 @@ const DELIVERY_TIERS = ["fast", "normal", "cheap"];
  * a pure in-memory lookup. Any non-finite / negative stored value falls
  * back to the platform default, so a corrupt doc can never under/over-charge.
  */
+/**
+ * B2B tiered pricing — the UNIT price for a given quantity is the highest
+ * tier whose minQty <= qty, falling back to the base price. Server-side
+ * authoritative: the escrow split (price × qty) uses THIS unit price.
+ */
+const resolveUnitPrice = (p, qty) => {
+  const base = p.price;
+  const tiers = Array.isArray(p.priceTiers) ? p.priceTiers : [];
+  let unit = base;
+  let best = 1;
+  for (const t of tiers) {
+    const mq = Number(t?.minQty), pr = Number(t?.price);
+    if (!Number.isFinite(mq) || !Number.isFinite(pr) || pr <= 0) continue;
+    if (qty >= mq && mq >= best) { best = mq; unit = pr; }
+  }
+  return unit;
+};
+
 const resolveDeliveryPrice = (cfgBySeller, sellerId, tier) => {
   const fallback = DELIVERY_PRICE[tier] ?? 0;
   const cfg = sellerId ? cfgBySeller.get(String(sellerId)) : null;
@@ -119,7 +137,8 @@ export const createOrder = async (req, res) => {
         });
       }
       const dt = DELIVERY_TIERS.includes(i.deliveryType) ? i.deliveryType : "normal";
-      total += p.price * qty;
+      const unitPrice = resolveUnitPrice(p, qty);
+      total += unitPrice * qty;
       // Delivery fee = the SELLER's own price for this tier (server-resolved).
       deliveryFee += resolveDeliveryPrice(cfgBySeller, p.seller, dt);
       // `seller` is denormalised onto the order line so per-seller payout
@@ -128,7 +147,9 @@ export const createOrder = async (req, res) => {
       // filled in atomically by the QPay callback once the payment lands.
       enriched.push({
         product: p._id, seller: p.seller,
-        name: p.name, oem: p.oem, price: p.price, quantity: qty, deliveryType: dt,
+        // price = the RESOLVED tier unit price — escrow split and payout
+        // queries multiply this by quantity, so it must be the real unit.
+        name: p.name, oem: p.oem, price: unitPrice, quantity: qty, deliveryType: dt,
       });
     }
     total += deliveryFee;
