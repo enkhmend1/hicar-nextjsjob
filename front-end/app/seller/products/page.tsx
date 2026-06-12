@@ -8,7 +8,7 @@ import Combobox from "@/app/components/ui/Combobox";
 import TagInput from "@/app/components/ui/TagInput";
 import Link from "next/link";
 import {
-  Plus, Pencil, Trash2, X, ImagePlus, Loader2,
+  Plus, Pencil, Trash2, X, ImagePlus, Loader2, Search,
   CheckCircle2, Clock, XCircle, AlertTriangle, Tag, Settings2, Sparkles, Boxes,
 } from "lucide-react";
 
@@ -65,6 +65,7 @@ export default function SellerProductsPage() {
   const defaultThreshold = user?.sellerProfile?.defaultLowStockThreshold ?? 5;
 
   const [items, setItems] = useState<Product[]>([]);
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -165,12 +166,25 @@ export default function SellerProductsPage() {
     return { low, out, totalValue };
   }, [items, defaultThreshold]);
 
+  // ── Live search — same instant client-side filter the warehouse page
+  // has: results update under the field on every keystroke. ───────────
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((p) =>
+      p.name.toLowerCase().includes(needle) ||
+      (p.oem ?? "").toLowerCase().includes(needle) ||
+      (p.brand ?? "").toLowerCase().includes(needle) ||
+      categoryLabel(p.category ?? "").toLowerCase().includes(needle),
+    );
+  }, [items, q]);
+
   return (
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-[22px] font-semibold text-gray-900">Миний бараа</h1>
-          <p className="text-[13px] text-gray-500">{items.length} бараа</p>
+          <p className="text-[13px] text-gray-500">{q.trim() ? `${visible.length} / ${items.length}` : items.length} бараа</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/seller/products/import"
@@ -198,6 +212,20 @@ export default function SellerProductsPage() {
         <Kpi label="Нөөцийн үнэлгээ" value={`₮${inventoryStats.totalValue.toLocaleString()}`} tone="blue" icon={Tag} />
       </div>
 
+      {/* Live search over the list (name / OEM / brand / category) */}
+      <div className="relative max-w-sm">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input value={q} onChange={(e) => setQ(e.target.value)}
+          className="w-full min-w-0 bg-white border border-gray-200 rounded-lg pl-9 pr-9 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none transition-colors"
+          placeholder="Нэр, OEM, брэнд, ангиллаар хайх..." />
+        {q && (
+          <button onClick={() => setQ("")} aria-label="Хайлт цэвэрлэх"
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 cursor-pointer bg-transparent border-none">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -216,15 +244,21 @@ export default function SellerProductsPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Уншиж байна...</td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">
-                  Бараа байхгүй.{" "}
-                  <Link href="/seller/products/new" className="text-blue-600 hover:text-blue-700 font-semibold underline" style={{ textDecoration: "underline" }}>
-                    Шинэ бараа нэмэх
-                  </Link>
-                  .
+              ) : visible.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  {q.trim() ? (
+                    <>«{q.trim()}» гэсэн илэрц олдсонгүй</>
+                  ) : (
+                    <>
+                      Бараа байхгүй.{" "}
+                      <Link href="/seller/products/new" className="text-blue-600 hover:text-blue-700 font-semibold underline" style={{ textDecoration: "underline" }}>
+                        Шинэ бараа нэмэх
+                      </Link>
+                      .
+                    </>
+                  )}
                 </td></tr>
-              ) : items.map((p) => {
+              ) : visible.map((p) => {
                 const st = STATUS_STYLE[p.status ?? "approved"];
                 const StIcon = st.icon;
                 const threshold = p.lowStockThreshold && p.lowStockThreshold >= 0 ? p.lowStockThreshold : defaultThreshold;

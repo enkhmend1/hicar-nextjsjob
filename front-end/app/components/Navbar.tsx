@@ -1,14 +1,15 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCartStore, useAuthStore, useCarStore } from "@/store";
 import { useT } from "@/lib/i18n";
 import LangSwitcher from "./LangSwitcher";
 import NotificationBell from "./NotificationBell";
+import NavSearch from "./NavSearch";
 import {
   ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car,
-  Search, ChevronDown, Plus, ClipboardList, HelpCircle,
+  ChevronDown, Plus, ClipboardList, HelpCircle,
 } from "lucide-react";
 
 /**
@@ -40,18 +41,10 @@ import {
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
   const pathname = usePathname();
 
-  // ── Persistent search (Phase U.3) ─────────────────────────────────
-  const [navQuery, setNavQuery] = useState("");
+  // ── Persistent search (Phase U.3 → live NavSearch) ────────────────
   const showNavSearch = pathname !== "/";
-  const onSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = navQuery.trim();
-    if (!q) { router.push("/shop"); return; }
-    router.push(`/shop?q=${encodeURIComponent(q)}`);
-  };
 
   // ── Cart badge (Phase O.4 hydration gate) ─────────────────────────
   const count        = useCartStore(s => s.count());
@@ -134,19 +127,11 @@ export default function Navbar() {
           <em className="text-blue-600 not-italic">Hi</em>car
         </Link>
 
-        {/* Persistent search */}
+        {/* Persistent search — live suggestions under the field */}
         {showNavSearch && (
-          <form onSubmit={onSearch} className="hidden md:flex flex-1 max-w-md mx-2">
-            <div className="relative w-full">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <input
-                value={navQuery}
-                onChange={(e) => setNavQuery(e.target.value)}
-                placeholder="Сэлбэг хайх... (нэр, OEM, брэнд)"
-                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 hover:border-gray-300 focus:border-blue-500 rounded-xl pl-9 pr-3 py-2 text-[13px] outline-none transition-colors font-sans"
-              />
-            </div>
-          </form>
+          <div className="hidden md:flex flex-1 max-w-md mx-2">
+            <NavSearch variant="desktop" />
+          </div>
         )}
 
         {/* ── VEHICLE DROPDOWN (Phase Z.1) ──────────────────────────── */}
@@ -439,18 +424,11 @@ export default function Navbar() {
 
       {open && (
         <div className="md:hidden bg-white border-t border-gray-100 px-5 pb-4 pt-3 shadow-lg max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain">
-          {/* Mobile search — the desktop bar is hidden below md, and a parts
-              shop without search on the phone is unusable. 16px font prevents
-              iOS Safari's focus auto-zoom. */}
-          <form onSubmit={(e) => { onSearch(e); setOpen(false); }} className="relative mb-3">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input
-              value={navQuery}
-              onChange={(e) => setNavQuery(e.target.value)}
-              placeholder="Сэлбэг хайх... (нэр, OEM, брэнд)"
-              className="w-full bg-gray-50 focus:bg-white border border-gray-200 focus:border-blue-500 rounded-xl pl-9 pr-3 py-2.5 text-[16px] outline-none transition-colors font-sans"
-            />
-          </form>
+          {/* Mobile search — live suggestions, same engine as desktop.
+              16px font prevents iOS Safari's focus auto-zoom. */}
+          <div className="mb-3">
+            <NavSearch variant="mobile" onNavigate={() => setOpen(false)} />
+          </div>
           {/* Mobile: show identity card at top when signed-in. */}
           {showUserUI && (
             <div className="flex items-center gap-2.5 pb-3 mb-2 border-b border-gray-100">
