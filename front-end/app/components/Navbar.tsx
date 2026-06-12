@@ -45,6 +45,9 @@ export default function Navbar() {
 
   // ── Persistent search (Phase U.3 → live NavSearch) ────────────────
   const showNavSearch = pathname !== "/";
+  // Mobile bar: also hidden where the page already owns a search field
+  // (/shop list has its own filter search) — no stacked duplicates.
+  const showMobileNavSearch = showNavSearch && pathname !== "/shop";
 
   // ── Cart badge (Phase O.4 hydration gate) ─────────────────────────
   const count        = useCartStore(s => s.count());
@@ -423,9 +426,9 @@ export default function Navbar() {
       </div>
 
       {/* Mobile: persistent search bar under the logo row — the burger is
-          NOT the only path to search anymore. Hidden on the home page,
-          where the hero search card is the centerpiece. */}
-      {showNavSearch && (
+          NOT the only path to search anymore. Hidden on the home page
+          (hero card) and the /shop list (its own filter search). */}
+      {showMobileNavSearch && (
         <div className="md:hidden max-w-6xl mx-auto px-5 pb-2.5">
           <NavSearch variant="mobile" />
         </div>
