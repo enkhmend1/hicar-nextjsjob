@@ -136,6 +136,18 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [p, delivery]);
 
+  // Snap the initial quantity to the first VALID amount per the product's
+  // B2B rules (>= moq, multiple of orderMultiple) — e.g. pair-sold shocks
+  // open at 2, not 1.
+  useEffect(() => {
+    if (!p) return;
+    const mu = Math.max(1, p.orderMultiple ?? 1);
+    const mq = Math.max(1, p.moq ?? 1);
+    const min = Math.ceil(mq / mu) * mu;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQty((q) => (q < min || q % mu !== 0 ? min : q));
+  }, [p]);
+
   if (loading) return (
     <BuyerShell>
       <div className="min-h-[70vh] flex items-center justify-center text-gray-400">Уншиж байна...</div>
@@ -186,7 +198,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const lineSubtotal = p.price * qty;
   const totalPrice = lineSubtotal + deliveryOpts[delivery].price;
   const stockCap = typeof p.stockQty === "number" && p.stockQty > 0 ? p.stockQty : 99;
-  const bumpQty = (delta: number) => setQty((q) => Math.max(1, Math.min(stockCap, q + delta)));
+  // B2B line rules: moq = minimum quantity; orderMultiple = pack size
+  // (2 = sold in pairs, e.g. front shocks). The steppers move in whole
+  // packs and the server re-validates at order create regardless.
+  const moqMin = Math.max(1, p.moq ?? 1);
+  const packOf = Math.max(1, p.orderMultiple ?? 1);
+  const minQty = Math.ceil(moqMin / packOf) * packOf;
+  const snapQty = (n: number) =>
+    Math.max(minQty, Math.min(stockCap, Math.round(n / packOf) * packOf) || minQty);
+  const bumpQty = (delta: number) => setQty((q) => snapQty(q + delta * packOf));
 
   // Phase AT: resolve the Mongolian category name from the live category
   // list (matches by stable English key → display name). Falls back to a
@@ -311,6 +331,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 {(p.warrantyMonths ?? 0) > 0 && (
                   <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-100">
                     {p.warrantyMonths} сарын баталгаа
+                  </span>
+                )}
+                {(p.orderMultiple ?? 1) > 1 && (
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-100">
+                    {p.orderMultiple === 2 ? "Хосоор зарагдана (2ш)" : `${p.orderMultiple}ш багцаар зарагдана`}
+                  </span>
+                )}
+                {(p.moq ?? 1) > 1 && (
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-100">
+                    Доод захиалга: {p.moq}ш
                   </span>
                 )}
               </div>
@@ -517,7 +547,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <div>
                   <div className="text-[11px] text-gray-500 mb-1">Тоо ширхэг</div>
                   <div className="inline-flex items-center border-2 border-gray-200 rounded-xl overflow-hidden">
-                    <button onClick={() => bumpQty(-1)} disabled={qty <= 1}
+                    <button onClick={() => bumpQty(-1)} disabled={qty <= minQty}
                       className="w-10 h-11 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none">
                       <Minus size={14} />
                     </button>
@@ -527,6 +557,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       max={stockCap}
                       value={qty}
                       onChange={(e) => setQty(Math.max(1, Math.min(stockCap, Number(e.target.value) || 1)))}
+                      onBlur={() => setQty((q) => snapQty(q))}
                       className="w-12 h-11 text-center text-[14px] font-semibold text-gray-900 border-none focus:outline-none bg-transparent"
                     />
                     <button onClick={() => bumpQty(1)} disabled={qty >= stockCap}
@@ -616,7 +647,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       <div className="lg:hidden fixed bottom-16 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <div className="px-4 py-3 flex items-center gap-3 max-w-2xl mx-auto">
           <div className="inline-flex items-center border-2 border-gray-200 rounded-lg overflow-hidden shrink-0">
-            <button onClick={() => bumpQty(-1)} disabled={qty <= 1}
+            <button onClick={() => bumpQty(-1)} disabled={qty <= minQty}
               className="w-9 h-10 flex items-center justify-center text-gray-600 disabled:opacity-30 cursor-pointer bg-transparent border-none">
               <Minus size={13} />
             </button>

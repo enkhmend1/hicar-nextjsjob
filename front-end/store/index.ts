@@ -23,6 +23,24 @@ interface CartStore {
   total: () => number;
   count: () => number;
 }
+/**
+ * B2B line rules: quantity must be >= moq AND a multiple of orderMultiple
+ * (parts sold in pairs/packs). `dir` rounds toward the caller's intent so
+ * the ±1 steppers in the cart still move whole packs (4 −1 → 2, 4 +1 → 6).
+ * Defaults (moq=1, multiple=1) make this an identity for normal products,
+ * including old persisted cart snapshots that predate the fields.
+ */
+const snapQty = (p: Product, q: number, dir: 1 | -1 | 0 = 0) => {
+  const mu = Math.max(1, p.orderMultiple ?? 1);
+  const mq = Math.max(1, p.moq ?? 1);
+  const min = Math.ceil(mq / mu) * mu;
+  const rounded =
+    dir > 0 ? Math.ceil(q / mu) * mu
+    : dir < 0 ? Math.floor(q / mu) * mu
+    : Math.round(q / mu) * mu;
+  return Math.max(min, rounded);
+};
+
 export const useCartStore = create<CartStore>()(
   persist((set, get) => ({
     items: [],
@@ -31,7 +49,7 @@ export const useCartStore = create<CartStore>()(
       set(s => {
         const k = pid(product);
         const ex = s.items.find(i => pid(i.product) === k);
-        const safeQty = Math.max(1, Math.floor(qty));
+        const safeQty = snapQty(product, Math.max(1, Math.floor(qty)), 1);
         // Phase AS: respect explicit quantity. If item already in cart,
         // INCREMENT by safeQty (matches user mental model: "Add 3" = add 3
         // more, not "set to 3").
@@ -40,7 +58,17 @@ export const useCartStore = create<CartStore>()(
       }),
     removeItem: id => set(s => ({ items: s.items.filter(i => pid(i.product) !== id) })),
     updateQty: (id, qty) =>
-      set(s => ({ items: qty <= 0 ? s.items.filter(i => pid(i.product) !== id) : s.items.map(i => pid(i.product) === id ? { ...i, quantity: qty } : i) })),
+      set(s => ({
+        items: qty <= 0
+          ? s.items.filter(i => pid(i.product) !== id)
+          : s.items.map(i => {
+              if (pid(i.product) !== id) return i;
+              // Round toward the requested direction so pack-multiple
+              // products step in whole packs and never go below their MOQ.
+              const dir = qty > i.quantity ? 1 : qty < i.quantity ? -1 : 0;
+              return { ...i, quantity: snapQty(i.product, qty, dir) };
+            }),
+      })),
     updateDelivery: (id, dt) =>
       set(s => ({ items: s.items.map(i => pid(i.product) === id ? { ...i, deliveryType: dt } : i) })),
     clearCart: () => set({ items: [] }),

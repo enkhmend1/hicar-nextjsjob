@@ -49,7 +49,8 @@ Flow: `POST /api/seller/import/parse` (header mapping below) → AI enrich
 
 | # | Column | Product field | Notes |
 |---|--------|---------------|-------|
-| 25 | `MOQ` | `moq` | ≥ 1. Surfaced on the product page when > 1. |
+| 25 | `MOQ` | `moq` | ≥ 1. Enforced server-side at order create; product page opens at the first valid quantity. |
+| 25b | `Order_Multiple` | `orderMultiple` | Pack size (2 = sold in pairs, e.g. front shocks). Quantity must be a clean multiple — steppers move in whole packs, cart snaps, order create rejects violations. HiCar extension beyond the 32 columns. |
 | 26 | `Lead_Time_Days` | `leadTimeDays` | 0–365. |
 | 27 | `Gallery_URLs` | `images[1..]` | Comma-separated, max 10 total, `https://` only. |
 | 28 | `Datasheet_URL` | `datasheetUrl` | Rendered as a PDF chip on the product page. |
@@ -82,9 +83,12 @@ for the parts brand must rename that column to `Brand`.
   `engineCode`/`transmission`/`driveType`; the normalised
   `compatibility.*` block is still resolved by
   `compatibilityResolver.service.js` for the AI engine.
-- Phase 2 candidates: GTIN check-digit validation, MOQ enforcement at
-  checkout (server-side, `order.controller.js`), structured fitment editor
+- MOQ + Order_Multiple are enforced at order create (`order.controller.js`,
+  before totals/stock) and mirrored in the cart store (`snapQty`) and the
+  product-page quantity stepper.
+- Phase 2 candidates: GTIN check-digit validation, structured fitment editor
   in the manual form, data-platform (M2) normalization rules for the new
-  fields, condition/warranty facets in shop filters.
+  fields, condition/warranty facets in shop filters, per-axle "quantity
+  needed" hint (TecDoc usage quantity).
 - The downloadable template lives in the import wizard
   (`app/seller/products/import` → "B2B загвар татах").

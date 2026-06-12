@@ -99,6 +99,25 @@ export const createOrder = async (req, res) => {
         });
       }
       const qty = Math.max(1, Number(i.quantity) || 1);
+      // B2B line rules — server-authoritative; the product page / cart UI
+      // mirror these but are never trusted.
+      //   moq           — minimum order quantity per line.
+      //   orderMultiple — parts sold in fixed packs (pairs of shocks etc.):
+      //                   quantity must be a clean multiple.
+      const moq  = Math.max(1, Number(p.moq) || 1);
+      const mult = Math.max(1, Number(p.orderMultiple) || 1);
+      if (qty < moq) {
+        return res.status(400).json({
+          message: `"${p.name}" — доод захиалга ${moq} ширхэг. Тоо ширхгээ нэмнэ үү.`,
+          missingProductId: String(p._id),
+        });
+      }
+      if (qty % mult !== 0) {
+        return res.status(400).json({
+          message: `"${p.name}" — ${mult} ширхгээрээ багцлагдан зарагддаг тул ${mult}-ын үржвэрээр (${mult}, ${mult * 2}, ${mult * 3}...) захиална уу.`,
+          missingProductId: String(p._id),
+        });
+      }
       const dt = DELIVERY_TIERS.includes(i.deliveryType) ? i.deliveryType : "normal";
       total += p.price * qty;
       // Delivery fee = the SELLER's own price for this tier (server-resolved).
