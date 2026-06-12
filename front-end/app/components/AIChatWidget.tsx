@@ -11,6 +11,7 @@ import { useLocale } from "@/lib/i18n";
 import { Product, Order } from "@/app/types";
 import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
+import { useAIChat } from "@/app/lib/aiChat";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
 import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Clock } from "lucide-react";
 // Chat-widget types + sub-renderers extracted to ./ai-chat/* (Phase: split a
@@ -403,6 +404,25 @@ export default function HiCarAIChat() {
     // Dispatch on layout — pure UI logic stays in the widget.
     pushAi(layoutToMessage(result.response));
   }, [input, busy, isAdminPath, messages, agent, pushAi]);
+
+  // ── Global "Ask AI" bridge ─────────────────────────────────────
+  // NavSearch (or any surface) calls openAIChat("query") — the widget
+  // opens itself and auto-sends the query through the normal agent
+  // pipeline. If a reply is already in flight, the query is parked in
+  // the input instead so nothing is silently dropped.
+  const askOpen = useAIChat((s) => s.open);
+  useEffect(() => {
+    if (!askOpen) return;
+    useAIChat.getState().set(false); // one-shot trigger consumed
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsOpen(true);
+    setIsMinimized(false);
+    const q = useAIChat.getState().consumeQuery();
+    if (q) {
+      if (busy) setInput(q);
+      else void send(q);
+    }
+  }, [askOpen, busy, send]);
 
   // ── Voice input ────────────────────────────────────────────────
   const toggleVoice = () => {

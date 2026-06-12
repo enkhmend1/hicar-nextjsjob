@@ -5,7 +5,8 @@ import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { Product } from "@/app/types";
-import { Search, Loader2, ArrowRight } from "lucide-react";
+import { openAIChat } from "@/app/lib/aiChat";
+import { Search, Loader2, ArrowRight, Sparkles } from "lucide-react";
 
 /**
  * NavSearch — global live product search for the navbar (desktop bar +
@@ -82,6 +83,14 @@ export default function NavSearch({
     router.push(query ? `/shop?q=${encodeURIComponent(query)}` : "/shop");
   };
 
+  /** Hand the query to the AI assistant (vehicle-aware agent pipeline). */
+  const askAI = () => {
+    const query = q.trim();
+    setOpen(false);
+    onNavigate?.();
+    openAIChat(query);
+  };
+
   const showDrop = open && q.trim().length >= 2;
   const inputCls =
     variant === "mobile"
@@ -106,6 +115,27 @@ export default function NavSearch({
 
       {showDrop && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-50">
+          {/* AI search — routes the query through the chat agent, which
+              checks vehicle fitment + OEM cross-references. Always on top
+              so it works even when the plain DB search finds nothing. */}
+          <button
+            type="button"
+            onClick={askAI}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-gradient-to-r from-blue-50 to-amber-50 hover:from-blue-100 hover:to-amber-100 cursor-pointer border-none border-b border-gray-100 transition-colors font-sans text-left"
+          >
+            <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-amber-600 text-white inline-flex items-center justify-center shrink-0">
+              <Sparkles size={14} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12px] font-semibold text-gray-900 truncate">
+                «{q.trim()}» — AI туслахаар хайх
+              </span>
+              <span className="block text-[10px] text-gray-500 truncate">
+                Машинд тохирохыг шалгаж, OEM солбицол хайна
+              </span>
+            </span>
+            <ArrowRight size={13} className="text-blue-600 shrink-0" />
+          </button>
           {busy && hits.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-3 text-[12px] text-gray-500">
               <Loader2 size={13} className="animate-spin" /> Хайж байна…

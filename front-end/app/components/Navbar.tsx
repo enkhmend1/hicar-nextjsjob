@@ -9,7 +9,7 @@ import NotificationBell from "./NotificationBell";
 import NavSearch from "./NavSearch";
 import {
   ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car,
-  ChevronDown, Plus, ClipboardList, HelpCircle,
+  ChevronDown, ChevronRight, Plus, ClipboardList, HelpCircle, Search,
 } from "lucide-react";
 
 /**
@@ -422,49 +422,66 @@ export default function Navbar() {
         </button>
       </div>
 
+      {/* Mobile: persistent search bar under the logo row — the burger is
+          NOT the only path to search anymore. Hidden on the home page,
+          where the hero search card is the centerpiece. */}
+      {showNavSearch && (
+        <div className="md:hidden max-w-6xl mx-auto px-5 pb-2.5">
+          <NavSearch variant="mobile" />
+        </div>
+      )}
+
       {open && (
-        <div className="md:hidden bg-white border-t border-gray-100 px-5 pb-4 pt-3 shadow-lg max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain">
-          {/* Mobile search — live suggestions, same engine as desktop.
-              16px font prevents iOS Safari's focus auto-zoom. */}
-          <div className="mb-3">
-            <NavSearch variant="mobile" onNavigate={() => setOpen(false)} />
-          </div>
-          {/* Mobile: show identity card at top when signed-in. */}
-          {showUserUI && (
-            <div className="flex items-center gap-2.5 pb-3 mb-2 border-b border-gray-100">
-              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white text-[14px] font-bold flex items-center justify-center shrink-0">
+        <div className="md:hidden bg-white border-t border-gray-100 px-5 pb-5 pt-3 shadow-lg max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain">
+          {/* No search in the burger — the persistent navbar bar owns it. */}
+
+          {/* Identity (signed-in) or auth CTA (guest) — top of the menu. */}
+          {showUserUI ? (
+            <div className="flex items-center gap-2.5 bg-gradient-to-r from-blue-50 to-amber-50/60 border border-blue-100 rounded-2xl p-3 mb-3">
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white text-[14px] font-bold flex items-center justify-center shrink-0 shadow-sm">
                 {initials || <User size={16} />}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-[14px] font-semibold text-gray-900 truncate">{user.name}</div>
-                <div className="text-[11px] text-gray-500 truncate">{user.email}</div>
+                <div className="text-[11px] text-gray-600 truncate">{user.email}</div>
               </div>
               <Link href="/profile" onClick={() => setOpen(false)}
-                className="text-[11px] text-blue-600 font-medium px-2 py-1 rounded border border-blue-200">
+                className="text-[11px] text-blue-700 font-semibold px-2.5 py-1.5 rounded-lg border border-blue-200 bg-white shrink-0">
                 Профайл
+              </Link>
+            </div>
+          ) : (
+            <div className="flex gap-2 mb-3">
+              <Link href="/auth/login" onClick={() => setOpen(false)}
+                className="flex-1 border border-gray-200 rounded-xl py-2.5 text-[13px] font-medium text-gray-700 text-center bg-gray-50">
+                {t("nav.login")}
+              </Link>
+              <Link href="/auth/register" onClick={() => setOpen(false)}
+                className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-[13px] font-semibold text-center shadow-sm shadow-blue-200">
+                {t("nav.register")}
               </Link>
             </div>
           )}
 
-          {/* Mobile vehicle row — same switch/clear actions condensed. */}
+          {/* Active vehicle card — same switch/clear actions condensed. */}
           {showVehicleBadge && activeVehicle && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mb-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-3">
               <div className="flex items-center gap-2 mb-1.5">
                 <Car size={13} className="text-blue-700" />
                 <div className="text-[12px] font-semibold text-blue-900 truncate flex-1">
                   {activeVehicle.manufacturer} {activeVehicle.model}
                 </div>
-                <span className="text-[11px] text-blue-700/90">{activeVehicle.plate}</span>
+                <span className="text-[11px] text-blue-700/90 font-mono">{activeVehicle.plate}</span>
               </div>
               <div className="flex gap-1.5 mt-1.5">
                 <Link href="/garage" onClick={() => setOpen(false)}
-                  className="flex-1 text-center text-[11px] bg-white text-blue-700 border border-blue-300 rounded-md py-1.5 font-medium">
+                  className="flex-1 text-center text-[11px] bg-white text-blue-700 border border-blue-300 rounded-lg py-1.5 font-medium">
                   Машины жагсаалт
                 </Link>
                 <button
                   type="button"
                   onClick={() => { clearActiveVehicle(); setOpen(false); }}
-                  className="text-[11px] text-red-500 border border-red-200 rounded-md px-3 py-1.5 cursor-pointer bg-white font-sans"
+                  className="text-[11px] text-red-500 border border-red-200 rounded-lg px-3 py-1.5 cursor-pointer bg-white font-sans"
                 >
                   Гарах
                 </button>
@@ -472,44 +489,92 @@ export default function Navbar() {
             </div>
           )}
 
-          <Link href="/shop" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Package size={16} />{t("nav.shop")}</Link>
-          <Link href="/orders" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Package size={16} />{t("nav.orders")}</Link>
-          <Link href="/help" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><HelpCircle size={16} />{t("nav.help")}</Link>
-          {isSeller && !isAdmin && (
-            <Link href="/seller" className="flex items-center gap-3 text-[15px] text-amber-600 font-semibold py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Store size={16} />{t("nav.seller")}</Link>
-          )}
-          {isAdmin && (
-            <Link href="/admin" className="flex items-center gap-3 text-[15px] text-blue-600 font-semibold py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Shield size={16} />{t("nav.admin")}</Link>
-          )}
-          {showUserUI && !isAdmin && !isSeller && (
-            <Link href="/seller/apply" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Store size={16} />{t("nav.becomeSeller")}</Link>
-          )}
-          {showUserUI && (
-            <>
-              <Link href="/wishlist" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Heart size={16} />Wishlist</Link>
-              <Link href="/garage" className="flex items-center gap-3 text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}><Car size={16} />Миний машинууд</Link>
-            </>
-          )}
-          <Link href="/cart" className="flex items-center justify-between text-[15px] text-gray-700 py-2.5 border-b border-gray-100" onClick={() => setOpen(false)}>
-            <span className="flex items-center gap-3"><ShoppingCart size={16} />{t("nav.cart")}</span>
-            {showCartBadge && <span className="bg-blue-600 text-white text-[11px] px-2 py-0.5 rounded-full">{count}</span>}
-          </Link>
-          <div className="pt-3"><LangSwitcher /></div>
-          {showUserUI ? (
-            <div className="pt-3">
-              <button onClick={() => { logout(); setOpen(false); }} className="w-full border border-red-200 text-red-500 rounded-lg py-2.5 text-[13px] cursor-pointer bg-transparent font-sans">
-                <span className="inline-flex items-center gap-2 justify-center"><LogOut size={14} /> {t("nav.logout")}</span>
+          {/* Quick-access tiles — thumb-first top destinations. */}
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {[
+              { href: "/shop",     icon: Package,       label: t("nav.shop") },
+              { href: "/orders",   icon: ClipboardList, label: t("nav.orders") },
+              { href: "/wishlist", icon: Heart,         label: "Хадгалсан" },
+              { href: "/garage",   icon: Car,           label: "Машинууд" },
+            ].map(({ href, icon: Icon, label }) => (
+              <Link key={href} href={href} onClick={() => setOpen(false)}
+                className="flex flex-col items-center gap-1.5 bg-gray-50 active:bg-blue-50 border border-gray-100 rounded-2xl py-3 transition-colors">
+                <span className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm inline-flex items-center justify-center text-blue-700">
+                  <Icon size={17} />
+                </span>
+                <span className="text-[11px] font-medium text-gray-700 leading-none truncate max-w-full px-1">{label}</span>
+              </Link>
+            ))}
+          </div>
+
+          {/* Grouped link rows */}
+          <div className="rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-50 mb-3">
+            <MobileRow href="/lookup" onClick={() => setOpen(false)}
+              icon={<Search size={15} />} label="Улсын дугаар лавлах" />
+            <MobileRow href="/cart" onClick={() => setOpen(false)}
+              icon={<ShoppingCart size={15} />} label={t("nav.cart")}
+              badge={showCartBadge ? (
+                <span className="bg-blue-600 text-white text-[11px] px-2 py-0.5 rounded-full shrink-0">{count}</span>
+              ) : undefined} />
+            <MobileRow href="/help" onClick={() => setOpen(false)}
+              icon={<HelpCircle size={15} />} label={t("nav.help")} />
+            {isAdmin && (
+              <MobileRow href="/admin" onClick={() => setOpen(false)}
+                icon={<Shield size={15} />} label={t("nav.admin")} tone="blue" />
+            )}
+            {isSeller && !isAdmin && (
+              <MobileRow href="/seller" onClick={() => setOpen(false)}
+                icon={<Store size={15} />} label={t("nav.seller")} tone="amber" />
+            )}
+            {showUserUI && !isAdmin && !isSeller && (
+              <MobileRow href="/seller/apply" onClick={() => setOpen(false)}
+                icon={<Store size={15} />} label={t("nav.becomeSeller")} tone="amber" />
+            )}
+          </div>
+
+          {/* Footer: language switch + logout side by side. */}
+          <div className="flex items-center justify-between gap-3">
+            <LangSwitcher />
+            {showUserUI && (
+              <button onClick={() => { logout(); setOpen(false); }}
+                className="inline-flex items-center gap-1.5 border border-red-200 text-red-500 rounded-lg px-3 py-2 text-[12px] cursor-pointer bg-transparent font-sans">
+                <LogOut size={13} /> {t("nav.logout")}
               </button>
-            </div>
-          ) : (
-            <div className="pt-3 flex gap-2">
-              <Link href="/auth/login" className="flex-1 border border-gray-200 rounded-lg py-2.5 text-[13px] text-gray-600 text-center" onClick={() => setOpen(false)}>{t("nav.login")}</Link>
-              <Link href="/auth/register" className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-[13px] font-medium text-center" onClick={() => setOpen(false)}>{t("nav.register")}</Link>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </nav>
+  );
+}
+
+/** Mobile burger-menu row: icon chip + label + optional badge + chevron. */
+function MobileRow({
+  href, icon, label, badge, tone, onClick,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: React.ReactNode;
+  badge?: React.ReactNode;
+  tone?: "blue" | "amber";
+  onClick?: () => void;
+}) {
+  const chip =
+    tone === "blue" ? "bg-blue-50 text-blue-700"
+    : tone === "amber" ? "bg-amber-50 text-amber-700"
+    : "bg-gray-50 text-gray-600";
+  const text =
+    tone === "blue" ? "text-blue-700 font-semibold"
+    : tone === "amber" ? "text-amber-700 font-semibold"
+    : "text-gray-800 font-medium";
+  return (
+    <Link href={href} onClick={onClick}
+      className="flex items-center gap-3 px-3.5 py-3 bg-white active:bg-gray-50 transition-colors">
+      <span className={`w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0 ${chip}`}>{icon}</span>
+      <span className={`flex-1 text-[14px] truncate ${text}`}>{label}</span>
+      {badge}
+      <ChevronRight size={15} className="text-gray-300 shrink-0" />
+    </Link>
   );
 }
 
