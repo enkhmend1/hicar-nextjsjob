@@ -111,7 +111,7 @@ export default function SmartPartSearch({ vehicleId, plate, initialQuery = "" }:
           onChange={(e) => setQuery(e.target.value)}
           disabled={busy}
           placeholder="Сэлбэгийн нэр Монголоор бичнэ үү…"
-          className="flex-1 bg-transparent text-[16px] md:text-[13px] outline-none py-2.5 font-sans" />
+          className="flex-1 min-w-0 bg-transparent text-[16px] md:text-[13px] outline-none py-2.5 font-sans" />
         <button type="submit" disabled={busy || !query.trim()}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg px-3.5 py-1.5 m-1 text-[12px] font-semibold cursor-pointer border-none flex items-center gap-1.5 transition-colors shrink-0">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}

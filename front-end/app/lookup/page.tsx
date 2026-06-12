@@ -124,7 +124,7 @@ function LookupInner() {
               value={plate}
               onChange={(e) => setPlate(e.target.value)}
               placeholder="Жнь: 8083СЭН"
-              className="flex-1 min-w-[160px] bg-transparent text-white placeholder-white/60 text-[15px] outline-none px-2 py-2"
+              className="flex-1 min-w-[160px] bg-transparent text-white placeholder-white/60 text-[16px] md:text-[15px] outline-none px-2 py-2"
               autoFocus
               disabled={busy}
             />
