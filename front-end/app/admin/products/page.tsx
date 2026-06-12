@@ -55,6 +55,17 @@ export default function AdminProductsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { queueMicrotask(reload); }, [statusFilter]);
 
+  // Live search — results refresh 300ms after the admin stops typing
+  // (Enter still triggers instantly). First render is skipped: the
+  // statusFilter effect above already performs the initial load.
+  const qInitRef = useRef(true);
+  useEffect(() => {
+    if (qInitRef.current) { qInitRef.current = false; return; }
+    const t = setTimeout(reload, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
   const moderate = async (p: Product, action: "approve" | "reject") => {
     const id = p._id ?? p.id;
     let reason = "";
@@ -137,8 +148,8 @@ export default function AdminProductsPage() {
         <div className="relative flex-1 max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && reload()}
-            className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[13px] focus:border-blue-500"
-            placeholder="Хайх (нэр, OEM, брэнд) — Enter" />
+            className="w-full min-w-0 bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500"
+            placeholder="Хайх (нэр, OEM, брэнд)..." />
         </div>
         <div className="flex gap-1">
           {[{ id: "all", label: "Бүгд" }, { id: "pending", label: "Хянагдаж буй" }, { id: "approved", label: "Зөвшөөрсөн" }, { id: "rejected", label: "Татгалзсан" }].map(s => (
