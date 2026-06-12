@@ -102,6 +102,10 @@ export default function HiCarAIChat() {
   const isAdminPath  = pathname?.startsWith("/admin")  && user?.role === "admin";
   const isSellerPath = pathname?.startsWith("/seller") && user?.role === "seller";
   const isBuyerPath  = !isAdminPath && !isSellerPath;
+  // Auth screens (/auth/login|register|forgot|reset) are a minimal,
+  // single-task flow — the floating launcher overlaps their submit
+  // buttons on small phones and has no business being there.
+  const isAuthPath = !!pathname?.startsWith("/auth");
 
   // ── Phase H-prep: useAgent() owns ALL backend orchestration ─────
   // Widget no longer talks to api.* directly or mutates the car
@@ -450,6 +454,24 @@ export default function HiCarAIChat() {
       ? (locale === "en" ? "Inventory question, OEM, or quote..." : "Бараа, OEM, эсвэл үнийн санал...")
       : (locale === "en" ? "Search part name or OEM code..."     : "Сэлбэгийн нэр эсвэл OEM код...");
 
+  // Hidden entirely on auth screens. Placed after every hook so the
+  // hooks order stays identical across renders (rules-of-hooks).
+  if (isAuthPath) return null;
+
+  // Route-aware mobile anchor for the launcher:
+  //  • /shop/[id] has a sticky add-to-cart bar (bottom-16 + ~4.5rem tall)
+  //    that the default 4.5rem anchor lands ON TOP of — lift above it.
+  //  • /admin + /seller layouts have no MobileBottomNav, so the default
+  //    stilt would leave the button floating mid-air — drop to 1.25rem.
+  //  • everywhere else: clear the 56px bottom tab bar (+ iOS safe area).
+  const isProductDetail = /^\/shop\/[^/]+/.test(pathname ?? "");
+  const hasBottomNav = !(pathname?.startsWith("/admin") || pathname?.startsWith("/seller"));
+  const fabAnchor = isProductDetail
+    ? "bottom-[calc(8.75rem+env(safe-area-inset-bottom))]"
+    : hasBottomNav
+      ? "bottom-[calc(4.5rem+env(safe-area-inset-bottom))]"
+      : "bottom-[calc(1.25rem+env(safe-area-inset-bottom))]";
+
   if (!isOpen || isMinimized) {
     return (
       <button
@@ -463,7 +485,7 @@ export default function HiCarAIChat() {
         // Default anchor lifts above the 56px mobile bottom nav (+ iOS safe
         // area); once dragged, an inline left/top overrides the anchor.
         style={fabPos ? { left: fabPos.x, top: fabPos.y, right: "auto", bottom: "auto" } : undefined}
-        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer active:cursor-grabbing touch-none select-none border-none transition-colors font-sans"
+        className={`fixed ${fabAnchor} md:bottom-5 right-5 z-50 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-full shadow-lg shadow-blue-300 px-4 h-12 cursor-pointer active:cursor-grabbing touch-none select-none border-none transition-colors font-sans`}
         aria-label="AI chat">
         {isAdminPath ? <Bot size={18} /> : isSellerPath ? <FileSpreadsheet size={18} /> : <MessageCircle size={18} />}
         <span className="text-[13px] font-semibold">
