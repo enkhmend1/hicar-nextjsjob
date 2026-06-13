@@ -10,6 +10,7 @@ import NavSearch from "./NavSearch";
 import {
   ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car,
   ChevronDown, ChevronRight, Plus, ClipboardList, HelpCircle, Search,
+  MessageSquareQuote,
 } from "lucide-react";
 
 /**
@@ -358,6 +359,9 @@ export default function Navbar() {
                     <DropdownLink href="/orders" icon={<ClipboardList size={13} />} onClick={() => setUserOpen(false)}>
                       Захиалгууд
                     </DropdownLink>
+                    <DropdownLink href="/rfq" icon={<MessageSquareQuote size={13} />} onClick={() => setUserOpen(false)}>
+                      Үнийн саналууд
+                    </DropdownLink>
                     <DropdownLink href="/wishlist" icon={<Heart size={13} />} onClick={() => setUserOpen(false)}>
                       Хадгалсан
                     </DropdownLink>
@@ -519,6 +523,10 @@ export default function Navbar() {
               badge={showCartBadge ? (
                 <span className="bg-blue-600 text-white text-[11px] px-2 py-0.5 rounded-full shrink-0">{count}</span>
               ) : undefined} />
+            {showUserUI && (
+              <MobileRow href="/rfq" onClick={() => setOpen(false)}
+                icon={<MessageSquareQuote size={15} />} label="Үнийн саналууд" />
+            )}
             <MobileRow href="/help" onClick={() => setOpen(false)}
               icon={<HelpCircle size={15} />} label={t("nav.help")} />
             {isAdmin && (

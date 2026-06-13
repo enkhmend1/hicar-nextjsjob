@@ -263,6 +263,52 @@ export interface Dispute {
   createdAt?: string;
   updatedAt?: string;
 }
+/**
+ * RFQ — Request For Quotation ("Үнийн санал"), B2B roadmap #4.
+ *
+ * A buyer asks a seller for a custom unit price on a product + quantity.
+ * The seller answers with an integer-MNT unit price valid until a date;
+ * once the buyer accepts, the negotiated unit is applied SERVER-SIDE at
+ * order create (the client never supplies the price). `product` is a bare
+ * id on the seller list and a populated {name,images,price} on the buyer
+ * list — `productSnapshot` is the immutable copy taken at request time.
+ */
+export type RfqStatus = "pending" | "quoted" | "accepted" | "declined" | "cancelled";
+
+export interface RfqQuote {
+  unitPrice: number;
+  note?: string;
+  /** ISO date — the quote expires after this instant. */
+  validUntil?: string;
+  quotedAt?: string;
+}
+
+export interface RfqProductSnapshot {
+  name: string;
+  oem?: string;
+  sku?: string;
+  image?: string;
+  basePrice: number;
+}
+
+export interface Rfq {
+  _id?: string;
+  buyer: string | { _id: string; name: string };
+  seller: string | SellerSummary;
+  /** Populated to {name,images,price} on /rfq/mine + /rfq/seller; a bare id otherwise. */
+  product: string | { _id: string; name: string; images?: string[]; price: number };
+  productSnapshot: RfqProductSnapshot;
+  qty: number;
+  message?: string;
+  status: RfqStatus;
+  quote?: RfqQuote;
+  /** Order id once the accepted RFQ has been converted to an order. */
+  order?: string;
+  respondedAt?: string;
+  acceptedAt?: string;
+  createdAt: string;
+}
+
 export interface Order {
   _id?: string;
   id?: string;
