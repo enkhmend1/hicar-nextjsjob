@@ -427,9 +427,14 @@ export default function Navbar() {
           </Link>
         </div>
 
-        <button onClick={() => setOpen(!open)} className="md:hidden p-2 cursor-pointer bg-transparent border-none text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
-          {open ? <X size={21} /> : <Menu size={21} />}
-        </button>
+        {/* Mobile controls — bell (always visible so notifications reach
+            phone users) + hamburger. */}
+        <div className="md:hidden flex items-center gap-0.5">
+          {showUserUI && <NotificationBell align="right" />}
+          <button onClick={() => setOpen(!open)} className="p-2 cursor-pointer bg-transparent border-none text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+            {open ? <X size={21} /> : <Menu size={21} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile: persistent search bar under the logo row — the burger is

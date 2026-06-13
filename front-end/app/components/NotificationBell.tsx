@@ -1,19 +1,19 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
 import { useAuthStore } from "@/store";
+import { useNotifications } from "@/app/lib/notifications";
 import { Bell, Check, X, ShoppingBag, Package, Store, AlertCircle, Star, MessageSquare, MessageSquareQuote, LifeBuoy } from "lucide-react";
 
-interface Notif {
-  _id: string;
-  type: string;
-  title: string;
-  body: string;
-  link: string;
-  read: boolean;
-  createdAt: string;
-}
+/**
+ * NotificationBell — presentational dropdown. Data (items/unread) and the
+ * fetch/poll live in the shared `useNotifications` store, driven globally by
+ * <NotificationPoller/>; this component only renders + dispatches read/remove.
+ *
+ * Rendered in multiple places (buyer navbar desktop + mobile, seller & admin
+ * layouts). `align` controls which edge the panel opens from so it never runs
+ * off-screen: "right" for top-bar/navbar bells, "left" for a left sidebar.
+ */
 
 const ICON: Record<string, typeof Bell> = {
   order_placed: ShoppingBag,
@@ -28,7 +28,6 @@ const ICON: Record<string, typeof Bell> = {
   low_stock: AlertCircle,
   review_received: Star,
   system: MessageSquare,
-  // RFQ ("Үнийн санал") + support helpdesk
   rfq_received: MessageSquareQuote,
   rfq_quoted: MessageSquareQuote,
   rfq_accepted: MessageSquareQuote,
@@ -58,37 +57,18 @@ const COLOR: Record<string, string> = {
   support_reply: "text-indigo-500 bg-indigo-50",
 };
 
-export default function NotificationBell() {
-  const user = useAuthStore(s => s.user);
-  const [items, setItems] = useState<Notif[]>([]);
-  const [unread, setUnread] = useState(0);
+export default function NotificationBell({ align = "right" }: { align?: "left" | "right" }) {
+  const user = useAuthStore((s) => s.user);
+  const items = useNotifications((s) => s.items);
+  const unread = useNotifications((s) => s.unread);
+  const markRead = useNotifications((s) => s.markRead);
+  const markAll = useNotifications((s) => s.markAll);
+  const remove = useNotifications((s) => s.remove);
+
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const load = async () => {
-    try {
-      const { items, unreadCount } = await api.get<{ items: Notif[]; unreadCount: number }>("/notifications?limit=20");
-      setItems(items);
-      setUnread(unreadCount);
-    } catch { /* ignore */ }
-  };
-
-  // Poll every 30s when user is logged in.
-  useEffect(() => {
-    if (!user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setItems([]);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setUnread(0);
-      return;
-    }
-    load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  // Click outside to close
+  // Click outside to close.
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -99,26 +79,14 @@ export default function NotificationBell() {
 
   if (!user) return null;
 
-  const markRead = async (id: string) => {
-    setItems(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
-    setUnread(u => Math.max(0, u - 1));
-    try { await api.patch(`/notifications/${id}/read`); } catch {}
-  };
-  const markAll = async () => {
-    setItems(prev => prev.map(n => ({ ...n, read: true })));
-    setUnread(0);
-    try { await api.patch("/notifications/read-all"); } catch {}
-  };
-  const remove = async (id: string) => {
-    setItems(prev => prev.filter(n => n._id !== id));
-    try { await api.delete(`/notifications/${id}`); } catch {}
-  };
+  // Panel never overflows a phone: capped to the viewport with a 1.5rem gutter.
+  const panelPos = align === "left" ? "left-0" : "right-0";
 
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen(o => !o)}
+      <button onClick={() => setOpen((o) => !o)}
         className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer bg-transparent border-none"
-        title="Notifications">
+        aria-label="Мэдэгдэл" title="Мэдэгдэл">
         <Bell size={18} />
         {unread > 0 && (
           <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-semibold">
@@ -128,7 +96,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[340px] max-h-[480px] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden">
+        <div className={`absolute ${panelPos} top-full mt-2 w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden`}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <span className="text-[14px] font-semibold text-gray-900">Мэдэгдэл</span>
@@ -142,14 +110,14 @@ export default function NotificationBell() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overscroll-contain">
             {items.length === 0 ? (
               <div className="text-center py-8">
                 <Bell size={28} className="mx-auto text-gray-300 mb-2" />
                 <p className="text-[12px] text-gray-400">Мэдэгдэл байхгүй</p>
               </div>
             ) : (
-              items.map(n => {
+              items.map((n) => {
                 const Icon = ICON[n.type] ?? Bell;
                 const color = COLOR[n.type] ?? "text-gray-500 bg-gray-50";
                 const Inner = (
@@ -164,8 +132,9 @@ export default function NotificationBell() {
                     </div>
                     {!n.read && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />}
                     <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(n._id); }}
-                      className="w-5 h-5 flex items-center justify-center rounded text-gray-300 hover:text-red-500 cursor-pointer bg-transparent border-none shrink-0">
-                      <X size={11} />
+                      aria-label="Устгах"
+                      className="w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 cursor-pointer bg-transparent border-none shrink-0">
+                      <X size={12} />
                     </button>
                   </div>
                 );

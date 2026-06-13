@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
+import NotificationBell from "@/app/components/NotificationBell";
 import { LayoutDashboard, Package, ShoppingBag, Users, Store, LogOut, Home, Brain, Scale, LayoutTemplate, Sparkles, UploadCloud, Receipt, Lightbulb, LifeBuoy } from "lucide-react";
 
 const NAV = [
@@ -39,11 +40,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col shrink-0">
-        <div className="px-5 py-4 border-b border-gray-100">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2">
           <Link href="/" className="text-[20px] font-semibold tracking-tight">
             <em className="text-blue-600 not-italic">Hi</em>car
             <span className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold align-middle">ADMIN</span>
           </Link>
+          <NotificationBell align="left" />
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
@@ -83,7 +85,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/" className="text-[16px] font-semibold">
             <em className="text-blue-600 not-italic">Hi</em>car <span className="text-[10px] text-blue-600">ADMIN</span>
           </Link>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
+            <NotificationBell align="right" />
             {NAV.map(n => {
               const active = n.exact ? pathname === n.href : pathname.startsWith(n.href);
               const Icon = n.icon;

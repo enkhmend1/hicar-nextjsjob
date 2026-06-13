@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AIChatWidget from "./components/AIChatWidget";
 import SessionBoot from "./components/SessionBoot";
+import NotificationPoller from "./components/NotificationPoller";
 import Toaster from "./components/Toaster";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="mn">
       <body className="bg-gray-50 text-gray-900 min-h-screen antialiased">
         <SessionBoot />
+        <NotificationPoller />
         {children}
         <AIChatWidget />
         {/* Phase V.1: app-wide toast container. Any client component
