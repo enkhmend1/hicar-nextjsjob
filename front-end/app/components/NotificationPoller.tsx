@@ -12,13 +12,26 @@
 
 import { useEffect } from "react";
 import { useAuthStore } from "@/store";
-import { useNotifications } from "@/app/lib/notifications";
+import { useNotifications, unlockAudio } from "@/app/lib/notifications";
 
 const POLL_MS = 25_000;
 
 export default function NotificationPoller() {
   const user = useAuthStore((s) => s.user);
   const hydrated = useAuthStore((s) => s._hasHydrated);
+
+  // Unlock the Web-Audio chime on the first user gesture (browsers block
+  // audio until then). One-shot, capture-phase, passive.
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    const opts = { once: true, passive: true } as const;
+    window.addEventListener("pointerdown", unlock, opts);
+    window.addEventListener("keydown", unlock, opts);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!hydrated) return;
