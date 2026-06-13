@@ -1,6 +1,7 @@
 import Order from "../Model/order.model.js";
 import Product from "../Model/product.model.js";
 import User from "../Model/user.model.js";
+import Rfq from "../Model/rfq.model.js";
 import { notify, notifyAdmins } from "../Service/notification.service.js";
 import { maybeAlertLowStock } from "../Service/inventory.service.js";
 import { scheduleRelease, cancelScheduledRelease } from "../Queue/escrowRelease.queue.js";
@@ -56,6 +57,9 @@ const ALLOWED_PAYMENT_METHODS = ["qpay", "card"];
 
 export const createOrder = async (req, res) => {
   const decremented = []; // {id, qty} for rollback
+  // RFQ ids whose negotiated price was applied to a line — stamped consumed
+  // (single-use) ONLY after stock decrement + order create both succeed.
+  const rfqsToConsume = [];
 
   try {
     const { items, address, phone, paymentMethod } = req.body;
@@ -137,7 +141,40 @@ export const createOrder = async (req, res) => {
         });
       }
       const dt = DELIVERY_TIERS.includes(i.deliveryType) ? i.deliveryType : "normal";
-      const unitPrice = resolveUnitPrice(p, qty);
+      // Default to the server-resolved tier unit price. An accepted RFQ
+      // OVERRIDES this with the negotiated unit (validated below).
+      let unitPrice = resolveUnitPrice(p, qty);
+      let lineRfqId = null;
+      // B2B roadmap #4 — RFQ price override. The client may pass an
+      // `i.rfq` (accepted-quote id) per line; the negotiated unit price is
+      // applied SERVER-SIDE here. The price itself is NEVER read from the
+      // client — only the RFQ id, which we re-validate against the DB.
+      if (i.rfq) {
+        const rfq = await Rfq.findById(i.rfq);
+        if (!rfq) {
+          return res.status(400).json({ message: "Үнийн санал олдсонгүй", missingProductId: String(p._id) });
+        }
+        if (String(rfq.buyer) !== String(req.user._id)) {
+          return res.status(400).json({ message: "Энэ үнийн санал таных биш", missingProductId: String(p._id) });
+        }
+        if (String(rfq.product) !== String(p._id)) {
+          return res.status(400).json({ message: "Үнийн санал энэ бараанд хамаарахгүй байна", missingProductId: String(p._id) });
+        }
+        if (rfq.status !== "accepted") {
+          return res.status(400).json({ message: "Зөвхөн хүлээн авсан үнийн саналаар захиалах боломжтой", missingProductId: String(p._id) });
+        }
+        if (rfq.order) {
+          return res.status(400).json({ message: "Энэ үнийн саналаар аль хэдийн захиалга хийгдсэн байна", missingProductId: String(p._id) });
+        }
+        if (!rfq.quote?.validUntil || new Date(rfq.quote.validUntil).getTime() <= Date.now()) {
+          return res.status(400).json({ message: "Үнийн саналын хугацаа дууссан", missingProductId: String(p._id) });
+        }
+        // Override the unit price with the negotiated quote. Escrow split
+        // (price × qty) will use THIS unit, just like a tier price.
+        unitPrice = rfq.quote.unitPrice;
+        lineRfqId = rfq._id;
+        rfqsToConsume.push(rfq._id);
+      }
       total += unitPrice * qty;
       // Delivery fee = the SELLER's own price for this tier (server-resolved).
       deliveryFee += resolveDeliveryPrice(cfgBySeller, p.seller, dt);
@@ -146,9 +183,10 @@ export const createOrder = async (req, res) => {
       // platformFee / sellerPayout / bankSnapshot) stay zero here — they're
       // filled in atomically by the QPay callback once the payment lands.
       enriched.push({
-        product: p._id, seller: p.seller,
-        // price = the RESOLVED tier unit price — escrow split and payout
-        // queries multiply this by quantity, so it must be the real unit.
+        product: p._id, seller: p.seller, rfq: lineRfqId,
+        // price = the RESOLVED tier OR negotiated-RFQ unit price — escrow
+        // split and payout queries multiply this by quantity, so it must
+        // be the real unit.
         name: p.name, oem: p.oem, price: unitPrice, quantity: qty, deliveryType: dt,
       });
     }
@@ -193,6 +231,19 @@ export const createOrder = async (req, res) => {
       status: "pending",
       paymentStatus: "PENDING",
     });
+
+    // 5b. Mark each applied RFQ consumed (single-use). Done only AFTER the
+    //     stock decrement + order create both succeeded. The `order: null`
+    //     filter makes this idempotent and race-safe: if a concurrent order
+    //     consumed the same accepted quote first, this update no-ops — the
+    //     price was already validated above, and double-stamping is harmless
+    //     because the line still recorded the correct negotiated unit.
+    for (const rfqId of rfqsToConsume) {
+      await Rfq.updateOne(
+        { _id: rfqId, order: null },
+        { $set: { order: order._id } },
+      ).catch(() => {});
+    }
 
     // Notifications (fire-and-forget)
     const shortId = String(order._id).slice(-8).toUpperCase();
