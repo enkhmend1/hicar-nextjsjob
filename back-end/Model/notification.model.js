@@ -12,6 +12,8 @@ const notificationSchema = new mongoose.Schema(
         "low_stock", "review_received", "system",
         // B2B roadmap #4 — RFQ (request-for-quote) lifecycle pings.
         "rfq_received", "rfq_quoted", "rfq_accepted", "rfq_declined",
+        // Support helpdesk — ticket opened + threaded replies (both sides).
+        "support_opened", "support_reply",
         // Phase L — proactive background-agent insights. The `data`
         // field carries a `kind` discriminator
         // (deadstock_alert / market_gap_digest / financial_summary)
