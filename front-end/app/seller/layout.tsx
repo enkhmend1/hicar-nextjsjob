@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
-import { LayoutDashboard, Package, ShoppingBag, BarChart3, Settings, LogOut, Home, AlertCircle, Clock, Scale, Warehouse } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, BarChart3, Settings, LogOut, Home, AlertCircle, Clock, Scale, Warehouse, MessageSquareQuote } from "lucide-react";
 
 const NAV = [
   { href: "/seller", label: "Хяналтын самбар", icon: LayoutDashboard, exact: true },
@@ -11,6 +11,7 @@ const NAV = [
   { href: "/seller/products", label: "Миний бараа", icon: Package },
   { href: "/seller/warehouse", label: "Агуулах", icon: Warehouse },
   { href: "/seller/orders", label: "Захиалга", icon: ShoppingBag },
+  { href: "/seller/rfq", label: "Үнийн санал", icon: MessageSquareQuote },
   { href: "/seller/disputes", label: "Маргаан", icon: Scale },
   { href: "/seller/profile", label: "Профайл", icon: Settings },
 ];

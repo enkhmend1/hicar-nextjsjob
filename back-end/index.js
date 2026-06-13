@@ -43,6 +43,7 @@ import proxyRoutes        from './Routes/proxy.route.js';
 import smartSearchRoutes  from './Routes/smartSearch.route.js';
 import sellerImportRoutes from './Routes/sellerImport.route.js';
 import disputeRoutes      from './Routes/dispute.route.js';
+import rfqRoutes          from './Routes/rfq.route.js';
 import auditRoutes        from './Routes/audit.route.js';
 import siteContentRoutes  from './Routes/siteContent.route.js';
 
@@ -100,6 +101,7 @@ app.use('/api/admin/proxy',   proxyRoutes);
 app.use('/api/search',        smartSearchRoutes);
 app.use('/api/seller/import', sellerImportRoutes);
 app.use('/api/disputes',      disputeRoutes);   // Phase-2: refund / dispute system
+app.use('/api/rfq',           rfqRoutes);       // B2B roadmap #4: request-for-quote
 app.use('/api/admin/audit',   auditRoutes);     // hash-chained financial event log
 app.use('/api/site-content',  siteContentRoutes); // homepage display labels + hero copy
 

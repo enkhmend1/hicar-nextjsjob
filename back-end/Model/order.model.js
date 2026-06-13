@@ -17,6 +17,13 @@ const orderItemSchema = new mongoose.Schema(
     /** Denormalised — needed for per-seller payout queries without populate. */
     seller:  { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
+    /**
+     * B2B roadmap #4 — the accepted RFQ whose negotiated unit price this
+     * line used, if any. The server validates + consumes the RFQ at order
+     * create (single-use); null for a normal catalogue-priced line.
+     */
+    rfq: { type: mongoose.Schema.Types.ObjectId, ref: "Rfq", default: null },
+
     name:  { type: String, required: true },
     oem:   { type: String, required: true },
     price: { type: Number, required: true, min: 0 },

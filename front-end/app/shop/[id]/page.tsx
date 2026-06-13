@@ -27,13 +27,15 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import BuyerShell from "@/app/components/BuyerShell";
 import ReviewSection from "@/app/components/ReviewSection";
-import { useCartStore } from "@/store";
+import RfqModal from "@/app/components/RfqModal";
+import { useCartStore, useAuthStore } from "@/store";
 import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
 import { Product } from "@/app/types";
 import {
   ShoppingCart, ArrowLeft, Truck, CheckCircle, Shield, Clock, Package,
   Store, ChevronRight, Star as StarIcon, Minus, Plus, Tag, Info,
-  FileText, Wrench, BadgeCheck,
+  FileText, Wrench, BadgeCheck, MessageSquareQuote,
 } from "lucide-react";
 import Link from "next/link";
 import Breadcrumbs from "@/app/components/Breadcrumbs";
@@ -103,7 +105,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
+  const [rfqOpen, setRfqOpen] = useState(false);
   const addItem = useCartStore(s => s.addItem);
+  const user = useAuthStore(s => s.user);
   const router = useRouter();
   // Phase AT: live category list (same source as homepage + shop filter) so
   // we can resolve the Mongolian display name instead of the raw English key.
@@ -233,6 +237,27 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       : "";
   const shopRating =
     typeof p.seller === "object" && p.seller ? p.seller.sellerProfile?.rating : undefined;
+
+  // RFQ ("Үнийн санал авах") visibility. The backend rejects own-product
+  // and house-brand (sellerless) RFQs anyway, but we hide the button when
+  // we can already tell it would fail: no seller, the viewer IS the seller
+  // who owns this listing, or the viewer is an admin (admins don't buy).
+  // When ownership is unknown (guest / unpopulated seller) we still show it
+  // and let the API 400 — per the brief.
+  const viewerId = (user?._id ?? user?.id) as string | undefined;
+  const ownsThisProduct = !!viewerId && !!sellerId && viewerId === sellerId;
+  const canRequestQuote = !!sellerId && !ownsThisProduct && user?.role !== "admin";
+
+  // Gate the modal on auth: a guest gets a login nudge toast instead.
+  const openRfq = () => {
+    if (!user) {
+      toast.warning("Үнийн санал авахын тулд нэвтэрнэ үү.", {
+        action: { label: "Нэвтрэх", href: "/auth/login" },
+      });
+      return;
+    }
+    setRfqOpen(true);
+  };
 
   // Phase AT: remaining-stock display. Show the actual count with a low-stock
   // amber warning so buyers feel urgency on thin inventory.
@@ -625,14 +650,23 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     <div className="text-[11px] text-gray-500">{qty} × ₮{unitPrice.toLocaleString()} + хүргэлт</div>
                   )}
                 </div>
-                <button onClick={handleAdd} disabled={!p.inStock}
-                  className={`flex items-center gap-2 rounded-xl px-5 py-3.5 text-[14px] font-semibold cursor-pointer border-none transition-all whitespace-nowrap ${
-                    added ? "bg-emerald-500 text-white" :
-                    p.inStock ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200" :
-                    "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  }`}>
-                  {added ? <><CheckCircle size={17} />Нэмэгдлээ!</> : <><ShoppingCart size={17} />Сагсанд нэмэх</>}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {canRequestQuote && (
+                    <button onClick={openRfq} type="button"
+                      title="Худалдагчаас бөөний/тусгай үнэ асуух"
+                      className="flex items-center gap-2 rounded-xl px-4 py-3.5 text-[14px] font-semibold cursor-pointer border-2 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-all whitespace-nowrap">
+                      <MessageSquareQuote size={17} />Үнийн санал авах
+                    </button>
+                  )}
+                  <button onClick={handleAdd} disabled={!p.inStock}
+                    className={`flex items-center gap-2 rounded-xl px-5 py-3.5 text-[14px] font-semibold cursor-pointer border-none transition-all whitespace-nowrap ${
+                      added ? "bg-emerald-500 text-white" :
+                      p.inStock ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200" :
+                      "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    }`}>
+                    {added ? <><CheckCircle size={17} />Нэмэгдлээ!</> : <><ShoppingCart size={17} />Сагсанд нэмэх</>}
+                  </button>
+                </div>
               </div>
 
               {/* Seller card — Phase AT: uses the lifted seller identity so
@@ -713,6 +747,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="text-[11px] text-gray-500">Нийт</div>
             <div className="text-[16px] font-bold text-blue-600 leading-tight">₮{totalPrice.toLocaleString()}</div>
           </div>
+          {canRequestQuote && (
+            <button onClick={openRfq} type="button" aria-label="Үнийн санал авах"
+              title="Үнийн санал авах"
+              className="w-11 h-10 flex items-center justify-center rounded-lg border-2 border-amber-300 bg-amber-50 text-amber-700 cursor-pointer shrink-0">
+              <MessageSquareQuote size={17} />
+            </button>
+          )}
           <button onClick={handleAdd} disabled={!p.inStock}
             className={`flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-[13px] font-semibold cursor-pointer border-none transition-all whitespace-nowrap ${
               added ? "bg-emerald-500 text-white" :
@@ -723,6 +764,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
       </div>
+
+      {/* RFQ ("Үнийн санал авах") modal — opens from both CTA rows. The
+          quantity defaults to whatever the buyer picked on the page. */}
+      {rfqOpen && (
+        <RfqModal
+          product={p}
+          defaultQty={qty}
+          onClose={() => setRfqOpen(false)}
+        />
+      )}
     </BuyerShell>
   );
 }
