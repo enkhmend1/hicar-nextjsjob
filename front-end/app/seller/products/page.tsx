@@ -9,8 +9,12 @@ import TagInput from "@/app/components/ui/TagInput";
 import Link from "next/link";
 import {
   Plus, Pencil, Trash2, X, ImagePlus, Loader2, Search,
-  CheckCircle2, Clock, XCircle, AlertTriangle, Tag, Settings2, Sparkles, Boxes,
+  CheckCircle2, Clock, XCircle, AlertTriangle, Tag, Settings2, Sparkles, Boxes, Package,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { StatCardInline } from "@/app/seller/_components/StatCard";
+import { EmptyState, TableRowsSkeleton } from "@/app/seller/_components/States";
+import { TableCard, Th } from "@/app/seller/_components/Table";
 
 // ── Canonical categories (shown first in autocomplete) ───────────────
 const CANONICAL_CATEGORIES = [
@@ -181,35 +185,36 @@ export default function SellerProductsPage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900">Миний бараа</h1>
-          <p className="text-[13px] text-gray-500">{q.trim() ? `${visible.length} / ${items.length}` : items.length} бараа</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/seller/products/import"
-            className="inline-flex items-center gap-1.5 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all font-sans"
-           >
-            <Sparkles size={14} /> AI Bulk Import
-          </Link>
-          {/*
-            "Шинэ бараа" товчийг новын 3-алхамт форм руу route хийсэн.
-            Хуучин setEditing-аар нээгддэг inline modal нь EXISTING product-ыг
-            ЗАСАХАД л үлдсэн (хүснэгтийн мөр доторх Pencil товч).
-          */}
-          <Link href="/seller/products/new"
-            className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans shadow-md shadow-blue-200"
-           >
-            <Plus size={14} /> Шинэ бараа
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="Миний бараа"
+        subtitle={`${q.trim() ? `${visible.length} / ${items.length}` : items.length} бараа`}
+        icon={Package}
+        actions={
+          <>
+            <Link href="/seller/products/import"
+              className="inline-flex items-center gap-1.5 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all font-sans"
+             >
+              <Sparkles size={14} /> AI Bulk Import
+            </Link>
+            {/*
+              "Шинэ бараа" товчийг новын 3-алхамт форм руу route хийсэн.
+              Хуучин setEditing-аар нээгддэг inline modal нь EXISTING product-ыг
+              ЗАСАХАД л үлдсэн (хүснэгтийн мөр доторх Pencil товч).
+            */}
+            <Link href="/seller/products/new"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-all font-sans shadow-md shadow-blue-200"
+             >
+              <Plus size={14} /> Шинэ бараа
+            </Link>
+          </>
+        }
+      />
 
       {/* Inventory health */}
       <div className="grid grid-cols-3 gap-3">
-        <Kpi label="Цөөн үлдсэн" value={inventoryStats.low} tone={inventoryStats.low > 0 ? "amber" : "gray"} icon={AlertTriangle} />
-        <Kpi label="Дууссан" value={inventoryStats.out} tone={inventoryStats.out > 0 ? "red" : "gray"} icon={XCircle} />
-        <Kpi label="Нөөцийн үнэлгээ" value={`₮${inventoryStats.totalValue.toLocaleString()}`} tone="blue" icon={Tag} />
+        <StatCardInline label="Цөөн үлдсэн" value={inventoryStats.low} tone={inventoryStats.low > 0 ? "amber" : "gray"} icon={AlertTriangle} />
+        <StatCardInline label="Дууссан" value={inventoryStats.out} tone={inventoryStats.out > 0 ? "red" : "gray"} icon={XCircle} />
+        <StatCardInline label="Нөөцийн үнэлгээ" value={`₮${inventoryStats.totalValue.toLocaleString()}`} tone="blue" icon={Tag} />
       </div>
 
       {/* Live search over the list (name / OEM / brand / category) */}
@@ -226,36 +231,38 @@ export default function SellerProductsPage() {
         )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+      <TableCard>
+        <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[12px]">
-                <th className="px-3 py-2.5 font-medium w-12"></th>
-                <th className="text-left px-4 py-2.5 font-medium">Нэр / Брэнд</th>
-                <th className="text-left px-4 py-2.5 font-medium">OEM</th>
-                <th className="text-left px-4 py-2.5 font-medium">Ангилал</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үнэ</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үлдэгдэл</th>
-                <th className="text-center px-4 py-2.5 font-medium">Төлөв</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үйлдэл</th>
+                <Th className="w-12" />
+                <Th>Нэр / Брэнд</Th>
+                <Th>OEM</Th>
+                <Th>Ангилал</Th>
+                <Th align="right">Үнэ</Th>
+                <Th align="right">Үлдэгдэл</Th>
+                <Th align="center">Төлөв</Th>
+                <Th align="right">Үйлдэл</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Уншиж байна...</td></tr>
+                <TableRowsSkeleton rows={6} cols={8} />
               ) : visible.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                <tr><td colSpan={8}>
                   {q.trim() ? (
-                    <>«{q.trim()}» гэсэн илэрц олдсонгүй</>
+                    <EmptyState icon={Search} title={`«${q.trim()}» гэсэн илэрц олдсонгүй`} hint="Өөр түлхүүр үгээр хайж үзнэ үү." />
                   ) : (
-                    <>
-                      Бараа байхгүй.{" "}
-                      <Link href="/seller/products/new" className="text-blue-600 hover:text-blue-700 font-semibold underline" style={{ textDecoration: "underline" }}>
-                        Шинэ бараа нэмэх
-                      </Link>
-                      .
-                    </>
+                    <EmptyState
+                      icon={Package}
+                      title="Бараа байхгүй"
+                      hint="Эхний бараагаа нэмж эхлээрэй."
+                      action={
+                        <Link href="/seller/products/new" className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-[13px] font-semibold cursor-pointer transition-colors" style={{ textDecoration: "none", color: "white" }}>
+                          <Plus size={14} /> Шинэ бараа нэмэх
+                        </Link>
+                      }
+                    />
                   )}
                 </td></tr>
               ) : visible.map((p) => {
@@ -311,9 +318,8 @@ export default function SellerProductsPage() {
                 );
               })}
             </tbody>
-          </table>
-        </div>
-      </div>
+        </table>
+      </TableCard>
 
       {editing && (
         <Modal onClose={() => !busy && setEditing(null)}>
@@ -485,13 +491,18 @@ export default function SellerProductsPage() {
           border: 1px solid #e5e7eb;
           border-radius: 8px;
           padding: 8px 12px;
-          font-size: 13px;
+          font-size: 16px;
           font-family: inherit;
           color: #111;
         }
+        @media (min-width: 768px) {
+          :global(.input) {
+            font-size: 13px;
+          }
+        }
         :global(.input:focus) {
           outline: none;
-          border-color: #8b5cf6;
+          border-color: #3b82f6;
           background: white;
         }
       `}</style>
@@ -518,26 +529,6 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
       </legend>
       {children}
     </fieldset>
-  );
-}
-
-function Kpi({ label, value, tone, icon: Icon }: { label: string; value: string | number; tone: "blue" | "amber" | "red" | "gray"; icon: typeof Tag }) {
-  const toneClass = {
-    blue: "bg-blue-50 text-blue-700",
-    amber:  "bg-amber-50 text-amber-700",
-    red:    "bg-red-50 text-red-700",
-    gray:   "bg-gray-50 text-gray-500",
-  }[tone];
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-3 flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${toneClass}`}>
-        <Icon size={15} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[16px] font-bold text-gray-900 tabular-nums truncate">{value}</div>
-        <div className="text-[11px] text-gray-500">{label}</div>
-      </div>
-    </div>
   );
 }
 

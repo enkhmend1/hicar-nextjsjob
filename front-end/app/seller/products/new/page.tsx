@@ -39,8 +39,10 @@ import {
 } from "@/app/lib/productSchema";
 import {
   AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronRight, CornerDownRight,
-  FolderTree, Loader2, Plus, Search, Trash2, Upload, X,
+  FolderTree, Loader2, Plus, Search, Trash2, Upload, X, ArrowLeft, PackagePlus,
 } from "lucide-react";
+import Link from "next/link";
+import PageHeader from "@/app/seller/_components/PageHeader";
 
 // Shared form-API type so child components and the parent agree on the
 // exact UseFormReturn shape. Using a named alias avoids TS surfacing the
@@ -142,10 +144,18 @@ export default function NewProductPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-6 px-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Шинэ бараа нэмэх</h1>
-        <p className="text-[13px] text-gray-500">3 алхамт форм — алхам бүрт автомат шалгана.</p>
-      </div>
+      <PageHeader
+        title="Шинэ бараа нэмэх"
+        subtitle="3 алхамт форм — алхам бүрт автомат шалгана."
+        icon={PackagePlus}
+        actions={
+          <Link href="/seller/products"
+            className="inline-flex items-center gap-1.5 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all">
+            <ArrowLeft size={14} /> Жагсаалт руу
+          </Link>
+        }
+      />
+
 
       {/* ── Stepper (fixed height) ───────────────────────────────── */}
       <nav className="mt-5 mb-5 flex items-center" aria-label="Progress">
@@ -262,7 +272,7 @@ function Step1Basics({ form }: { form: ProductForm }) {
     setValue("category", "", { shouldDirty: true });
   };
 
-  const inputCls = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans";
+  const inputCls = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans";
 
   return (
     <div className="space-y-4">
@@ -529,21 +539,21 @@ function Step3Pricing({ form }: { form: ProductForm }) {
       <div className="grid sm:grid-cols-3 gap-4">
         <Field label="Үнэ (₮)" error={errors.price?.message}>
           <input type="number" {...register("price", { valueAsNumber: true })} min={0}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
         </Field>
         <Field label="Хямдралын өмнөх үнэ (₮)" hint="Заавал биш" error={errors.originalPrice?.message}>
           <input type="number" {...register("originalPrice", { valueAsNumber: true, setValueAs: (v) => v === "" || v == null ? undefined : Number(v) })} min={0}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
         </Field>
         <Field label="Нөөц (ширхэг)" error={errors.stockQty?.message}>
           <input type="number" {...register("stockQty", { valueAsNumber: true })} min={0}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans" />
         </Field>
       </div>
 
       <Field label="Тайлбар" hint="Дэлгэрэнгүй техникийн мэдээлэл, нөхцөл, баталгаа" error={errors.description?.message}>
         <textarea {...register("description")} rows={4}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans resize-none" />
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans resize-none" />
       </Field>
 
       <div>
@@ -728,7 +738,7 @@ function AttributesFor({
         const path = `attributes.${f.key}` as const;
         const err = attrErrors[f.key]?.message;
         const label = f.label + (f.required ? " *" : "");
-        const cls = `w-full bg-gray-50 border rounded-xl px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans ${
+        const cls = `w-full bg-gray-50 border rounded-xl px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-sans ${
           err ? "border-red-300" : "border-gray-200"
         }`;
 

@@ -18,6 +18,8 @@ import { Dispute, DisputeStatus } from "@/app/types";
 import {
   Scale, Clock, AlertTriangle, Check, Coins, XCircle, Loader2, Image as ImageIcon, MessageSquare,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { EmptyState, Skeleton } from "@/app/seller/_components/States";
 
 const STATUS_CHIP: Record<DisputeStatus, { label: string; cls: string }> = {
   open:             { label: "Шинэ",       cls: "bg-rose-50 text-rose-700 border-rose-200" },
@@ -85,12 +87,7 @@ export default function SellerDisputesPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-          <Scale size={20} className="text-rose-500" /> Маргаан
-        </h1>
-        <p className="text-[13px] text-gray-500">Захиалгад гарсан гомдол + AI шинжилгээ</p>
-      </div>
+      <PageHeader title="Маргаан" subtitle="Захиалгад гарсан гомдол + AI шинжилгээ" icon={Scale} iconClassName="text-rose-500" />
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map((f) => (
@@ -107,12 +104,16 @@ export default function SellerDisputesPage() {
         {/* ── List ─────────────────────────────────────────────── */}
         <aside className="bg-white border border-gray-200 rounded-2xl overflow-hidden md:max-h-[78vh] md:overflow-y-auto">
           {loading ? (
-            <div className="p-6 text-center text-gray-400 text-[12px]">Уншиж байна...</div>
-          ) : disputes.length === 0 ? (
-            <div className="p-8 text-center">
-              <Scale size={28} className="mx-auto text-gray-300 mb-2" />
-              <p className="text-[12px] text-gray-400">Маргаан байхгүй</p>
+            <div className="p-3 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              ))}
             </div>
+          ) : disputes.length === 0 ? (
+            <EmptyState icon={Scale} title="Маргаан байхгүй" />
           ) : (
             <div className="divide-y divide-gray-100">
               {disputes.map((d) => {
@@ -154,7 +155,7 @@ export default function SellerDisputesPage() {
           {selected ? (
             <DisputeDetail dispute={selected} onChanged={reload} />
           ) : (
-            <div className="p-8 text-center text-gray-400 text-[12px]">Маргаан сонгоно уу</div>
+            <EmptyState icon={Scale} title="Маргаан сонгоно уу" hint="Зүүн талаас маргааныг сонгож дэлгэрэнгүйг харна уу." />
           )}
         </section>
       </div>
@@ -283,7 +284,7 @@ function DisputeDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: ()
             onChange={(e) => setNote(e.target.value)}
             placeholder="Тайлбар (заавал биш) — буцаалт өгөх / татгалзах шалтгаан..."
             rows={3} maxLength={2000}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
           />
 
           <div className="grid sm:grid-cols-3 gap-2">
@@ -295,7 +296,7 @@ function DisputeDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: ()
             <div className="flex gap-1">
               <input type="number" value={partial} onChange={(e) => setPartial(e.target.value)}
                 min={1} max={dispute.requestedRefundAmount - 1}
-                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[12px] focus:border-blue-500 outline-none w-0" />
+                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[16px] md:text-[12px] focus:border-blue-500 outline-none w-0" />
               <button onClick={() => respond("partial_refund_offered")} disabled={busy}
                 className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-2 py-2 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans inline-flex items-center gap-1 whitespace-nowrap">
                 <Coins size={11} /> Хэсэг

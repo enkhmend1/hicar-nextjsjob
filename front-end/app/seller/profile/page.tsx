@@ -47,6 +47,8 @@ import {
   Store, ExternalLink, Copy, Check, Image as ImageIcon, Trash2,
   Star, ShoppingBag, Shield, Truck, Clock,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { ErrorBanner } from "@/app/seller/_components/States";
 
 type Tab = "branding" | "payouts" | "inventory" | "delivery";
 
@@ -172,36 +174,33 @@ export default function SellerProfilePage() {
   return (
     <div className="space-y-5">
       {/* ── HEADER ROW ───────────────────────────────────────────── */}
-      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Store size={20} className="text-blue-700" /> Профайл ба тохиргоо
-          </h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">
-            Олон нийтэд харагдах дэлгүүрийн брэндинг + дотоод тохиргоо.
-          </p>
-        </div>
-
-        {sellerId && (
-          <div className="flex flex-col sm:items-end gap-1.5">
-            <Link href={`/store/${sellerId}`} target="_blank" rel="noopener"
-              className="inline-flex items-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl px-4 py-2 text-[13px] font-semibold transition-colors shadow-sm shadow-blue-200">
-              <ExternalLink size={13} /> Миний дэлгүүрийг үзэх
-            </Link>
-            {storeUrl && (
-              <button onClick={copyUrl}
-                className="group inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-blue-700 cursor-pointer bg-transparent border-none font-sans">
-                {copied ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
-                <span className="font-mono truncate max-w-[260px]">{storeUrl}</span>
-              </button>
-            )}
-          </div>
-        )}
-      </header>
+      <PageHeader
+        title="Профайл ба тохиргоо"
+        subtitle="Олон нийтэд харагдах дэлгүүрийн брэндинг + дотоод тохиргоо."
+        icon={Store}
+        iconClassName="text-blue-700"
+        actions={
+          sellerId ? (
+            <div className="flex flex-col sm:items-end gap-1.5">
+              <Link href={`/store/${sellerId}`} target="_blank" rel="noopener"
+                className="inline-flex items-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl px-4 py-2 text-[13px] font-semibold transition-colors shadow-sm shadow-blue-200">
+                <ExternalLink size={13} /> Миний дэлгүүрийг үзэх
+              </Link>
+              {storeUrl && (
+                <button onClick={copyUrl}
+                  className="group inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-blue-700 cursor-pointer bg-transparent border-none font-sans">
+                  {copied ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                  <span className="font-mono truncate max-w-[260px]">{storeUrl}</span>
+                </button>
+              )}
+            </div>
+          ) : undefined
+        }
+      />
 
       {/* ── INLINE FEEDBACK ──────────────────────────────────────── */}
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[12px] rounded-xl px-3 py-2">{msg}</div>}
-      {err && <div className="bg-red-50 border border-red-200 text-red-600 text-[12px] rounded-xl px-3 py-2">{err}</div>}
+      {err && <ErrorBanner message={err} />}
 
       {/* ── TABS ─────────────────────────────────────────────────── */}
       <div className="flex gap-1 border-b border-gray-200">
@@ -297,13 +296,13 @@ export default function SellerProfilePage() {
                 <Field label="Дэлгүүрийн нэр">
                   <input value={branding.shopName} onChange={(e) => setBranding((p) => ({ ...p, shopName: e.target.value }))}
                     placeholder="Жнь: AutoParts Mongolia"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white outline-none transition-colors" />
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors" />
                 </Field>
                 <Field label="Танилцуулга" hint="Худалдан авагчид таны дэлгүүрийн чиглэл, давуу талыг харна.">
                   <textarea value={branding.description} onChange={(e) => setBranding((p) => ({ ...p, description: e.target.value }))}
                     rows={4}
                     placeholder="Жнь: Японы оригинал OEM сэлбэг, 7 жилийн туршлагатай..."
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors resize-none leading-relaxed font-sans" />
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors resize-none leading-relaxed font-sans" />
                 </Field>
               </Card>
 
@@ -317,7 +316,7 @@ export default function SellerProfilePage() {
                 <Field label="Банкны данс">
                   <input value={payouts.bankAccount} onChange={(e) => setPayouts({ bankAccount: e.target.value })}
                     placeholder="5001 1234 5678"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-mono" />
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors font-mono" />
                 </Field>
 
                 <div className="grid grid-cols-3 gap-3 mt-2 pt-4 border-t border-gray-100">
@@ -339,7 +338,7 @@ export default function SellerProfilePage() {
                   <input type="number" min={0} max={1000}
                     value={inventory.defaultLowStockThreshold}
                     onChange={(e) => setInventory((p) => ({ ...p, defaultLowStockThreshold: Number(e.target.value) }))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white outline-none transition-colors" />
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors" />
                 </Field>
 
                 <label className="flex items-start gap-3 cursor-pointer bg-blue-50/40 border border-blue-100 rounded-xl p-3 mt-1">
@@ -405,7 +404,7 @@ export default function SellerProfilePage() {
                               value={opt.value}
                               disabled={!opt.enabled}
                               onChange={(e) => setTier(tier, { value: Number(e.target.value) })}
-                              className="w-20 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50" />
+                              className="w-20 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50" />
                             <select
                               value={opt.unit}
                               disabled={!opt.enabled}
@@ -413,7 +412,7 @@ export default function SellerProfilePage() {
                                 const unit = e.target.value as DeliveryUnit;
                                 setTier(tier, { unit, value: Math.min(opt.value, MAX_ETA_BY_UNIT[unit]) });
                               }}
-                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50 cursor-pointer font-sans">
+                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50 cursor-pointer font-sans">
                               <option value="hour">Цаг</option>
                               <option value="day">Хоног</option>
                             </select>
@@ -429,7 +428,7 @@ export default function SellerProfilePage() {
                               disabled={!opt.enabled}
                               onChange={(e) => setTier(tier, { price: Number(e.target.value) })}
                               placeholder="0"
-                              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-7 pr-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50" />
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-7 pr-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none transition-colors disabled:opacity-50" />
                           </div>
                         </div>
                       </div>

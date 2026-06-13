@@ -99,19 +99,19 @@ export default function SellerApplyPage() {
             <div>
               <label className="block text-[12px] font-medium text-gray-700 mb-1">Дэлгүүрийн нэр *</label>
               <input required value={form.shopName} onChange={e => setForm(f => ({ ...f, shopName: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[14px] focus:border-blue-500 focus:bg-white transition-colors"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors"
                 placeholder="HiAuto Parts" />
             </div>
             <div>
               <label className="block text-[12px] font-medium text-gray-700 mb-1">Танилцуулга</label>
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white transition-colors resize-none h-20 font-sans"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors resize-none h-20 font-sans"
                 placeholder="Япон, Солонгосын OEM сэлбэгийн нийлүүлэгч..." />
             </div>
             <div>
               <label className="block text-[12px] font-medium text-gray-700 mb-1">Дансны мэдээлэл</label>
               <input value={form.bankAccount} onChange={e => setForm(f => ({ ...f, bankAccount: e.target.value }))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] focus:border-blue-500 focus:bg-white transition-colors font-mono"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white transition-colors font-mono"
                 placeholder="Хаан банк — 5001 1234 5678" />
             </div>
 

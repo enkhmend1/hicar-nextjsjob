@@ -7,6 +7,9 @@ import {
   TrendingUp, Coins, Package, ShoppingBag, FileSpreadsheet, FileText, FileDown,
   Loader2, AlertTriangle, BarChart3,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { StatCard } from "@/app/seller/_components/StatCard";
+import { ErrorBanner, StatCardsSkeleton } from "@/app/seller/_components/States";
 
 // ── Types ───────────────────────────────────────────────────────────
 interface Analytics {
@@ -106,25 +109,14 @@ export default function SellerAnalyticsPage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <BarChart3 size={20} className="text-amber-500" /> Аналитик
-          </h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">
-            Орлого, ашиг, бараа материал, борлуулалтын тайлан
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <DateRangePicker value={range} onChange={setRange} />
-        </div>
-      </header>
+      <PageHeader
+        title="Аналитик"
+        subtitle="Орлого, ашиг, бараа материал, борлуулалтын тайлан"
+        icon={BarChart3}
+        actions={<DateRangePicker value={range} onChange={setRange} />}
+      />
 
-      {err && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-3 py-2 flex items-center gap-2">
-          <AlertTriangle size={14} /> {err}
-        </div>
-      )}
+      {err && <ErrorBanner message={err} />}
 
       {/* Export bar */}
       <div className="bg-gradient-to-r from-blue-50 to-amber-50 border border-blue-100 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
@@ -143,17 +135,15 @@ export default function SellerAnalyticsPage() {
       </div>
 
       {loading && !data ? (
-        <div className="text-center py-16 text-gray-400 text-[13px]">
-          <Loader2 className="inline animate-spin mr-1.5" size={14} /> Уншиж байна...
-        </div>
+        <StatCardsSkeleton count={4} />
       ) : !data ? null : (
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi label="Орлого" value={`₮${data.totals.revenue.toLocaleString()}`} sub={`${data.totals.orders} захиалга`} icon={Coins} tone="blue" />
-            <Kpi label="Цэвэр ашиг" value={`₮${data.totals.profit.toLocaleString()}`} sub={`Хураамж ${data.platformFeePercent}% (₮${data.totals.commission.toLocaleString()})`} icon={TrendingUp} tone="emerald" />
-            <Kpi label="Дундаж захиалга" value={`₮${data.totals.avgOrderValue.toLocaleString()}`} sub={`${data.totals.units} ширхэг`} icon={ShoppingBag} tone="amber" />
-            <Kpi label="Нөөц" value={`₮${data.inventory.stockValue.toLocaleString()}`} sub={`${data.inventory.totalStock} ширхэг`} icon={Package} tone="indigo" />
+            <StatCard label="Орлого" value={`₮${data.totals.revenue.toLocaleString()}`} sub={`${data.totals.orders} захиалга`} icon={Coins} tone="blue" />
+            <StatCard label="Цэвэр ашиг" value={`₮${data.totals.profit.toLocaleString()}`} sub={`Хураамж ${data.platformFeePercent}% (₮${data.totals.commission.toLocaleString()})`} icon={TrendingUp} tone="emerald" />
+            <StatCard label="Дундаж захиалга" value={`₮${data.totals.avgOrderValue.toLocaleString()}`} sub={`${data.totals.units} ширхэг`} icon={ShoppingBag} tone="amber" />
+            <StatCard label="Нөөц" value={`₮${data.inventory.stockValue.toLocaleString()}`} sub={`${data.inventory.totalStock} ширхэг`} icon={Package} tone="indigo" />
           </div>
 
           {/* Daily revenue mini-chart */}
@@ -213,29 +203,31 @@ export default function SellerAnalyticsPage() {
               {data.topProducts.length === 0 ? (
                 <p className="text-[13px] text-gray-400 text-center py-6">Өгөгдөл алга</p>
               ) : (
-                <table className="w-full text-[13px]">
-                  <thead className="text-[11px] text-gray-400">
-                    <tr>
-                      <th className="text-left pb-1">#</th>
-                      <th className="text-left pb-1">Бараа</th>
-                      <th className="text-right pb-1">Ширхэг</th>
-                      <th className="text-right pb-1">Орлого</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.topProducts.map((p, i) => (
-                      <tr key={p._id} className="border-t border-gray-100">
-                        <td className="py-1.5 text-gray-400 tabular-nums">{i + 1}</td>
-                        <td className="py-1.5">
-                          <div className="font-medium text-gray-900 truncate max-w-[260px]">{p.name}</div>
-                          {p.oem && <div className="text-[10px] text-gray-400 font-mono">{p.oem}</div>}
-                        </td>
-                        <td className="py-1.5 text-right tabular-nums text-gray-700">{p.units}</td>
-                        <td className="py-1.5 text-right font-semibold tabular-nums text-blue-600">₮{p.revenue.toLocaleString()}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13px]">
+                    <thead className="text-[11px] text-gray-400">
+                      <tr>
+                        <th className="text-left pb-1">#</th>
+                        <th className="text-left pb-1">Бараа</th>
+                        <th className="text-right pb-1">Ширхэг</th>
+                        <th className="text-right pb-1">Орлого</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.topProducts.map((p, i) => (
+                        <tr key={p._id} className="border-t border-gray-100">
+                          <td className="py-1.5 text-gray-400 tabular-nums">{i + 1}</td>
+                          <td className="py-1.5">
+                            <div className="font-medium text-gray-900 truncate max-w-[260px]">{p.name}</div>
+                            {p.oem && <div className="text-[10px] text-gray-400 font-mono">{p.oem}</div>}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums text-gray-700">{p.units}</td>
+                          <td className="py-1.5 text-right font-semibold tabular-nums text-blue-600">₮{p.revenue.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </section>
           </div>
@@ -244,26 +236,28 @@ export default function SellerAnalyticsPage() {
           {data.monthly.length > 0 && (
             <section className="bg-white border border-gray-200 rounded-2xl p-4">
               <h2 className="text-[14px] font-semibold text-gray-900 mb-3">Сар бүрийн борлуулалт</h2>
-              <table className="w-full text-[13px]">
-                <thead className="text-[11px] text-gray-400">
-                  <tr>
-                    <th className="text-left pb-1">Сар</th>
-                    <th className="text-right pb-1">Захиалга</th>
-                    <th className="text-right pb-1">Ширхэг</th>
-                    <th className="text-right pb-1">Орлого</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.monthly.map((m) => (
-                    <tr key={m.month} className="border-t border-gray-100">
-                      <td className="py-1.5 font-medium text-gray-700">{m.month}</td>
-                      <td className="py-1.5 text-right tabular-nums">{m.orderCount}</td>
-                      <td className="py-1.5 text-right tabular-nums">{m.units}</td>
-                      <td className="py-1.5 text-right font-semibold tabular-nums text-blue-600">₮{m.revenue.toLocaleString()}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead className="text-[11px] text-gray-400">
+                    <tr>
+                      <th className="text-left pb-1">Сар</th>
+                      <th className="text-right pb-1">Захиалга</th>
+                      <th className="text-right pb-1">Ширхэг</th>
+                      <th className="text-right pb-1">Орлого</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.monthly.map((m) => (
+                      <tr key={m.month} className="border-t border-gray-100">
+                        <td className="py-1.5 font-medium text-gray-700">{m.month}</td>
+                        <td className="py-1.5 text-right tabular-nums">{m.orderCount}</td>
+                        <td className="py-1.5 text-right tabular-nums">{m.units}</td>
+                        <td className="py-1.5 text-right font-semibold tabular-nums text-blue-600">₮{m.revenue.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           )}
 
@@ -291,28 +285,6 @@ export default function SellerAnalyticsPage() {
 }
 
 // ── Reusable bits ───────────────────────────────────────────────────
-function Kpi({ label, value, sub, icon: Icon, tone }: {
-  label: string; value: string | number; sub?: string;
-  icon: typeof Coins; tone: "blue" | "emerald" | "amber" | "indigo";
-}) {
-  const toneClass = {
-    blue:  "bg-blue-50 text-blue-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    amber: "bg-amber-50 text-amber-600",
-    indigo:  "bg-indigo-50 text-indigo-600",
-  }[tone];
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-4">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${toneClass}`}>
-        <Icon size={18} />
-      </div>
-      <div className="text-[20px] font-bold text-gray-900 tabular-nums">{value}</div>
-      <div className="text-[12px] text-gray-500 mt-0.5">{label}</div>
-      {sub && <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-}
-
 function Stat({ label, value, tone = "gray" }: { label: string; value: number; tone?: "gray" | "emerald" | "red" | "amber" }) {
   const toneClass = {
     gray: "text-gray-900", emerald: "text-emerald-700", red: "text-red-600", amber: "text-amber-700",
