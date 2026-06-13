@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store";
-import { Bell, Check, X, ShoppingBag, Package, Store, AlertCircle, Star, MessageSquare } from "lucide-react";
+import { Bell, Check, X, ShoppingBag, Package, Store, AlertCircle, Star, MessageSquare, MessageSquareQuote, LifeBuoy } from "lucide-react";
 
 interface Notif {
   _id: string;
@@ -28,6 +28,13 @@ const ICON: Record<string, typeof Bell> = {
   low_stock: AlertCircle,
   review_received: Star,
   system: MessageSquare,
+  // RFQ ("Үнийн санал") + support helpdesk
+  rfq_received: MessageSquareQuote,
+  rfq_quoted: MessageSquareQuote,
+  rfq_accepted: MessageSquareQuote,
+  rfq_declined: MessageSquareQuote,
+  support_opened: LifeBuoy,
+  support_reply: LifeBuoy,
 };
 
 const COLOR: Record<string, string> = {
@@ -43,6 +50,12 @@ const COLOR: Record<string, string> = {
   low_stock: "text-orange-500 bg-orange-50",
   review_received: "text-amber-500 bg-amber-50",
   system: "text-gray-500 bg-gray-50",
+  rfq_received: "text-blue-500 bg-blue-50",
+  rfq_quoted: "text-blue-500 bg-blue-50",
+  rfq_accepted: "text-emerald-500 bg-emerald-50",
+  rfq_declined: "text-red-500 bg-red-50",
+  support_opened: "text-amber-500 bg-amber-50",
+  support_reply: "text-indigo-500 bg-indigo-50",
 };
 
 export default function NotificationBell() {
