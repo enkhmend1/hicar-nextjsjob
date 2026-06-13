@@ -22,8 +22,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import {
-  Sparkles, RefreshCw, Loader2, TrendingUp, Search, ArrowRight, Bell,
+  Sparkles, RefreshCw, Loader2, TrendingUp, Search, ArrowRight, Bell, Lightbulb,
 } from "lucide-react";
+import {
+  PageHeader, Card, CardSkeletons, EmptyState, btn,
+} from "@/app/admin/_components/ui";
 
 interface Notif {
   _id: string;
@@ -76,20 +79,17 @@ export default function AdminAiInsightsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900">AI дүгнэлт</h1>
-          <p className="text-[13px] text-gray-500">
-            Системийн долоо хоног тутмын автомат дүгнэлтүүд — зах зээлийн цоорхой,
-            санхүүгийн товч.
-          </p>
-        </div>
-        <button onClick={reload} disabled={loading}
-          className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-[13px] font-medium cursor-pointer border-none disabled:opacity-50 transition-colors">
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Шинэчлэх
-        </button>
-      </div>
+      <PageHeader
+        title="AI дүгнэлт"
+        icon={Lightbulb}
+        subtitle="Системийн долоо хоног тутмын автомат дүгнэлтүүд — зах зээлийн цоорхой, санхүүгийн товч."
+        actions={
+          <button onClick={reload} disabled={loading} className={btn.primary}>
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Шинэчлэх
+          </button>
+        }
+      />
 
       {/* What this is */}
       <div className="flex items-start gap-2.5 border border-amber-200 bg-amber-50 rounded-2xl p-3.5 text-[13px] text-amber-900">
@@ -101,19 +101,18 @@ export default function AdminAiInsightsPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Уншиж байна...</div>
-        ) : rows.length === 0 ? (
-          <div className="p-10 text-center">
-            <Bell size={28} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-[13px] text-gray-500 font-medium">Одоогоор AI дүгнэлт алга</p>
-            <p className="text-[12px] text-gray-400 mt-1 max-w-sm mx-auto leading-relaxed">
-              Систем долоо хоног тутам шинэ дүгнэлт үүсгэнэ. Анхаарал татах
-              өөрчлөлт гармагц энд харагдана.
-            </p>
-          </div>
-        ) : (
+      {loading ? (
+        <CardSkeletons count={3} height="h-20" />
+      ) : rows.length === 0 ? (
+        <Card padded={false}>
+          <EmptyState
+            icon={Bell}
+            title="Одоогоор AI дүгнэлт алга"
+            description="Систем долоо хоног тутам шинэ дүгнэлт үүсгэнэ. Анхаарал татах өөрчлөлт гармагц энд харагдана."
+          />
+        </Card>
+      ) : (
+        <Card padded={false}>
           <div className="divide-y divide-gray-100">
             {rows.map((n) => {
               const meta = KIND_META[n.data?.kind ?? ""] ?? {
@@ -146,8 +145,8 @@ export default function AdminAiInsightsPage() {
               );
             })}
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
       {/* Drill-downs into the live data behind the digests */}
       <div className="grid sm:grid-cols-2 gap-3">

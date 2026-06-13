@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { Product } from "@/app/types";
-import { Plus, Pencil, Trash2, Search, X, ImagePlus, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, ImagePlus, Loader2, CheckCircle2, XCircle, Clock, Package } from "lucide-react";
+import {
+  PageHeader, FilterTabs, TableShell, THead, Th, Td, TableSkeleton, StatusChip, btn,
+} from "@/app/admin/_components/ui";
 
 const CATEGORIES = [
   { id: "brake", name: "Тоормос" },
@@ -133,16 +136,16 @@ export default function AdminProductsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900">Бараа</h1>
-          <p className="text-[13px] text-gray-500">{items.length} бараа</p>
-        </div>
-        <button onClick={() => setEditing({ ...emptyForm })}
-          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">
-          <Plus size={14} /> Шинэ бараа
-        </button>
-      </div>
+      <PageHeader
+        title="Бараа"
+        subtitle={`${items.length} бараа`}
+        icon={Package}
+        actions={
+          <button onClick={() => setEditing({ ...emptyForm })} className={btn.primary}>
+            <Plus size={14} /> Шинэ бараа
+          </button>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 max-w-sm">
@@ -151,76 +154,72 @@ export default function AdminProductsPage() {
             className="w-full min-w-0 bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500"
             placeholder="Хайх (нэр, OEM, брэнд)..." />
         </div>
-        <div className="flex gap-1">
-          {[{ id: "all", label: "Бүгд" }, { id: "pending", label: "Хянагдаж буй" }, { id: "approved", label: "Зөвшөөрсөн" }, { id: "rejected", label: "Татгалзсан" }].map(s => (
-            <button key={s.id} onClick={() => setStatusFilter(s.id)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-                statusFilter === s.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-              }`}>{s.label}</button>
-          ))}
-        </div>
+        <FilterTabs
+          value={statusFilter}
+          onSelect={setStatusFilter}
+          options={[
+            { id: "all", label: "Бүгд" },
+            { id: "pending", label: "Хянагдаж буй" },
+            { id: "approved", label: "Зөвшөөрсөн" },
+            { id: "rejected", label: "Татгалзсан" },
+          ]}
+        />
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[12px]">
-                <th className="px-3 py-2.5 font-medium w-12"></th>
-                <th className="text-left px-4 py-2.5 font-medium">Нэр</th>
-                <th className="text-left px-4 py-2.5 font-medium">Seller</th>
-                <th className="text-left px-4 py-2.5 font-medium">OEM</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үнэ</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үлдэгдэл</th>
-                <th className="text-center px-4 py-2.5 font-medium">Төлөв</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үйлдэл</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Уншиж байна...</td></tr>
-              ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Бараа байхгүй</td></tr>
-              ) : items.map(p => (
+      <TableShell minWidth={760}>
+        <THead>
+          <Th className="w-12"></Th>
+          <Th>Нэр</Th>
+          <Th>Seller</Th>
+          <Th>OEM</Th>
+          <Th align="right">Үнэ</Th>
+          <Th align="right">Үлдэгдэл</Th>
+          <Th align="center">Төлөв</Th>
+          <Th align="right">Үйлдэл</Th>
+        </THead>
+        {loading ? (
+          <TableSkeleton cols={8} />
+        ) : (
+          <tbody>
+            {items.length === 0 ? (
+              <tr><Td colSpan={8} align="center" className="py-8 text-gray-400">Бараа байхгүй</Td></tr>
+            ) : items.map(p => (
                 <tr key={p._id ?? p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                  <td className="px-3 py-2">
+                  <Td className="px-3">
                     <div className="relative w-8 h-8 bg-blue-50 rounded-md overflow-hidden flex items-center justify-center">
                       {p.images && p.images.length > 0
                         ? <Image src={p.images[0]} alt="" fill sizes="32px" className="object-cover" />
                         : <ImagePlus size={12} className="text-gray-300" />
                       }
                     </div>
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </Td>
+                  <Td>
                     <div className="font-medium text-gray-900 truncate max-w-[220px]">{p.name}</div>
                     <div className="text-[11px] text-gray-400 truncate">{p.brand} · {CATEGORIES.find(c => c.id === p.category)?.name ?? p.category}</div>
                     {p.status === "rejected" && p.rejectedReason && (
                       <div className="text-[10px] text-red-500 mt-0.5 max-w-[220px] truncate">⚠ {p.rejectedReason}</div>
                     )}
-                  </td>
-                  <td className="px-4 py-2.5 text-[12px] text-gray-600">
+                  </Td>
+                  <Td className="text-[12px] text-gray-600">
                     {p.seller && typeof p.seller === "object"
                       ? <div className="truncate max-w-[140px]">{p.seller.sellerProfile?.shopName || p.seller.name}</div>
                       : <span className="text-gray-400 italic">Admin</span>
                     }
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-500 font-mono text-[12px]">{p.oem}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-blue-600">₮{p.price.toLocaleString()}</td>
-                  <td className={`px-4 py-2.5 text-right font-medium ${(p.stockQty ?? 0) <= 5 ? "text-red-600" : (p.stockQty ?? 0) <= 20 ? "text-amber-600" : "text-gray-700"}`}>
+                  </Td>
+                  <Td className="text-gray-500 font-mono text-[12px]"><span className="break-all">{p.oem}</span></Td>
+                  <Td align="right" className="font-semibold text-blue-600 whitespace-nowrap">₮{p.price.toLocaleString()}</Td>
+                  <Td align="right" className={`font-medium ${(p.stockQty ?? 0) <= 5 ? "text-red-600" : (p.stockQty ?? 0) <= 20 ? "text-amber-600" : "text-gray-700"}`}>
                     {p.stockQty ?? 0}
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
+                  </Td>
+                  <Td align="center">
                     {(() => {
                       const st = STATUS_BADGE[p.status ?? "approved"] ?? STATUS_BADGE.approved;
-                      const StIcon = st.icon;
                       return (
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${st.color}`}>
-                          <StIcon size={10} /> {st.label}
-                        </span>
+                        <StatusChip color={st.color} icon={st.icon}>{st.label}</StatusChip>
                       );
                     })()}
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                  </Td>
+                  <Td align="right" className="whitespace-nowrap">
                     {p.status === "pending" && (
                       <>
                         <button onClick={() => moderate(p, "approve")} title="Зөвшөөрөх"
@@ -241,13 +240,12 @@ export default function AdminProductsPage() {
                       className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer bg-transparent border-none transition-colors">
                       <Trash2 size={13} />
                     </button>
-                  </td>
+                  </Td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          </tbody>
+        )}
+      </TableShell>
 
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !busy && setEditing(null)}>
@@ -383,13 +381,18 @@ export default function AdminProductsPage() {
           border: 1px solid #e5e7eb;
           border-radius: 8px;
           padding: 8px 12px;
-          font-size: 13px;
+          font-size: 16px;
           font-family: inherit;
           color: #111;
         }
+        @media (min-width: 768px) {
+          :global(.input) {
+            font-size: 13px;
+          }
+        }
         :global(.input:focus) {
           outline: none;
-          border-color: #8b5cf6;
+          border-color: #3b82f6;
           background: white;
         }
       `}</style>

@@ -23,6 +23,9 @@ import {
   CategoryChip, StatusChip, relTime,
 } from "@/app/components/support/shared";
 import { Headset, Circle, ChevronRight, User as UserIcon } from "lucide-react";
+import {
+  PageHeader, FilterTabs, CardSkeletons, EmptyState,
+} from "@/app/admin/_components/ui";
 
 type Filter = "all" | "awaiting_admin" | "awaiting_user" | "resolved" | "closed";
 
@@ -80,46 +83,40 @@ export default function AdminSupportPage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Headset size={20} className="text-blue-600" /> Тусламжийн хүсэлт
-          </h1>
-          <p className="text-[13px] text-gray-500">
+      <PageHeader
+        title="Тусламжийн хүсэлт"
+        icon={Headset}
+        subtitle={
+          <>
             {tickets.length} хүсэлт
             {unreadCount > 0 && <span className="text-amber-600 font-medium"> · {unreadCount} уншаагүй</span>}
-          </p>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Filter tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setFilter(t.id)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === t.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-            }`}>
-            {t.label}
-            {t.id === "awaiting_admin" && unreadCount > 0 && filter !== "awaiting_admin" && (
-              <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{unreadCount}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        value={filter}
+        onSelect={setFilter}
+        options={TABS.map((t) => ({
+          id: t.id,
+          label: t.label,
+          badge:
+            t.id === "awaiting_admin" && unreadCount > 0 && filter !== "awaiting_admin"
+              ? unreadCount
+              : undefined,
+        }))}
+      />
 
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[96px] animate-pulse" />
-          ))}
-        </div>
+        <CardSkeletons count={4} height="h-[96px]" />
       ) : tickets.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl py-16 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <Headset size={28} className="text-gray-300" />
-          </div>
-          <p className="text-[14px] font-medium text-gray-700">Хүсэлт алга.</p>
-          <p className="text-[12px] text-gray-500 mt-1">Хэрэглэгч тусламж хүсмэгц энд харагдана.</p>
+        <div className="bg-white border border-gray-200 rounded-2xl">
+          <EmptyState
+            icon={Headset}
+            title="Хүсэлт алга."
+            description="Хэрэглэгч тусламж хүсмэгц энд харагдана."
+          />
         </div>
       ) : (
         <div className="space-y-3">

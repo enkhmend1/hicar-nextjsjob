@@ -22,7 +22,8 @@ import { SupportTicket } from "@/app/types";
 import {
   CategoryChip, StatusChip, MessageThread, Composer,
 } from "@/app/components/support/shared";
-import { ArrowLeft, Loader2, CheckCircle, RotateCcw, Package, Mail, User as UserIcon } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, RotateCcw, Package, Mail, User as UserIcon, SearchX } from "lucide-react";
+import { EmptyState, btn } from "@/app/admin/_components/ui";
 
 export default function AdminTicketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -87,9 +88,14 @@ export default function AdminTicketPage({ params }: { params: Promise<{ id: stri
           <div className="bg-white border border-gray-200 rounded-2xl h-[280px] animate-pulse" />
         </div>
       ) : notFound || !ticket ? (
-        <div className="text-center py-20">
-          <p className="text-[15px] font-medium text-gray-700 mb-2">Хүсэлт олдсонгүй.</p>
-          <Link href="/admin/support" className="text-[13px] text-blue-600 hover:underline">Бүх хүсэлт рүү буцах</Link>
+        <div className="bg-white border border-gray-200 rounded-2xl">
+          <EmptyState
+            icon={SearchX}
+            title="Хүсэлт олдсонгүй."
+            action={
+              <Link href="/admin/support" className={btn.secondary}>Бүх хүсэлт рүү буцах</Link>
+            }
+          />
         </div>
       ) : (
         <>

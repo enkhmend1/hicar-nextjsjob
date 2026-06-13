@@ -18,6 +18,7 @@ import {
   UploadCloud, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle,
   RotateCcw, Database, Sparkles, Copy, MinusCircle, X,
 } from "lucide-react";
+import { PageHeader, StatusChip, ErrorBanner, btn } from "@/app/admin/_components/ui";
 
 interface ImportJob {
   _id: string;
@@ -129,21 +130,18 @@ export default function ImportWizardPage() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <header>
-        <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-          <UploadCloud size={20} className="text-blue-700" /> Импорт (CSV / Excel)
-        </h1>
-        <p className="text-[13px] text-gray-500 mt-0.5">
-          Бөөнөөр бараа оруулах. Мөр бүр өөрчлөгдөшгүй <span className="font-mono">raw_products</span>-д хадгалагдаж,
-          нормчлолд автоматаар орно. Толгой мөрийг (англи/кирилл/латин) уян хатан таниулна.
-        </p>
-      </header>
+      <PageHeader
+        title="Импорт (CSV / Excel)"
+        icon={UploadCloud}
+        subtitle={
+          <>
+            Бөөнөөр бараа оруулах. Мөр бүр өөрчлөгдөшгүй <span className="font-mono">raw_products</span>-д хадгалагдаж,
+            нормчлолд автоматаар орно. Толгой мөрийг (англи/кирилл/латин) уян хатан таниулна.
+          </>
+        }
+      />
 
-      {err && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-[12px] rounded-xl px-3 py-2 flex items-center gap-2">
-          <AlertTriangle size={14} /> {err}
-        </div>
-      )}
+      {err && <ErrorBanner>{err}</ErrorBanner>}
 
       {/* ── UPLOAD FORM (hidden once a job is running) ─────────────── */}
       {!jobId && (
@@ -187,7 +185,7 @@ export default function ImportWizardPage() {
             </label>
             <input value={sellerId} onChange={(e) => setSellerId(e.target.value.trim())}
               placeholder="24 тэмдэгт ObjectId"
-              className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[13px] font-mono outline-none transition-colors ${
+              className={`w-full bg-gray-50 border rounded-xl px-4 py-2.5 text-[16px] md:text-[13px] font-mono outline-none transition-colors ${
                 sellerId && !OBJECT_ID_RE.test(sellerId) ? "border-red-400" : "border-gray-200 focus:border-blue-500 focus:bg-white"
               }`} />
             <p className="text-[10px] text-gray-400 mt-1">Импортолж буй бараа аль зарагчид хамаарахыг заана. (Туршихад өөрийн ID-г ашиглаж болно.)</p>
@@ -215,9 +213,9 @@ export default function ImportWizardPage() {
               </div>
             </div>
             {job && (
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_BADGE[job.status]}`}>
+              <StatusChip color={STATUS_BADGE[job.status]} className="shrink-0">
                 {STATUS_LABEL[job.status]}
-              </span>
+              </StatusChip>
             )}
           </div>
 
@@ -282,8 +280,7 @@ export default function ImportWizardPage() {
           )}
 
           {!active && (
-            <button onClick={reset}
-              className="inline-flex items-center gap-1.5 bg-white border border-gray-200 hover:border-blue-400 rounded-xl px-4 py-2 text-[13px] font-medium text-gray-700 cursor-pointer transition-colors">
+            <button onClick={reset} className={btn.secondary}>
               <RotateCcw size={14} /> Шинээр импортлох
             </button>
           )}
