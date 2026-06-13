@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Package, ShoppingBag, TrendingUp, Coins, Clock } from "lucide-react";
+import PageHeader from "./_components/PageHeader";
+import { StatCard } from "./_components/StatCard";
+import { ErrorBanner, StatCardsSkeleton } from "./_components/States";
 
 interface DashboardData {
   totals: {
@@ -40,42 +43,29 @@ export default function SellerDashboard() {
       .catch(e => setErr((e as Error).message));
   }, []);
 
-  if (err) return <div className="text-red-600 text-sm">⚠ {err}</div>;
-  if (!data) return <div className="text-gray-400 text-sm">Уншиж байна...</div>;
+  if (err) return <ErrorBanner message={err} />;
+  if (!data) return (
+    <div className="space-y-6">
+      <PageHeader title="Хяналтын самбар" subtitle="Танай дэлгүүрийн борлуулалт, нөөц" />
+      <StatCardsSkeleton count={4} />
+    </div>
+  );
 
   const cards = [
-    { label: "Зөвшөөрөгдсөн бараа", value: data.totals.approved, sub: `Нийт ${data.totals.products}`, icon: Package, color: "amber" },
-    { label: "Хүлээгдэж буй", value: data.totals.pending, sub: `Татгалзсан: ${data.totals.rejected}`, icon: Clock, color: "amber" },
-    { label: "Захиалга", value: data.totals.orders, sub: "Нийт", icon: ShoppingBag, color: "blue" },
-    { label: "Цэвэр орлого", value: `₮${data.totals.netRevenue.toLocaleString()}`, sub: `Хураамж: ₮${data.totals.commission.toLocaleString()}`, icon: TrendingUp, color: "emerald" },
+    { label: "Зөвшөөрөгдсөн бараа", value: data.totals.approved, sub: `Нийт ${data.totals.products}`, icon: Package, tone: "amber" as const },
+    { label: "Хүлээгдэж буй", value: data.totals.pending, sub: `Татгалзсан: ${data.totals.rejected}`, icon: Clock, tone: "amber" as const },
+    { label: "Захиалга", value: data.totals.orders, sub: "Нийт", icon: ShoppingBag, tone: "blue" as const },
+    { label: "Цэвэр орлого", value: `₮${data.totals.netRevenue.toLocaleString()}`, sub: `Хураамж: ₮${data.totals.commission.toLocaleString()}`, icon: TrendingUp, tone: "emerald" as const },
   ];
-  const colorMap: Record<string, string> = {
-    amber:   "bg-amber-50 text-amber-600",
-    blue:    "bg-blue-50 text-blue-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Хяналтын самбар</h1>
-        <p className="text-[13px] text-gray-500 mt-0.5">Танай дэлгүүрийн борлуулалт, нөөц</p>
-      </div>
+      <PageHeader title="Хяналтын самбар" subtitle="Танай дэлгүүрийн борлуулалт, нөөц" />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map(c => {
-          const Icon = c.icon;
-          return (
-            <div key={c.label} className="bg-white border border-gray-200 rounded-2xl p-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${colorMap[c.color]}`}>
-                <Icon size={18} />
-              </div>
-              <div className="text-[20px] font-bold text-gray-900">{c.value}</div>
-              <div className="text-[12px] text-gray-500 mt-0.5">{c.label}</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{c.sub}</div>
-            </div>
-          );
-        })}
+        {cards.map(c => (
+          <StatCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} tone={c.tone} />
+        ))}
       </div>
 
       <div className="bg-gradient-to-br from-blue-500 to-amber-500 text-white rounded-2xl p-4 flex items-center gap-3">
