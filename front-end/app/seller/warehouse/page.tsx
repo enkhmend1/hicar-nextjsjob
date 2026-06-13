@@ -7,6 +7,10 @@ import {
   Warehouse, Search, AlertTriangle, XCircle, Boxes, MapPin,
   Check, X, Pencil, Loader2, ImagePlus, PackageCheck,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { StatCardInline } from "@/app/seller/_components/StatCard";
+import { ErrorBanner, EmptyState, TableRowsSkeleton } from "@/app/seller/_components/States";
+import { TableCard, Th } from "@/app/seller/_components/Table";
 
 /**
  * Warehouse / inventory page.
@@ -144,24 +148,24 @@ export default function SellerWarehousePage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Warehouse size={20} className="text-blue-600" /> Агуулахын үлдэгдэл
-          </h1>
-          <p className="text-[13px] text-gray-500">{items.length} бараа · Үлдэгдэл, байршлыг шууд засна</p>
-        </div>
-        <Link href="/seller/products"
-          className="inline-flex items-center gap-1.5 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all">
-          <PackageCheck size={14} /> Бараа удирдах
-        </Link>
-      </header>
+      <PageHeader
+        title="Агуулахын үлдэгдэл"
+        subtitle={`${items.length} бараа · Үлдэгдэл, байршлыг шууд засна`}
+        icon={Warehouse}
+        iconClassName="text-blue-600"
+        actions={
+          <Link href="/seller/products"
+            className="inline-flex items-center gap-1.5 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-all">
+            <PackageCheck size={14} /> Бараа удирдах
+          </Link>
+        }
+      />
 
       {/* KPI summary */}
       <div className="grid grid-cols-3 gap-3">
-        <Kpi label="Цөөн үлдсэн" value={stats.low} tone={stats.low > 0 ? "amber" : "gray"} icon={AlertTriangle} />
-        <Kpi label="Дууссан" value={stats.out} tone={stats.out > 0 ? "red" : "gray"} icon={XCircle} />
-        <Kpi label="Нийт ширхэг" value={stats.units.toLocaleString()} tone="blue" icon={Boxes} />
+        <StatCardInline label="Цөөн үлдсэн" value={stats.low} tone={stats.low > 0 ? "amber" : "gray"} icon={AlertTriangle} />
+        <StatCardInline label="Дууссан" value={stats.out} tone={stats.out > 0 ? "red" : "gray"} icon={XCircle} />
+        <StatCardInline label="Нийт ширхэг" value={stats.units.toLocaleString()} tone="blue" icon={Boxes} />
       </div>
 
       {/* Controls */}
@@ -186,31 +190,32 @@ export default function SellerWarehousePage() {
         </button>
       </div>
 
-      {err && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2">{err}</div>
-      )}
+      {err && <ErrorBanner message={err} />}
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+      <TableCard>
+        <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[12px]">
-                <th className="px-3 py-2.5 font-medium w-12"></th>
-                <th className="text-left px-4 py-2.5 font-medium">Нэр / Брэнд</th>
-                <th className="text-left px-4 py-2.5 font-medium">OEM</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үлдэгдэл</th>
-                <th className="text-right px-4 py-2.5 font-medium">Анхааруулах босго</th>
-                <th className="text-left px-4 py-2.5 font-medium">Байршил</th>
-                <th className="text-right px-4 py-2.5 font-medium w-28">Үйлдэл</th>
+                <Th className="w-12" />
+                <Th>Нэр / Брэнд</Th>
+                <Th>OEM</Th>
+                <Th align="right">Үлдэгдэл</Th>
+                <Th align="right">Анхааруулах босго</Th>
+                <Th>Байршил</Th>
+                <Th align="right" className="w-28">Үйлдэл</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Уншиж байна...</td></tr>
+                <TableRowsSkeleton rows={6} cols={7} />
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                  {items.length === 0 ? "Бараа байхгүй байна." : "Хайлтад тохирох бараа алга."}
+                <tr><td colSpan={7}>
+                  <EmptyState
+                    icon={items.length === 0 ? Warehouse : Search}
+                    title={items.length === 0 ? "Бараа байхгүй байна" : "Хайлтад тохирох бараа алга"}
+                    hint={items.length === 0 ? "Бараа нэмсний дараа энд агуулахын үлдэгдэл харагдана." : "Өөр түлхүүр үг эсвэл шүүлтүүр ашиглана уу."}
+                  />
                 </td></tr>
               ) : filtered.map((p) => {
                 const isEditing = editingId === p._id;
@@ -333,32 +338,8 @@ export default function SellerWarehousePage() {
                 );
               })}
             </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── KPI card (mirrors the products page) ────────────────────────────
-function Kpi({ label, value, tone, icon: Icon }: {
-  label: string; value: string | number; tone: "blue" | "amber" | "red" | "gray"; icon: typeof Boxes;
-}) {
-  const toneClass = {
-    blue:  "bg-blue-50 text-blue-700",
-    amber: "bg-amber-50 text-amber-700",
-    red:   "bg-red-50 text-red-700",
-    gray:  "bg-gray-50 text-gray-500",
-  }[tone];
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-3 flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${toneClass}`}>
-        <Icon size={15} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[16px] font-bold text-gray-900 tabular-nums truncate">{value}</div>
-        <div className="text-[11px] text-gray-500">{label}</div>
-      </div>
+        </table>
+      </TableCard>
     </div>
   );
 }

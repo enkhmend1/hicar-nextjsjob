@@ -4,8 +4,17 @@ import { api, ApiError } from "@/lib/api";
 import { User } from "@/app/types";
 import { useAuthStore } from "@/store";
 import {
-  Shield, ShieldOff, Trash2, KeyRound, Copy, Check, AlertTriangle, X,
+  Shield, ShieldOff, Trash2, KeyRound, Copy, Check, AlertTriangle, X, Users as UsersIcon,
 } from "lucide-react";
+import {
+  PageHeader, TableShell, THead, Th, Td, TableSkeleton, StatusChip,
+} from "@/app/admin/_components/ui";
+
+const ROLE_META: Record<string, { label: string; color: string }> = {
+  admin:  { label: "Admin",  color: "bg-blue-50 text-blue-700 border-blue-200" },
+  seller: { label: "Seller", color: "bg-amber-50 text-amber-700 border-amber-200" },
+  user:   { label: "User",   color: "bg-gray-100 text-gray-600 border-gray-200" },
+};
 
 interface PasswordReset {
   user: { _id: string; name: string; email: string };
@@ -87,54 +96,43 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Хэрэглэгч</h1>
-        <p className="text-[13px] text-gray-500">{users.length} хэрэглэгч</p>
-      </div>
+      <PageHeader title="Хэрэглэгч" subtitle={`${users.length} хэрэглэгч`} icon={UsersIcon} />
 
       <input value={q} onChange={(e) => setQ(e.target.value)}
-        className="w-full max-w-sm bg-white border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
+        className="w-full max-w-sm bg-white border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none"
         placeholder="Нэр эсвэл имэйлээр хайх..." />
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[12px]">
-                <th className="text-left px-4 py-2.5 font-medium">Нэр</th>
-                <th className="text-left px-4 py-2.5 font-medium">Имэйл</th>
-                <th className="text-left px-4 py-2.5 font-medium">Утас</th>
-                <th className="text-center px-4 py-2.5 font-medium">Эрх</th>
-                <th className="text-right px-4 py-2.5 font-medium">Үйлдэл</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Уншиж байна...</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Хэрэглэгч байхгүй</td></tr>
-              ) : filtered.map((u) => {
+      <TableShell minWidth={620}>
+        <THead>
+          <Th>Нэр</Th>
+          <Th>Имэйл</Th>
+          <Th>Утас</Th>
+          <Th align="center">Эрх</Th>
+          <Th align="right">Үйлдэл</Th>
+        </THead>
+        {loading ? (
+          <TableSkeleton cols={5} />
+        ) : (
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><Td colSpan={5} align="center" className="py-8 text-gray-400">Хэрэглэгч байхгүй</Td></tr>
+            ) : filtered.map((u) => {
                 const id = u._id ?? u.id ?? "";
                 const isMe = String(id) === String(me?._id ?? me?.id);
                 const busy = busyId === id;
+                const role = ROLE_META[u.role ?? "user"] ?? ROLE_META.user;
                 return (
                   <tr key={id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-2.5 font-medium text-gray-900">
+                    <Td className="font-medium text-gray-900">
                       {u.name}
                       {isMe && <span className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Та</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
-                    <td className="px-4 py-2.5 text-gray-500">{u.phone || "—"}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                        u.role === "admin"  ? "bg-blue-50 text-blue-700"
-                        : u.role === "seller" ? "bg-amber-50 text-amber-700"
-                        : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {u.role === "admin" ? "Admin" : u.role === "seller" ? "Seller" : "User"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    </Td>
+                    <Td className="text-gray-500"><span className="break-all">{u.email}</span></Td>
+                    <Td className="text-gray-500 whitespace-nowrap">{u.phone || "—"}</Td>
+                    <Td align="center">
+                      <StatusChip color={role.color}>{role.label}</StatusChip>
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap">
                       <ActionBtn onClick={() => resetPassword(u)} title="Нууц үг шинэчлэх" color="amber" disabled={isMe || busy}>
                         <KeyRound size={13} />
                       </ActionBtn>
@@ -144,14 +142,13 @@ export default function AdminUsersPage() {
                       <ActionBtn onClick={() => remove(u)} title="Устгах" color="red" disabled={isMe}>
                         <Trash2 size={13} />
                       </ActionBtn>
-                    </td>
+                    </Td>
                   </tr>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          </tbody>
+        )}
+      </TableShell>
 
       {/* ───────── One-time password reveal modal ───────── */}
       {resetResult && (

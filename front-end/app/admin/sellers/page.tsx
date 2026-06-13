@@ -6,6 +6,9 @@ import { User } from "@/app/types";
 import {
   Check, X, Store, Clock, CheckCircle2, XCircle, Pencil, Banknote, Save, AlertTriangle,
 } from "lucide-react";
+import {
+  PageHeader, Card, FilterTabs, StatusChip, CardSkeletons, EmptyState, btn,
+} from "@/app/admin/_components/ui";
 
 const STATUS_FILTER = [
   { id: "all", label: "Бүгд" },
@@ -84,7 +87,7 @@ function EconomicsModal({
               value={fee}
               onChange={(e) => setFee(e.target.value)}
               type="number" min={0} max={50} step={0.5}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none"
             />
             <p className="text-[11px] text-gray-500 mt-1">
               0-50 хооронд. Захиалга төлөгдөх агшинд snapshot хийгдэх ба тэр захиалгад
@@ -101,19 +104,19 @@ function EconomicsModal({
                 value={bank}
                 onChange={(e) => setBank(e.target.value)}
                 placeholder='Банкны нэр (жнь "Хаан банк")'
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none"
               />
               <input
                 value={acct}
                 onChange={(e) => setAcct(e.target.value)}
                 placeholder="Дансны дугаар"
-                className="w-full font-mono border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
+                className="w-full font-mono border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none"
               />
               <input
                 value={hold}
                 onChange={(e) => setHold(e.target.value)}
                 placeholder="Данс эзэмшигчийн нэр"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none"
               />
             </div>
           </div>
@@ -186,31 +189,18 @@ export default function AdminSellersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Seller-үүд</h1>
-        <p className="text-[13px] text-gray-500">{sellers.length} seller</p>
-      </div>
+      <PageHeader title="Seller-үүд" subtitle={`${sellers.length} seller`} icon={Store} />
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {STATUS_FILTER.map(s => (
-          <button key={s.id} onClick={() => setFilter(s.id)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === s.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-            }`}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <FilterTabs value={filter} onSelect={setFilter} options={STATUS_FILTER} />
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Уншиж байна...</div>
-        ) : sellers.length === 0 ? (
-          <div className="p-12 text-center">
-            <Store size={32} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-[13px] text-gray-400">Seller байхгүй</p>
-          </div>
-        ) : (
+      {loading ? (
+        <CardSkeletons count={4} height="h-28" />
+      ) : sellers.length === 0 ? (
+        <Card padded={false}>
+          <EmptyState icon={Store} title="Seller байхгүй" />
+        </Card>
+      ) : (
+        <Card padded={false}>
           <div className="divide-y divide-gray-100">
             {sellers.map(s => {
               const st = STATUS_BADGE[s.sellerStatus ?? "pending"] ?? STATUS_BADGE.pending;
@@ -228,9 +218,7 @@ export default function AdminSellersPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[14px] font-semibold text-gray-900 truncate">{sp.shopName || "(нэр оруулаагүй)"}</span>
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium border px-2 py-0.5 rounded-full ${st.color}`}>
-                        <StIcon size={10} /> {st.label}
-                      </span>
+                      <StatusChip color={st.color} icon={StIcon}>{st.label}</StatusChip>
                     </div>
                     <div className="text-[12px] text-gray-500 mt-0.5 truncate">
                       {s.name} · {s.email} · {s.phone || "—"}
@@ -255,18 +243,17 @@ export default function AdminSellersPage() {
                     {s.sellerStatus === "pending" && (
                       <>
                         <button onClick={() => approve(s)} disabled={busy === id}
-                          className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-[12px] font-semibold cursor-pointer border-none transition-colors disabled:opacity-50 font-sans">
+                          className="inline-flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors disabled:opacity-50 font-sans">
                           <Check size={12} /> Зөвшөөрөх
                         </button>
-                        <button onClick={() => reject(s)} disabled={busy === id}
-                          className="flex items-center gap-1 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg px-3 py-1.5 text-[12px] font-semibold cursor-pointer bg-white transition-colors disabled:opacity-50 font-sans">
+                        <button onClick={() => reject(s)} disabled={busy === id} className={btn.danger}>
                           <X size={12} /> Татгалзах
                         </button>
                       </>
                     )}
                     {(s.sellerStatus === "approved" || s.sellerStatus === "pending") && (
                       <button onClick={() => setEditing(s)}
-                        className="flex items-center gap-1 border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg px-3 py-1.5 text-[12px] font-semibold cursor-pointer bg-white transition-colors font-sans">
+                        className="inline-flex items-center justify-center gap-1 border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer bg-white transition-colors font-sans">
                         <Pencil size={12} /> Хураамж/Данс
                       </button>
                     )}
@@ -275,8 +262,8 @@ export default function AdminSellersPage() {
               );
             })}
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
       {editing && (
         <EconomicsModal

@@ -8,7 +8,10 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { ShieldCheck, ShieldAlert, RefreshCw, Loader2 } from "lucide-react";
+import { ShieldCheck, ShieldAlert, RefreshCw, Loader2, Receipt } from "lucide-react";
+import {
+  PageHeader, Card, FilterTabs, StatusChip, CardSkeletons, EmptyState, btn,
+} from "@/app/admin/_components/ui";
 
 interface AuditRow {
   _id: string;
@@ -83,17 +86,17 @@ export default function AdminAuditPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900">Санхүүгийн лог</h1>
-          <p className="text-[13px] text-gray-500">{total} бичлэг · hash-chained, өөрчлөгдөшгүй дэвтэр</p>
-        </div>
-        <button onClick={runVerify} disabled={verifying}
-          className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-[13px] font-medium cursor-pointer border-none disabled:opacity-50 transition-colors">
-          {verifying ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Бүрэн бүтэн байдлыг шалгах
-        </button>
-      </div>
+      <PageHeader
+        title="Санхүүгийн лог"
+        icon={Receipt}
+        subtitle={`${total} бичлэг · hash-chained, өөрчлөгдөшгүй дэвтэр`}
+        actions={
+          <button onClick={runVerify} disabled={verifying} className={btn.primary}>
+            {verifying ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Бүрэн бүтэн байдлыг шалгах
+          </button>
+        }
+      />
 
       {/* Verify result banner */}
       {verify && (
@@ -108,29 +111,29 @@ export default function AdminAuditPage() {
       )}
 
       {/* Type filter */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {(["all", ...TYPES]).map((t) => (
-          <button key={t} onClick={() => setType(t)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              type === t ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-            }`}>
-            {t === "all" ? "Бүгд" : TYPE_LABEL[t]}
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        value={type}
+        onSelect={setType}
+        options={(["all", ...TYPES]).map((t) => ({
+          id: t,
+          label: t === "all" ? "Бүгд" : TYPE_LABEL[t],
+        }))}
+      />
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Уншиж байна...</div>
-        ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Бичлэг алга</div>
-        ) : (
+      {loading ? (
+        <CardSkeletons count={5} height="h-16" />
+      ) : rows.length === 0 ? (
+        <Card padded={false}>
+          <EmptyState icon={Receipt} title="Бичлэг алга" />
+        </Card>
+      ) : (
+        <Card padded={false}>
           <div className="divide-y divide-gray-100">
             {rows.map((r) => (
               <div key={r._id} className="p-4 flex flex-wrap items-center gap-3">
-                <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium shrink-0 ${TYPE_COLOR[r.type] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                <StatusChip color={TYPE_COLOR[r.type] ?? "bg-gray-50 text-gray-600 border-gray-200"} className="shrink-0">
                   {TYPE_LABEL[r.type] ?? r.type}
-                </span>
+                </StatusChip>
                 <div className="min-w-0 flex-1">
                   <div className="text-[12px] text-gray-700">
                     Захиалга <span className="font-mono">{short(r.orderId)}</span>
@@ -149,8 +152,8 @@ export default function AdminAuditPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </Card>
+      )}
     </div>
   );
 }

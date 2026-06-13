@@ -19,6 +19,9 @@ import {
   Sparkles, RefreshCw, Check, AlertTriangle, Database, ListChecks,
   Gauge, BookMarked, Wrench, Loader2,
 } from "lucide-react";
+import {
+  PageHeader, Card, StatCard, FilterTabs, ErrorBanner, btn,
+} from "@/app/admin/_components/ui";
 
 // ── DP response shapes ────────────────────────────────────────────
 interface FieldRes { value: string | null; confidence: number; source: string; evidence?: string }
@@ -100,26 +103,21 @@ export default function NormalizationAdminPage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Sparkles size={20} className="text-blue-700" /> Нормчлол ба шалгалт
-          </h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">
-            Түүхий зарын текстийг бүтэцлэх — бага итгэлтэй тайлбаруудыг засаж, толь бичгийг өсгөнө.
-          </p>
-        </div>
-        <button onClick={reload}
-          className="inline-flex items-center gap-1.5 bg-white border border-gray-200 hover:border-blue-400 rounded-xl px-3.5 py-2 text-[13px] font-medium text-gray-700 cursor-pointer transition-colors">
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Шинэчлэх
-        </button>
-      </header>
+      <PageHeader
+        title="Нормчлол ба шалгалт"
+        icon={Sparkles}
+        subtitle="Түүхий зарын текстийг бүтэцлэх — бага итгэлтэй тайлбаруудыг засаж, толь бичгийг өсгөнө."
+        actions={
+          <button onClick={reload} className={btn.secondary}>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Шинэчлэх
+          </button>
+        }
+      />
 
       {err && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-[12px] rounded-xl px-3 py-2 flex items-center gap-2">
-          <AlertTriangle size={14} /> {err}
-          <span className="text-red-400">— Data platform ажиллаж байгаа эсэхийг шалгана уу (npm run dp:server).</span>
-        </div>
+        <ErrorBanner>
+          {err} — Data platform ажиллаж байгаа эсэхийг шалгана уу (npm run dp:server).
+        </ErrorBanner>
       )}
       {msg && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[12px] rounded-xl px-3 py-2 flex items-center gap-2">
@@ -129,30 +127,25 @@ export default function NormalizationAdminPage() {
 
       {/* ── OVERVIEW STRIP ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard icon={Database} label="Түүхий" value={stats?.raw.total} hint="raw_products" />
-        <StatCard icon={ListChecks} label="Нормчилсон" value={stats?.normalized.total} hint="normalized" />
-        <StatCard icon={AlertTriangle} label="Шалгах" value={stats?.normalized.reviewable} accent="amber" />
+        <StatCard icon={Database} label="Түүхий" value={stats?.raw.total ?? "—"} hint="raw_products" />
+        <StatCard icon={ListChecks} label="Нормчилсон" value={stats?.normalized.total ?? "—"} hint="normalized" />
+        <StatCard icon={AlertTriangle} label="Шалгах" value={stats?.normalized.reviewable ?? "—"} tone="amber" />
         <StatCard icon={Gauge} label="Дундаж итгэл"
-          value={stats ? `${Math.round(stats.normalized.avgConfidence * 100)}%` : undefined} />
-        <StatCard icon={BookMarked} label="Alias толь" value={stats?.catalog.aliases} hint={`${stats?.catalog.parts ?? "—"} эд анги`} />
-        <StatCard icon={Wrench} label="Засвар" value={stats?.corrections.total} hint="нийт" />
+          value={stats ? `${Math.round(stats.normalized.avgConfidence * 100)}%` : "—"} />
+        <StatCard icon={BookMarked} label="Alias толь" value={stats?.catalog.aliases ?? "—"} hint={`${stats?.catalog.parts ?? "—"} эд анги`} />
+        <StatCard icon={Wrench} label="Засвар" value={stats?.corrections.total ?? "—"} hint="нийт" />
       </div>
 
       {/* ── FILTER TABS ────────────────────────────────────────── */}
-      <div className="flex gap-1 border-b border-gray-200">
-        {([
+      <FilterTabs<StatusFilter>
+        value={filter}
+        onSelect={setFilter}
+        options={[
           { id: "needs_review", label: "Шалгах" },
           { id: "rejected", label: "Татгалзсан" },
           { id: "all", label: "Бүгд" },
-        ] as const).map((t) => (
-          <button key={t.id} onClick={() => setFilter(t.id)}
-            className={`px-4 py-2.5 text-[13px] font-medium cursor-pointer bg-transparent border-none border-b-2 transition-colors font-sans ${
-              filter === t.id ? "border-blue-700 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+      />
 
       {/* ── QUEUE ──────────────────────────────────────────────── */}
       {loading ? (
@@ -160,9 +153,9 @@ export default function NormalizationAdminPage() {
           {[1, 2, 3].map((n) => <div key={n} className="h-28 bg-gray-100 rounded-2xl animate-pulse" />)}
         </div>
       ) : items.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-[14px]">
+        <Card className="p-10 text-center text-gray-400 text-[14px]">
           {err ? "Өгөгдөл ачаалж чадсангүй." : "🎉 Шалгах зүйл алга — бүх тайлбар хангалттай итгэлтэй байна."}
-        </div>
+        </Card>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
@@ -175,24 +168,6 @@ export default function NormalizationAdminPage() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, hint, accent }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  label: string; value?: number | string; hint?: string; accent?: "amber";
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-3.5">
-      <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-wider ${accent === "amber" ? "text-amber-600" : "text-gray-400"}`}>
-        <Icon size={12} /> {label}
-      </div>
-      <div className="text-[22px] font-bold text-gray-900 mt-1 leading-none">
-        {value === undefined ? "—" : value}
-      </div>
-      {hint && <div className="text-[10px] text-gray-400 mt-1">{hint}</div>}
     </div>
   );
 }
@@ -286,7 +261,7 @@ function ReviewRow({ item, adminId, onDone }: {
             <label className="flex flex-col gap-1">
               <span className="text-[10px] text-gray-400 uppercase tracking-wider">Талбар</span>
               <select value={field} onChange={(e) => setField(e.target.value as CorrectableField)}
-                className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none font-sans cursor-pointer">
+                className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none font-sans cursor-pointer">
                 {(Object.keys(FIELD_LABELS) as CorrectableField[]).map((f) => (
                   <option key={f} value={f}>{FIELD_LABELS[f]}</option>
                 ))}
@@ -296,7 +271,7 @@ function ReviewRow({ item, adminId, onDone }: {
               <span className="text-[10px] text-gray-400 uppercase tracking-wider">Зөв утга</span>
               <input value={newValue} onChange={(e) => setNewValue(e.target.value)}
                 placeholder={field === "partType" ? "жнь: Headlight" : "зөв утга"}
-                className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none" />
+                className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none" />
             </label>
             <label className="flex flex-col gap-1 flex-1 min-w-[140px]">
               <span className="text-[10px] text-gray-400 uppercase tracking-wider">
@@ -305,7 +280,7 @@ function ReviewRow({ item, adminId, onDone }: {
               <input value={rawToken} onChange={(e) => setRawToken(e.target.value)}
                 placeholder="жнь: gerel"
                 disabled={field !== "partType"}
-                className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 focus:bg-white outline-none disabled:opacity-50" />
+                className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 focus:bg-white outline-none disabled:opacity-50" />
             </label>
             <button onClick={submit} disabled={busy}
               className="inline-flex items-center justify-center gap-1.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white rounded-lg px-4 py-2 text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans">

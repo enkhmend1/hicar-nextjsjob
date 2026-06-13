@@ -27,6 +27,9 @@ import {
   CheckCircle2, AlertTriangle, Trash2, Plus, X, Sparkles, Info, ChevronDown,
   Download,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { ErrorBanner } from "@/app/seller/_components/States";
+import { TableCard } from "@/app/seller/_components/Table";
 
 /**
  * B2B import template (TecDoc-style 32-column standard).
@@ -366,34 +369,28 @@ export default function ImportWizardPage() {
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <Sparkles size={20} className="text-amber-500" /> AI Bulk Import
-          </h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">
-            Excel/CSV эсвэл зургаар оруулж, AI-аар цэвэрлэгдсэн бараагаа dataset-руу нэгтгэнэ
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={downloadB2BTemplate}
-            className="inline-flex items-center gap-1.5 border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-emerald-700 rounded-lg px-3 py-2 text-[12px] font-semibold cursor-pointer bg-white transition-all font-sans">
-            <Download size={13} /> B2B загвар татах (32 багана)
-          </button>
-          <Link href="/seller/products" className="text-[12px] text-blue-600 hover:underline">
-            ← Бараа жагсаалт руу буцах
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="AI Bulk Import"
+        subtitle="Excel/CSV эсвэл зургаар оруулж, AI-аар цэвэрлэгдсэн бараагаа dataset-руу нэгтгэнэ"
+        icon={Sparkles}
+        actions={
+          <>
+            <button onClick={downloadB2BTemplate}
+              className="inline-flex items-center gap-1.5 border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-emerald-700 rounded-lg px-3 py-2 text-[12px] font-semibold cursor-pointer bg-white transition-all font-sans">
+              <Download size={13} /> B2B загвар татах (32 багана)
+            </button>
+            <Link href="/seller/products"
+              className="inline-flex items-center gap-1.5 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700 rounded-lg px-3 py-2 text-[12px] font-semibold cursor-pointer bg-white transition-all">
+              <ArrowLeft size={13} /> Бараа жагсаалт руу буцах
+            </Link>
+          </>
+        }
+      />
 
       {/* Stepper */}
       <Stepper step={step} />
 
-      {err && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl p-3 flex items-start gap-2">
-          <AlertTriangle size={14} className="shrink-0 mt-0.5" /> {err}
-        </div>
-      )}
+      {err && <ErrorBanner message={err} />}
 
       {/* ── SOURCE ─────────────────────────────────────────────────── */}
       {step === "source" && (
@@ -442,8 +439,7 @@ export default function ImportWizardPage() {
                   <Plus size={12} /> Мөр нэмэх
                 </button>
               </header>
-              <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
+              <TableCard>
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200 text-gray-500">
@@ -474,8 +470,7 @@ export default function ImportWizardPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </div>
+              </TableCard>
 
               <div className="flex justify-end">
                 <button onClick={runEnrich} disabled={busy || rawRows.length === 0}
@@ -551,8 +546,7 @@ export default function ImportWizardPage() {
             </div>
           )}
 
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
+          <TableCard>
               <table className="w-full text-[12px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-gray-500">
@@ -683,8 +677,7 @@ export default function ImportWizardPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-          </div>
+          </TableCard>
 
           <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-end gap-3 flex-wrap">
             <div className="flex gap-2">

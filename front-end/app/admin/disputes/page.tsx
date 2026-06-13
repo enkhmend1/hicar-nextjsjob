@@ -21,9 +21,12 @@ import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 import { Dispute, DisputeStatus } from "@/app/types";
 import {
-  Scale, AlertTriangle, Check, Coins, XCircle, ShieldCheck, Loader2, User as UserIcon,
+  Scale, Check, Coins, XCircle, ShieldCheck, Loader2, User as UserIcon,
   Store, Bot, MessageSquare, Image as ImageIcon,
 } from "lucide-react";
+import {
+  PageHeader, FilterTabs, StatusChip, EmptyState, ErrorBanner,
+} from "@/app/admin/_components/ui";
 
 const STATUS_CHIP: Record<DisputeStatus, { label: string; cls: string }> = {
   open:             { label: "Шинэ",          cls: "bg-rose-50 text-rose-700 border-rose-200" },
@@ -79,33 +82,20 @@ export default function AdminDisputesPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-          <Scale size={20} className="text-blue-600" /> Маргаан шийдвэрлэх
-        </h1>
-        <p className="text-[13px] text-gray-500">AI шинжилгээ + хоёр талын түүх + escrow удирдлага</p>
-      </div>
+      <PageHeader
+        title="Маргаан шийдвэрлэх"
+        subtitle="AI шинжилгээ + хоёр талын түүх + escrow удирдлага"
+        icon={Scale}
+      />
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {FILTERS.map((f) => (
-          <button key={f.id} onClick={() => setFilter(f.id)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === f.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-            }`}>
-            {f.label}
-          </button>
-        ))}
-      </div>
+      <FilterTabs value={filter} onSelect={setFilter} options={FILTERS} />
 
       <div className="grid md:grid-cols-[320px_1fr] gap-4">
         <aside className="bg-white border border-gray-200 rounded-2xl overflow-hidden md:max-h-[78vh] md:overflow-y-auto">
           {loading ? (
             <div className="p-6 text-center text-gray-400 text-[12px]">Уншиж байна...</div>
           ) : disputes.length === 0 ? (
-            <div className="p-8 text-center">
-              <ShieldCheck size={28} className="mx-auto text-emerald-300 mb-2" />
-              <p className="text-[12px] text-gray-400">Шийдэх маргаан байхгүй</p>
-            </div>
+            <EmptyState icon={ShieldCheck} title="Шийдэх маргаан байхгүй" />
           ) : (
             <div className="divide-y divide-gray-100">
               {disputes.map((d) => {
@@ -129,9 +119,7 @@ export default function AdminDisputesPage() {
                             : "bg-amber-100 text-amber-700"
                           }`}>AI {score}</span>
                         )}
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${chip.cls}`}>
-                          {chip.label}
-                        </span>
+                        <StatusChip color={chip.cls}>{chip.label}</StatusChip>
                       </div>
                     </div>
                     <div className="text-[12px] font-semibold text-gray-900 truncate">
@@ -205,9 +193,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
           <div className="text-[11px] text-gray-400 font-mono">#{dispute._id?.slice(-8).toUpperCase()}</div>
           <div className="text-[16px] font-semibold text-gray-900">{REASON_LABEL[dispute.reason]}</div>
         </div>
-        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${chip.cls}`}>
-          {chip.label}
-        </span>
+        <StatusChip color={chip.cls}>{chip.label}</StatusChip>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-[12px]">
@@ -334,7 +320,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Шийдвэрийн дотоод тэмдэглэл (audit log)..."
             rows={2} maxLength={2000}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none resize-none font-sans"
           />
 
           <div>
@@ -345,7 +331,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
               <span className="text-[13px] text-gray-500">₮</span>
               <input type="number" value={penalty} onChange={(e) => setPenalty(e.target.value)}
                 min={0} step={1000} placeholder="0"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-blue-500 outline-none" />
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[13px] focus:border-blue-500 outline-none" />
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
               Худалдагчийн буруу гэж дүгнэсэн үед буцаалтын шуудангийн төлбөрийг
@@ -362,7 +348,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
             <div className="flex gap-1">
               <input type="number" value={partial} onChange={(e) => setPartial(e.target.value)}
                 min={1} max={dispute.requestedRefundAmount}
-                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[12px] focus:border-blue-500 outline-none w-0" />
+                className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-[16px] md:text-[12px] focus:border-blue-500 outline-none w-0" />
               <button onClick={() => resolve("refund_partial")} disabled={busy}
                 className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-2 py-2 text-[11px] font-semibold cursor-pointer border-none transition-colors font-sans inline-flex items-center gap-1 whitespace-nowrap">
                 <Coins size={11} /> Хэсэг
@@ -380,12 +366,7 @@ function AdminDetail({ dispute, onChanged }: { dispute: Dispute; onChanged: () =
             </button>
           </div>
 
-          {err && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg p-2.5 text-[12px]">
-              <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-              <span>{err}</span>
-            </div>
-          )}
+          {err && <ErrorBanner>{err}</ErrorBanner>}
 
           {busy && (
             <div className="flex items-center gap-2 text-[12px] text-gray-500">

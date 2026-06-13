@@ -2,7 +2,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Order } from "@/app/types";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ShoppingBag } from "lucide-react";
+import {
+  PageHeader, Card, FilterTabs, StatusChip, StatCard, CardSkeletons, EmptyState,
+} from "@/app/admin/_components/ui";
 
 const STATUSES = ["pending", "paid", "processing", "shipped", "delivered", "cancelled"] as const;
 const STATUS_LABEL: Record<string, string> = {
@@ -81,28 +84,25 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Захиалга</h1>
-        <p className="text-[13px] text-gray-500">{orders.length} захиалга</p>
-      </div>
+      <PageHeader title="Захиалга" subtitle={`${orders.length} захиалга`} icon={ShoppingBag} />
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {(["all", ...STATUSES] as const).map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium cursor-pointer border transition-all font-sans ${
-              filter === s ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-            }`}>
-            {s === "all" ? "Бүгд" : STATUS_LABEL[s]}
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        value={filter}
+        onSelect={setFilter}
+        options={(["all", ...STATUSES] as const).map(s => ({
+          id: s,
+          label: s === "all" ? "Бүгд" : STATUS_LABEL[s],
+        }))}
+      />
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Уншиж байна...</div>
-        ) : orders.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Захиалга байхгүй</div>
-        ) : (
+      {loading ? (
+        <CardSkeletons count={5} height="h-20" />
+      ) : orders.length === 0 ? (
+        <Card padded={false}>
+          <EmptyState icon={ShoppingBag} title="Захиалга байхгүй" />
+        </Card>
+      ) : (
+        <Card padded={false}>
           <div className="divide-y divide-gray-100">
             {orders.map(o => {
               const id = (o._id ?? o.id) as string;
@@ -136,9 +136,9 @@ export default function AdminOrdersPage() {
                       + admin manual Release / Hold overrides. */}
                   {o.paymentStatus && (
                     <div className="flex flex-wrap items-center gap-2 mt-2 ml-10 text-[11px]">
-                      <span className={`px-2 py-0.5 rounded-full border font-medium ${PAYMENT_COLOR[o.paymentStatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                      <StatusChip color={PAYMENT_COLOR[o.paymentStatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}>
                         🛡 {PAYMENT_LABEL[o.paymentStatus] ?? o.paymentStatus}
-                      </span>
+                      </StatusChip>
                       {(o.escrowAmount ?? 0) > 0 && o.paymentStatus !== "PAID_OUT" && (
                         <span className="text-gray-500">Дүн: <b className="text-gray-700">₮{o.escrowAmount!.toLocaleString()}</b></span>
                       )}
@@ -190,8 +190,8 @@ export default function AdminOrdersPage() {
               );
             })}
           </div>
-        )}
-      </div>
+        </Card>
+      )}
     </div>
   );
 }

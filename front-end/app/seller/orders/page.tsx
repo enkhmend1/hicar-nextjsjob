@@ -16,8 +16,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Order } from "@/app/types";
-import { ChevronDown, ChevronUp, Truck, PackageCheck, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Truck, PackageCheck, Loader2, ShoppingBag } from "lucide-react";
 import OrderTimeline from "@/app/components/OrderTimeline";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { EmptyState, CardListSkeleton } from "@/app/seller/_components/States";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Хүлээгдэж буй", paid: "Төлсөн", processing: "Бэлдэж буй",
@@ -104,10 +106,7 @@ export default function SellerOrdersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Захиалга</h1>
-        <p className="text-[13px] text-gray-500">{orders.length} захиалга</p>
-      </div>
+      <PageHeader title="Захиалга" subtitle={`${orders.length} захиалга`} icon={ShoppingBag} iconClassName="text-blue-600" />
 
       {/* Status filter chips */}
       <div className="flex flex-wrap gap-2">
@@ -135,14 +134,18 @@ export default function SellerOrdersPage() {
         })}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">Уншиж байна...</div>
-        ) : visible.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-[13px]">
-            {filter === "all" ? "Захиалга байхгүй" : "Энэ ангилалд захиалга алга"}
-          </div>
-        ) : (
+      {loading ? (
+        <CardListSkeleton count={4} height="h-[88px]" />
+      ) : visible.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-2xl">
+          <EmptyState
+            icon={ShoppingBag}
+            title={filter === "all" ? "Захиалга байхгүй" : "Энэ ангилалд захиалга алга"}
+            hint={filter === "all" ? "Худалдан авагч захиалга өгмөгц энд харагдана." : undefined}
+          />
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="divide-y divide-gray-100">
             {visible.map((o) => {
               const id = (o._id ?? o.id) as string;
@@ -199,7 +202,7 @@ export default function SellerOrdersPage() {
                             placeholder="Хяналтын код (заавал биш)"
                             value={trackingDraft[id] || ""}
                             onChange={(e) => setTrackingDraft((d) => ({ ...d, [id]: e.target.value }))}
-                            className="px-3 py-1.5 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-blue-400 w-48"
+                            className="px-3 py-1.5 rounded-lg border border-gray-200 text-[16px] md:text-[12px] focus:outline-none focus:border-blue-400 w-48"
                           />
                           <button
                             onClick={() => updateStatus(id, "shipped")}
@@ -244,8 +247,8 @@ export default function SellerOrdersPage() {
               );
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

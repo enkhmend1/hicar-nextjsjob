@@ -25,6 +25,8 @@ import { Rfq, RfqStatus } from "@/app/types";
 import {
   MessageSquareQuote, Package, Send, X, Loader2, Clock, User as UserIcon,
 } from "lucide-react";
+import PageHeader from "@/app/seller/_components/PageHeader";
+import { EmptyState, CardListSkeleton } from "@/app/seller/_components/States";
 
 type Filter = "all" | "pending" | "quoted";
 
@@ -136,17 +138,16 @@ export default function SellerRfqPage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 flex items-center gap-2">
-            <MessageSquareQuote size={20} className="text-amber-600" /> Үнийн санал
-          </h1>
-          <p className="text-[13px] text-gray-500">
+      <PageHeader
+        title="Үнийн санал"
+        icon={MessageSquareQuote}
+        subtitle={
+          <>
             {rfqs.length} хүсэлт
             {pendingCount > 0 && <span className="text-amber-600 font-medium"> · {pendingCount} шинэ</span>}
-          </p>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Filter tabs */}
       <div className="inline-flex bg-gray-100 rounded-lg p-1">
@@ -164,18 +165,14 @@ export default function SellerRfqPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-2xl h-[150px] animate-pulse" />
-          ))}
-        </div>
+        <CardListSkeleton count={3} height="h-[150px]" />
       ) : visible.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl py-16 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <MessageSquareQuote size={28} className="text-gray-300" />
-          </div>
-          <p className="text-[14px] font-medium text-gray-700">Үнийн санал алга.</p>
-          <p className="text-[12px] text-gray-500 mt-1">Худалдан авагч үнийн санал хүсмэгц энд харагдана.</p>
+        <div className="bg-white border border-gray-200 rounded-2xl">
+          <EmptyState
+            icon={MessageSquareQuote}
+            title="Үнийн санал алга."
+            hint="Худалдан авагч үнийн санал хүсмэгц энд харагдана."
+          />
         </div>
       ) : (
         <div className="space-y-3">
