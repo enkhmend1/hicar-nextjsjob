@@ -48,15 +48,33 @@ interface NotifState {
 // page load would chime for pre-existing unread items).
 let seenIds: Set<string> | null = null;
 
-/** Short, self-contained "ding" via Web Audio — no asset file needed. */
-function chime() {
+// Shared AudioContext. Browsers start it "suspended" until a user gesture, so
+// we create + resume it once on the first interaction (unlockAudio, wired from
+// <NotificationPoller/>). Reusing one unlocked context is what makes the chime
+// actually fire on later notifications, including on mobile Safari/Chrome.
+let audioCtx: AudioContext | null = null;
+
+function getCtx(): AudioContext | null {
   try {
     const w = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
     const Ctx = w.AudioContext || w.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    // Browsers start the context suspended without a gesture — try to resume.
-    void ctx.resume?.();
+    if (!Ctx) return null;
+    if (!audioCtx) audioCtx = new Ctx();
+    if (audioCtx.state === "suspended") void audioCtx.resume();
+    return audioCtx;
+  } catch { return null; }
+}
+
+/** Unlock audio on the first user gesture so later chimes aren't blocked. */
+export function unlockAudio() {
+  getCtx();
+}
+
+/** Short, self-contained "ding" via Web Audio — no asset file needed. */
+function chime() {
+  try {
+    const ctx = getCtx();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -69,7 +87,6 @@ function chime() {
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
     osc.start();
     osc.stop(ctx.currentTime + 0.42);
-    setTimeout(() => { void ctx.close?.(); }, 700);
   } catch { /* autoplay blocked / unsupported — toast still fires */ }
 }
 

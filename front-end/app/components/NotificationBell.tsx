@@ -79,39 +79,36 @@ export default function NotificationBell({ align = "right" }: { align?: "left" |
 
   if (!user) return null;
 
-  // Panel never overflows a phone: capped to the viewport with a 1.5rem gutter.
+  const close = () => setOpen(false);
+  // Desktop dropdown opens from the bell's side; "left" for sidebar bells so
+  // the panel opens inward instead of off-screen.
   const panelPos = align === "left" ? "left-0" : "right-0";
 
-  return (
-    <div ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)}
-        className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer bg-transparent border-none"
-        aria-label="Мэдэгдэл" title="Мэдэгдэл">
-        <Bell size={18} />
+  const header = (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+      <div className="flex items-center gap-2">
+        <span className="text-[15px] md:text-[14px] font-semibold text-gray-900">Мэдэгдэл</span>
+        {unread > 0 && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium">{unread} шинэ</span>}
+      </div>
+      <div className="flex items-center gap-1.5">
         {unread > 0 && (
-          <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-semibold">
-            {unread > 99 ? "99+" : unread}
-          </span>
+          <button onClick={markAll}
+            className="flex items-center gap-1 text-[12px] md:text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer bg-transparent border-none font-medium px-1 py-1">
+            <Check size={12} /> Бүгдийг уншсан
+          </button>
         )}
-      </button>
+        {/* Explicit close — essential on the mobile sheet. */}
+        <button onClick={close} aria-label="Хаах"
+          className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer bg-transparent border-none">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
 
-      {open && (
-        <div className={`absolute ${panelPos} top-full mt-2 w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden`}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <span className="text-[14px] font-semibold text-gray-900">Мэдэгдэл</span>
-              {unread > 0 && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium">{unread} шинэ</span>}
-            </div>
-            {unread > 0 && (
-              <button onClick={markAll}
-                className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer bg-transparent border-none font-medium">
-                <Check size={11} /> Бүгдийг уншсан
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto overscroll-contain">
-            {items.length === 0 ? (
+  const list = (
+    <div className="flex-1 overflow-y-auto overscroll-contain">
+      {items.length === 0 ? (
               <div className="text-center py-8">
                 <Bell size={28} className="mx-auto text-gray-300 mb-2" />
                 <p className="text-[12px] text-gray-400">Мэдэгдэл байхгүй</p>
@@ -150,8 +147,40 @@ export default function NotificationBell({ align = "right" }: { align?: "left" |
                 );
               })
             )}
+    </div>
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+        className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer bg-transparent border-none"
+        aria-label="Мэдэгдэл" title="Мэдэгдэл">
+        <Bell size={18} />
+        {unread > 0 && (
+          <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-semibold">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          {/* Mobile: full-width bottom sheet (backdrop + slide-up) so the
+              list is readable on a phone instead of a cramped dropdown. */}
+          <div className="md:hidden fixed inset-0 z-[60]">
+            <div className="absolute inset-0 bg-black/40" onClick={close} />
+            <div className="absolute inset-x-0 bottom-0 max-h-[85vh] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
+              <div className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-gray-300 shrink-0" />
+              {header}
+              {list}
+            </div>
           </div>
-        </div>
+          {/* Desktop: anchored dropdown. */}
+          <div className={`hidden md:flex absolute ${panelPos} top-full mt-2 w-[360px] max-h-[70vh] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex-col overflow-hidden`}>
+            {header}
+            {list}
+          </div>
+        </>
       )}
     </div>
   );
