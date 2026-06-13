@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Users, Package, ShoppingBag, TrendingUp } from "lucide-react";
+import { PageHeader, StatCard, StatGrid, ErrorBanner, CardSkeletons } from "./_components/ui";
 
 interface DashboardData {
   totals: { users: number; products: number; orders: number; revenue: number };
@@ -37,42 +38,30 @@ export default function AdminDashboard() {
       .catch(e => setErr((e as Error).message));
   }, []);
 
-  if (err) return <div className="text-red-600 text-sm">⚠ {err}</div>;
-  if (!data) return <div className="text-gray-400 text-sm">Уншиж байна...</div>;
+  if (err) return <ErrorBanner>{err}</ErrorBanner>;
+  if (!data) return (
+    <div className="space-y-6">
+      <PageHeader title="Хяналтын самбар" subtitle="HiCar дэлгүүрийн ерөнхий мэдээлэл" />
+      <CardSkeletons count={4} height="h-28" />
+    </div>
+  );
 
   const cards = [
-    { label: "Нийт хэрэглэгч", value: data.totals.users.toLocaleString(), icon: Users, color: "blue" },
-    { label: "Нийт бараа", value: data.totals.products.toLocaleString(), icon: Package, color: "blue" },
-    { label: "Нийт захиалга", value: data.totals.orders.toLocaleString(), icon: ShoppingBag, color: "emerald" },
-    { label: "Нийт борлуулалт", value: `₮${data.totals.revenue.toLocaleString()}`, icon: TrendingUp, color: "orange" },
+    { label: "Нийт хэрэглэгч", value: data.totals.users.toLocaleString(), icon: Users, tone: "blue" as const },
+    { label: "Нийт бараа", value: data.totals.products.toLocaleString(), icon: Package, tone: "blue" as const },
+    { label: "Нийт захиалга", value: data.totals.orders.toLocaleString(), icon: ShoppingBag, tone: "emerald" as const },
+    { label: "Нийт борлуулалт", value: `₮${data.totals.revenue.toLocaleString()}`, icon: TrendingUp, tone: "orange" as const },
   ];
-  const colorMap: Record<string, string> = {
-    blue:    "bg-blue-50 text-blue-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    orange:  "bg-orange-50 text-orange-600",
-  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900">Хяналтын самбар</h1>
-        <p className="text-[13px] text-gray-500 mt-0.5">HiCar дэлгүүрийн ерөнхий мэдээлэл</p>
-      </div>
+      <PageHeader title="Хяналтын самбар" subtitle="HiCar дэлгүүрийн ерөнхий мэдээлэл" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map(c => {
-          const Icon = c.icon;
-          return (
-            <div key={c.label} className="bg-white border border-gray-200 rounded-2xl p-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${colorMap[c.color]}`}>
-                <Icon size={18} />
-              </div>
-              <div className="text-[20px] font-bold text-gray-900">{c.value}</div>
-              <div className="text-[12px] text-gray-500 mt-0.5">{c.label}</div>
-            </div>
-          );
-        })}
-      </div>
+      <StatGrid>
+        {cards.map(c => (
+          <StatCard key={c.label} label={c.label} value={c.value} icon={c.icon} tone={c.tone} />
+        ))}
+      </StatGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-4">
