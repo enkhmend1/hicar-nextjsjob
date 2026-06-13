@@ -64,6 +64,22 @@ export const createRfq = async (req, res) => {
       return res.status(400).json({ message: "Тоо ширхэг дор хаяж 1 байх ёстой" });
     }
 
+    // One active inquiry per product per buyer — a pending/quoted RFQ is an
+    // open negotiation thread (Alibaba model). Block duplicates so the
+    // seller's inbox doesn't fill with repeats; declined/cancelled/accepted
+    // are settled, so a fresh request after those is allowed.
+    const existingActive = await Rfq.findOne({
+      buyer: req.user._id,
+      product: product._id,
+      status: { $in: ["pending", "quoted"] },
+    });
+    if (existingActive) {
+      return res.status(409).json({
+        message: "Энэ бараанд таны идэвхтэй үнийн санал хүсэлт байна. 'Миний үнийн саналууд' хэсгээс үзнэ үү.",
+        rfqId: String(existingActive._id),
+      });
+    }
+
     const rfq = await Rfq.create({
       buyer: req.user._id,
       seller: sellerId,
@@ -109,7 +125,11 @@ export const listMyRfqs = async (req, res) => {
     if (req.query.status) filter.status = req.query.status;
     const rfqs = await Rfq.find(filter)
       .sort({ createdAt: -1 })
-      .populate("product", "name images price");
+      .limit(200)
+      .populate("product", "name images price")
+      // Seller delivery config so the RFQ checkout shows the SAME delivery
+      // fee the server will charge (no surprise at payment).
+      .populate("seller", "sellerProfile.shopName sellerProfile.deliveryOptions");
     return res.json({ rfqs });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -130,6 +150,7 @@ export const listSellerRfqs = async (req, res) => {
     if (req.query.status) filter.status = req.query.status;
     const rfqs = await Rfq.find(filter)
       .sort({ createdAt: -1 })
+      .limit(200)
       .populate("buyer", "name")
       .populate("product", "name images price");
     return res.json({ rfqs });

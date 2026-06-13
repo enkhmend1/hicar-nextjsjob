@@ -57,7 +57,15 @@ export default function RfqModal({
       onSent?.();
       onClose();
     } catch (e) {
-      setErr((e as ApiError).message || "Алдаа гарлаа");
+      const ae = e as ApiError;
+      // 409 = an active RFQ for this product already exists. Don't show a
+      // scary red banner — point the buyer to their existing request.
+      if (ae.status === 409) {
+        toast.info(ae.message, { action: { label: "Үнийн саналууд", href: "/rfq" } });
+        onClose();
+        return;
+      }
+      setErr(ae.message || "Алдаа гарлаа");
     } finally {
       setBusy(false);
     }
