@@ -309,6 +309,61 @@ export interface Rfq {
   createdAt: string;
 }
 
+/**
+ * Support tickets — buyer ↔ operator helpdesk ("Тусламж / Оператор").
+ *
+ * A buyer opens a ticket with a subject + category (+ optional related order
+ * and first message). The thread is a list of messages authored by `user`,
+ * `admin`, or `system`. The backend owns the status machine; the client only
+ * renders it and posts new messages. `user` is a bare id on the owner's own
+ * list and a populated {_id,name,email} on the admin inbox.
+ *
+ * Unread flags are one-way mirrors: `unreadForUser` is cleared server-side
+ * when the owner opens the ticket (GET /support/:id); `unreadForAdmin` is the
+ * admin-side counterpart surfaced as a badge in the admin inbox.
+ */
+export type SupportCategory =
+  | "order"
+  | "payment"
+  | "delivery"
+  | "account"
+  | "seller"
+  | "other";
+
+export type SupportStatus =
+  | "open"
+  | "awaiting_admin"
+  | "awaiting_user"
+  | "resolved"
+  | "closed";
+
+export interface SupportMessage {
+  _id?: string;
+  author: "user" | "admin" | "system";
+  /** Populated {_id,name} for admin-authored messages when available. */
+  adminUser?: string | { _id: string; name: string };
+  text: string;
+  images?: string[];
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  _id: string;
+  /** Bare id on /support/mine; populated {_id,name,email} on the admin inbox. */
+  user: string | { _id: string; name: string; email: string };
+  subject: string;
+  category: SupportCategory;
+  status: SupportStatus;
+  priority?: string;
+  relatedOrder?: string | null;
+  messages: SupportMessage[];
+  assignedAdmin?: string | { _id: string; name: string } | null;
+  lastMessageAt: string;
+  unreadForAdmin?: boolean;
+  unreadForUser?: boolean;
+  createdAt: string;
+}
+
 export interface Order {
   _id?: string;
   id?: string;

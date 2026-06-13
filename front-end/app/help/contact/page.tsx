@@ -63,13 +63,31 @@ export default function HelpContactPage() {
         </div>
 
         {/* Hero */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-[22px] font-semibold text-gray-900 mb-1">Оператортой холбогдох</h1>
           <p className="text-[13px] text-gray-500">
             HiCar-ийн дэмжлэгийн баг туслахад бэлэн. Захиалга, төлбөр, хүргэлт
             эсвэл маргаантай холбоотой асуудлаа доорх сувгаар шийдэцгээе.
           </p>
         </div>
+
+        {/* Primary in-app channel — real operator chat hand-off. */}
+        <Link
+          href="/support"
+          className="group flex items-center gap-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-2xl p-4 mb-8 shadow-sm shadow-blue-200 transition-all"
+        >
+          <span className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+            <MessageSquare size={20} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold">Оператортой чат бичих</div>
+            <div className="text-[12px] text-blue-100 leading-relaxed mt-0.5">
+              Аппликейшн дотроос шууд хүсэлт нээж, оператортой бичгээр харилцаарай. Хариуг
+              энд хүлээн авна.
+            </div>
+          </div>
+          <ArrowRight size={18} className="text-white/80 group-hover:translate-x-0.5 transition-transform shrink-0" />
+        </Link>
 
         {/* "Бид хэрхэн туслах вэ" intro */}
         <section className="mb-8">

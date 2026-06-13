@@ -10,7 +10,7 @@ import NavSearch from "./NavSearch";
 import {
   ShoppingCart, User, Menu, X, LogOut, Package, Shield, Store, Heart, Car,
   ChevronDown, ChevronRight, Plus, ClipboardList, HelpCircle, Search,
-  MessageSquareQuote,
+  MessageSquareQuote, LifeBuoy,
 } from "lucide-react";
 
 /**
@@ -362,6 +362,9 @@ export default function Navbar() {
                     <DropdownLink href="/rfq" icon={<MessageSquareQuote size={13} />} onClick={() => setUserOpen(false)}>
                       Үнийн саналууд
                     </DropdownLink>
+                    <DropdownLink href="/support" icon={<LifeBuoy size={13} />} onClick={() => setUserOpen(false)}>
+                      Тусламж
+                    </DropdownLink>
                     <DropdownLink href="/wishlist" icon={<Heart size={13} />} onClick={() => setUserOpen(false)}>
                       Хадгалсан
                     </DropdownLink>
@@ -526,6 +529,10 @@ export default function Navbar() {
             {showUserUI && (
               <MobileRow href="/rfq" onClick={() => setOpen(false)}
                 icon={<MessageSquareQuote size={15} />} label="Үнийн саналууд" />
+            )}
+            {showUserUI && (
+              <MobileRow href="/support" onClick={() => setOpen(false)}
+                icon={<LifeBuoy size={15} />} label="Тусламж / Оператор" />
             )}
             <MobileRow href="/help" onClick={() => setOpen(false)}
               icon={<HelpCircle size={15} />} label={t("nav.help")} />
