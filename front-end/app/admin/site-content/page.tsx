@@ -27,6 +27,9 @@ import {
   AlertCircle, Check, ChevronDown, ChevronRight, CornerDownRight, Eye, EyeOff,
   FolderTree, ImagePlus, LayoutTemplate, Loader2, Plus, Save, Search, Sliders, Trash2, X,
 } from "lucide-react";
+import {
+  PageHeader, CardSkeletons, ErrorBanner, btn,
+} from "@/app/admin/_components/ui";
 
 interface AttributeDef {
   key: string;
@@ -246,13 +249,13 @@ export default function AdminSiteContentPage() {
         <input value={cat.name}
           onChange={(e) => updateCategory(idx, { name: e.target.value })}
           placeholder="Нэр (Жнь: Духны ремень)"
-          className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors" />
+          className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-[16px] md:text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors" />
 
         {/* stable id */}
         <input value={cat.id}
           onChange={(e) => updateCategory(idx, { id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
           placeholder="id"
-          className="w-24 shrink-0 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-[11px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors" />
+          className="w-24 shrink-0 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-[16px] md:text-[11px] font-mono focus:bg-white focus:border-blue-500 outline-none transition-colors" />
 
         {/* live count */}
         <div className="shrink-0 w-10 text-center bg-slate-50 rounded-lg h-9 flex items-center justify-center text-[12px] font-semibold text-slate-700"
@@ -395,37 +398,46 @@ export default function AdminSiteContentPage() {
   }, [content]);
 
   if (loading) {
-    return <div className="text-gray-400 text-sm py-12 text-center">Уншиж байна...</div>;
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Сайтын контент"
+          icon={LayoutTemplate}
+          subtitle="Нүүр хуудасны категори болон hero текст. Тоонууд DB-аас live тооцогддог тул засаж болохгүй."
+        />
+        <CardSkeletons count={3} height="h-40" />
+      </div>
+    );
   }
   if (!content) {
-    return <div className="text-red-600 text-sm py-12 text-center">Контент ачаалж чадсангүй</div>;
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Сайтын контент" icon={LayoutTemplate} />
+        <ErrorBanner>Контент ачаалж чадсангүй</ErrorBanner>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-gray-900 inline-flex items-center gap-2">
-            <LayoutTemplate size={20} className="text-blue-600" />
-            Сайтын контент
-          </h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">
-            Нүүр хуудасны категори болон hero текст. Тоонууд DB-аас live тооцогддог тул засаж болохгүй.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {savedAt && (
-            <span className="text-[11px] text-emerald-600 inline-flex items-center gap-1">
-              <Check size={11} /> {savedAt.toLocaleTimeString("mn-MN")}-д хадгаласан
-            </span>
-          )}
-          <button onClick={save} disabled={saving || !validation.ok}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] font-semibold cursor-pointer border-none transition-colors font-sans shadow-sm shadow-blue-200">
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            {saving ? "Хадгалж байна..." : "Хадгалах"}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Сайтын контент"
+        icon={LayoutTemplate}
+        subtitle="Нүүр хуудасны категори болон hero текст. Тоонууд DB-аас live тооцогддог тул засаж болохгүй."
+        actions={
+          <>
+            {savedAt && (
+              <span className="text-[11px] text-emerald-600 inline-flex items-center gap-1">
+                <Check size={11} /> {savedAt.toLocaleTimeString("mn-MN")}-д хадгаласан
+              </span>
+            )}
+            <button onClick={save} disabled={saving || !validation.ok} className={btn.primary}>
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {saving ? "Хадгалж байна..." : "Хадгалах"}
+            </button>
+          </>
+        }
+      />
 
       {!validation.ok && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[12px] text-amber-800">
@@ -439,16 +451,14 @@ export default function AdminSiteContentPage() {
       )}
 
       {err && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-[12px] text-red-700">
-          <div className="inline-flex items-start gap-2">
-            <AlertCircle size={13} className="mt-0.5 shrink-0" /> {err}
-          </div>
+        <ErrorBanner>
+          <div>{err}</div>
           {serverErrors.length > 0 && (
             <ul className="mt-2 list-disc list-inside space-y-0.5 ml-1">
               {serverErrors.map((m, i) => <li key={i}>{m}</li>)}
             </ul>
           )}
-        </div>
+        </ErrorBanner>
       )}
 
       {/* ── Categories — nested tree (Main → Sub) ───────────────── */}
@@ -462,7 +472,7 @@ export default function AdminSiteContentPage() {
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={catQuery} onChange={(e) => setCatQuery(e.target.value)} placeholder="Хайх…"
-                className="w-40 pl-8 pr-2.5 py-1.5 text-[12px] bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-blue-500 outline-none transition-colors" />
+                className="w-40 pl-8 pr-2.5 py-1.5 text-[16px] md:text-[12px] bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-blue-500 outline-none transition-colors" />
             </div>
             <button type="button" onClick={addCategory}
               className="inline-flex items-center gap-1 text-[12px] text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-3 py-1.5 cursor-pointer border-none font-semibold transition-colors shadow-sm shadow-blue-200">
@@ -582,13 +592,13 @@ export default function AdminSiteContentPage() {
                   value={String(content.hero[f.key] || "")}
                   onChange={(e) => updateHero(f.key, e.target.value)}
                   rows={3} placeholder={f.placeholder}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors font-sans resize-none" />
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors font-sans resize-none" />
               ) : (
                 <input
                   value={String(content.hero[f.key] || "")}
                   onChange={(e) => updateHero(f.key, e.target.value)}
                   placeholder={f.placeholder}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors font-sans" />
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[16px] md:text-[12px] focus:bg-white focus:border-blue-500 outline-none transition-colors font-sans" />
               )}
             </div>
           ))}
