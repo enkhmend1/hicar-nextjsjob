@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { Order } from "@/app/types";
 import { ChevronDown, ChevronUp, ShoppingBag } from "lucide-react";
 import {
-  PageHeader, Card, FilterTabs, StatusChip, StatCard, CardSkeletons, EmptyState,
+  PageHeader, Card, FilterTabs, StatusChip, CardSkeletons, EmptyState,
 } from "@/app/admin/_components/ui";
 
 const STATUSES = ["pending", "paid", "processing", "shipped", "delivered", "cancelled"] as const;

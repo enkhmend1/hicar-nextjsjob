@@ -25,7 +25,7 @@ import {
   Store, Bot, MessageSquare, Image as ImageIcon,
 } from "lucide-react";
 import {
-  PageHeader, FilterTabs, StatusChip, EmptyState, ErrorBanner,
+  PageHeader, FilterTabs, StatusChip, EmptyState, ErrorBanner, Skeleton,
 } from "@/app/admin/_components/ui";
 
 const STATUS_CHIP: Record<DisputeStatus, { label: string; cls: string }> = {
@@ -93,7 +93,18 @@ export default function AdminDisputesPage() {
       <div className="grid md:grid-cols-[320px_1fr] gap-4">
         <aside className="bg-white border border-gray-200 rounded-2xl overflow-hidden md:max-h-[78vh] md:overflow-y-auto">
           {loading ? (
-            <div className="p-6 text-center text-gray-400 text-[12px]">Уншиж байна...</div>
+            <div className="divide-y divide-gray-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-2.5 w-1/2" />
+                </div>
+              ))}
+            </div>
           ) : disputes.length === 0 ? (
             <EmptyState icon={ShieldCheck} title="Шийдэх маргаан байхгүй" />
           ) : (
