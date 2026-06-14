@@ -21,6 +21,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useCategories } from "@/app/lib/useCategories";
+import CameraSheet from "@/app/components/media/CameraSheet";
 import * as XLSX from "xlsx";
 import {
   Upload, FileSpreadsheet, ScanLine, ArrowLeft, ArrowRight, Loader2,
@@ -180,6 +181,7 @@ export default function ImportWizardPage() {
   const [rawRows, setRawRows] = useState<RawRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ocrInputRef = useRef<HTMLInputElement>(null);
+  const [ocrCamera, setOcrCamera] = useState(false);
   const [ocrPreview, setOcrPreview] = useState<string | null>(null);
 
   // ── Preview state ──
@@ -406,8 +408,8 @@ export default function ImportWizardPage() {
             <SourceCard
               icon={ScanLine} color="blue"
               title="Зураг / Barcode (OCR)"
-              body="Баглааны зургийг авч AI таних. OEM код + нэрийг автоматаар уншина (OpenAI key шаардана)."
-              onClick={() => ocrInputRef.current?.click()}
+              body="Баглааны зургийг КАМЕРААР шууд авч AI таних. OEM код + нэрийг автоматаар уншина (OpenAI key шаардана)."
+              onClick={() => setOcrCamera(true)}
             />
             <SourceCard
               icon={Plus} color="amber"
@@ -418,6 +420,11 @@ export default function ImportWizardPage() {
           </div>
           <input ref={fileInputRef}  type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => onFile(e.target.files?.[0] || null)} />
           <input ref={ocrInputRef}   type="file" hidden accept="image/*"          onChange={(e) => onOcr(e.target.files?.[0] || null)} />
+          {ocrCamera && (
+            <CameraSheet mode="photo" title="Баглааны зураг авах (OCR)"
+              onCapture={(file) => { setOcrCamera(false); onOcr(file); }}
+              onClose={() => setOcrCamera(false)} />
+          )}
 
           {ocrPreview && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">

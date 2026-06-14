@@ -2,7 +2,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
-import { Search, Upload, Loader2, AlertTriangle, Car, ChevronRight } from "lucide-react";
+import { openAIChatWithImage } from "@/app/lib/aiChat";
+import CameraSheet from "@/app/components/media/CameraSheet";
+import { Search, Upload, Loader2, AlertTriangle, Car, ChevronRight, Camera, ScanLine } from "lucide-react";
 
 type Tab = 0 | 1 | 2;
 
@@ -38,7 +40,13 @@ export default function SearchCard() {
   const [found, setFound] = useState<IdentifiedVehicle | null>(null);
   const [err, setErr] = useState<{ message: string; code?: string } | null>(null);
 
+  // Camera / scanner sheet — null = closed.
+  const [sheet, setSheet] = useState<"photo" | "scan" | null>(null);
+
   const resetState = () => { setFound(null); setErr(null); };
+
+  /** Image search: hand the captured/picked photo to the AI chat (vision). */
+  const imageSearch = (file: File) => { setSheet(null); openAIChatWithImage(file); };
 
   const searchByPlate = async () => {
     const trimmed = plate.trim();
@@ -157,14 +165,43 @@ export default function SearchCard() {
       )}
 
       {tab === 2 && (
-        <label className="block border-2 border-dashed border-blue-200 rounded-xl p-8 text-center cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
-          <input type="file" accept="image/*" className="hidden" />
-          <div className="w-12 h-12 bg-white border border-blue-200 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Upload size={18} className="text-blue-500" />
+        <div className="space-y-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Live device camera → AI vision search */}
+            <button onClick={() => setSheet("photo")}
+              className="flex flex-col items-center justify-center gap-2 border-2 border-blue-200 rounded-xl p-5 bg-blue-50 hover:bg-blue-100 cursor-pointer transition-colors border-none">
+              <span className="w-11 h-11 bg-white border border-blue-200 rounded-full flex items-center justify-center">
+                <Camera size={18} className="text-blue-600" />
+              </span>
+              <span className="text-[13px] font-semibold text-gray-800">Камераар авах</span>
+            </button>
+            {/* Gallery upload → AI vision search */}
+            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-blue-200 rounded-xl p-5 bg-blue-50 hover:bg-blue-100 cursor-pointer transition-colors">
+              <input type="file" accept="image/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) imageSearch(f); }} />
+              <span className="w-11 h-11 bg-white border border-blue-200 rounded-full flex items-center justify-center">
+                <Upload size={18} className="text-blue-500" />
+              </span>
+              <span className="text-[13px] font-semibold text-gray-800">Зураг сонгох</span>
+            </label>
           </div>
-          <p className="text-[14px] font-medium text-gray-800 mb-1">Сэлбэгийн зураг оруулна уу</p>
-          <p className="text-[12px] text-gray-400">AI OEM дугаарыг автоматаар тодорхойлно</p>
-        </label>
+          {/* QR / barcode scan → part search by the decoded code */}
+          <button onClick={() => setSheet("scan")}
+            className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-2.5 text-[13px] font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 cursor-pointer bg-white transition-colors">
+            <ScanLine size={15} /> QR / баркод уншуулах
+          </button>
+          <p className="text-[11px] text-gray-400 text-center">AI зургаас OEM дугаарыг таних, эсвэл баркодоор шууд хайна</p>
+        </div>
+      )}
+
+      {sheet === "photo" && (
+        <CameraSheet mode="photo" title="Сэлбэгийн зураг авах"
+          onCapture={imageSearch} onClose={() => setSheet(null)} />
+      )}
+      {sheet === "scan" && (
+        <CameraSheet mode="scan" title="QR / баркод уншуулах"
+          onResult={(text) => { setSheet(null); goShopSearch(text); }}
+          onClose={() => setSheet(null)} />
       )}
     </div>
   );
