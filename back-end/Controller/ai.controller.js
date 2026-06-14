@@ -1034,7 +1034,7 @@ const TOOL_HANDLERS = {
       ...scopeFilter(scope),
       $or: [{ stockQty: { $lte: threshold } }, { inStock: false }],
     };
-    const raw = await Product.find(filter).limit(20).lean();
+    const raw = await Product.find(filter).limit(20).select("+warehouseLocation").lean();
     const rows = raw.map((p) => ([
       p.oem || p.name,
       p.stockQty ?? 0,

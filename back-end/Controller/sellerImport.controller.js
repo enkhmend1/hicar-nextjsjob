@@ -382,6 +382,7 @@ export const ocrHandler = async (req, res) => {
     }
     const { imageUrl } = req.body || {};
     if (!imageUrl) return res.status(400).json({ message: "imageUrl шаардлагатай" });
+    if (!/^https:\/\/\S+$/i.test(String(imageUrl))) return res.status(400).json({ message: "imageUrl нь https:// байх ёстой" });
 
     // Step 1: vision extracts the visible part info via function calling
     const tool = {

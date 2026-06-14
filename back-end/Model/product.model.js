@@ -80,10 +80,10 @@ const productSchema = new mongoose.Schema(
      *                        Indexed so the Shelf Locator tool answers
      *                        "where is OEM 04465-02220" in O(log n).
      */
-    costPrice:         { type: Number, default: 0, min: 0 },
-    warehouseLocation: { type: String, default: "", trim: true, maxlength: 60, index: true },
+    costPrice:         { type: Number, default: 0, min: 0, select: false },
+    warehouseLocation: { type: String, default: "", trim: true, maxlength: 60, index: true, select: false },
     /** Cached for deadstock heuristic — updated by order create hook. */
-    lastSoldAt:        { type: Date, default: null, index: true },
+    lastSoldAt:        { type: Date, default: null, index: true, select: false },
 
     badge: { type: String, default: "" },
     description: { type: String, default: "", maxlength: 4000 },

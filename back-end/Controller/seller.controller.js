@@ -382,7 +382,7 @@ export const warehouse = async (req, res) => {
   try {
     const sellerDefault = req.user.sellerProfile?.defaultLowStockThreshold ?? 5;
     const products = await Product.find({ seller: req.user._id })
-      .select("name oem brand category images iconPath stockQty lowStockThreshold warehouseLocation inStock updatedAt")
+      .select("name oem brand category images iconPath stockQty lowStockThreshold +warehouseLocation inStock updatedAt")
       .sort({ stockQty: 1, name: 1 }) // lowest stock first — what the seller cares about
       .limit(500)
       .lean();
@@ -458,7 +458,7 @@ export const warehouseUpdate = async (req, res) => {
 
     const item = await Product.findByIdAndUpdate(req.params.id, { $set: update }, {
       returnDocument: "after", runValidators: true,
-    }).select("name oem brand category images stockQty lowStockThreshold warehouseLocation inStock updatedAt").lean();
+    }).select("name oem brand category images stockQty lowStockThreshold +warehouseLocation inStock updatedAt").lean();
 
     // Re-evaluate the low-stock alert if stock or threshold moved.
     if ("stockQty" in update || "lowStockThreshold" in update) {

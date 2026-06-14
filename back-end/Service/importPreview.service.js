@@ -46,7 +46,7 @@ const fetchExistingByOem = async (sellerId, oemList) => {
   if (cleaned.length === 0) return new Map();
 
   const docs = await Product.find({ seller: sellerId, oem: { $in: cleaned } })
-    .select("name oem price stockQty status warehouseLocation costPrice")
+    .select("name oem price stockQty status +warehouseLocation +costPrice")
     .lean();
   return new Map(docs.map((d) => [String(d.oem || "").toUpperCase(), d]));
 };
