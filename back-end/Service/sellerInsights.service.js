@@ -82,7 +82,7 @@ export const findDeadstock = async (sellerId, { monthsSilent = 6, limit = 50 } =
     stockQty: { $gt: 0 },
     status:   { $ne: "rejected" },
   })
-    .select("name oem brand category price costPrice stockQty warehouseLocation lastSoldAt createdAt")
+    .select("name oem brand category price +costPrice stockQty +warehouseLocation +lastSoldAt createdAt")
     .lean();
 
   const now = Date.now();
@@ -184,7 +184,7 @@ export const findShelfLocations = async (sellerId, queryStr, { limit = 12 } = {}
   }
 
   const raw = await Product.find(filter)
-    .select("name oem brand stockQty warehouseLocation price")
+    .select("name oem brand stockQty +warehouseLocation price")
     .limit(limit)
     .lean();
 

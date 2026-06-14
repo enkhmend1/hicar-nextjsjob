@@ -51,7 +51,7 @@ const buildFilter = (query) => {
   if (source && source !== "all") f.source = source;
   if (seller) f.seller = seller;
   if (q) {
-    const rx = new RegExp(q, "i");
+    const rx = new RegExp(String(q).slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
     f.$or = [{ name: rx }, { oem: rx }, { brand: rx }];
   }
 
