@@ -30,6 +30,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/store";
 import { useCartDrawer } from "@/app/lib/cartDrawer";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { deliveryPriceFor } from "@/app/lib/delivery";
 import { CartItem, Product } from "@/app/types";
 import {
@@ -85,6 +86,9 @@ export default function CartDrawer() {
       window.removeEventListener("keydown", onKey);
     };
   }, [open, set]);
+
+  // Phone / browser BACK button closes the drawer instead of leaving /shop.
+  useBackClose(open, () => set(false));
 
   const groups = useMemo(() => groupBySeller(items), [items]);
   const itemCount   = items.reduce((s, i) => s + i.quantity, 0);

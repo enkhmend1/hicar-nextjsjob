@@ -12,6 +12,7 @@ import { Product, Order } from "@/app/types";
 import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
 import { useAIChat } from "@/app/lib/aiChat";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
 import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Clock, Camera } from "lucide-react";
 import CameraSheet from "./media/CameraSheet";
@@ -430,6 +431,11 @@ export default function HiCarAIChat() {
     if (img) void handleImagePick(img);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askOpen, busy, send]);
+
+  // Phone / browser BACK button closes the open chat panel instead of leaving
+  // the page (the camera sheet, mounted inside, registers its own handler so
+  // Back closes the camera first, then the panel).
+  useBackClose(isOpen && !isMinimized, () => { setIsOpen(false); setIsMinimized(false); });
 
   // ── Voice input ────────────────────────────────────────────────
   const toggleVoice = () => {

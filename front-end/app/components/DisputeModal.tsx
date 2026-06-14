@@ -15,6 +15,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { api, ApiError, getToken } from "@/lib/api";
 import { Order, DisputeReason } from "@/app/types";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { AlertTriangle, Loader2, Upload, X, Scale } from "lucide-react";
 
 const REASONS: Array<{ id: DisputeReason; label: string; hint: string }> = [
@@ -37,6 +38,9 @@ export default function DisputeModal({
   const [uploading, setUploading]     = useState(false);
   const [busy, setBusy]               = useState(false);
   const [err, setErr]                 = useState("");
+
+  // Phone / browser BACK closes the modal (it only mounts while open).
+  useBackClose(true, onClose);
 
   const orderId = (order._id ?? order.id) as string;
   const max = order.total;

@@ -29,6 +29,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Camera, SwitchCamera, ImagePlus, Loader2, ScanLine, AlertTriangle } from "lucide-react";
+import { useBackClose } from "@/app/lib/useBackClose";
 
 type Mode = "photo" | "scan";
 
@@ -66,6 +67,11 @@ export default function CameraSheet({
   }, []);
 
   const close = useCallback(() => { stopAll(); onClose(); }, [stopAll, onClose]);
+
+  // Phone / browser BACK button closes the camera (and tears the stream down)
+  // instead of leaving the page. The sheet only mounts while open, so the
+  // open flag is a constant `true` for its whole lifetime.
+  useBackClose(true, close);
 
   // Start the camera (photo) or the zxing reader (scan) whenever facing changes.
   useEffect(() => {
@@ -169,16 +175,21 @@ export default function CameraSheet({
   const heading = title || (mode === "scan" ? "QR / баркод уншуулах" : "Камераар зураг авах");
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black flex flex-col">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 h-14 text-white shrink-0"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <span className="text-[15px] font-semibold flex items-center gap-2">
-          {mode === "scan" ? <ScanLine size={18} /> : <Camera size={18} />} {heading}
+    // h-[100dvh] (not inset-0) so the sheet tracks the VISIBLE viewport — on
+    // mobile the browser URL bar / gesture area never pushes the controls off
+    // screen or under the system bars.
+    <div className="fixed inset-x-0 top-0 z-[70] h-[100dvh] bg-black flex flex-col">
+      {/* Top bar — padding (not a fixed height) so the notch safe-area is
+          ADDED above the row instead of squeezing it on small phones. */}
+      <div className="flex items-center justify-between gap-3 px-4 pb-2 text-white shrink-0"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
+        <span className="text-[15px] font-semibold flex items-center gap-2 min-w-0">
+          {mode === "scan" ? <ScanLine size={18} className="shrink-0" /> : <Camera size={18} className="shrink-0" />}
+          <span className="truncate">{heading}</span>
         </span>
         <button onClick={close} aria-label="Хаах"
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 cursor-pointer border-none text-white">
-          <X size={20} />
+          className="w-9 h-9 shrink-0 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 active:bg-white/30 cursor-pointer border-none text-white">
+          <X size={18} />
         </button>
       </div>
 
@@ -220,29 +231,31 @@ export default function CameraSheet({
         )}
       </div>
 
-      {/* Controls */}
+      {/* Controls — extra bottom inset so the shutter never lands on the
+          phone's gesture / navigation bar (env() alone is 0 on most Android
+          browsers, so we add a guaranteed 1.5rem on top of it). */}
       {err !== "camera" && (
-        <div className="shrink-0 px-6 pb-6 pt-3 flex items-center justify-center gap-8"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
+        <div className="shrink-0 px-6 pt-3 flex items-center justify-center gap-10"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}>
           {multiCam ? (
             <button onClick={() => setFacing((f) => (f === "environment" ? "user" : "environment"))}
               aria-label="Камер солих"
-              className="w-12 h-12 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 cursor-pointer border-none text-white">
-              <SwitchCamera size={20} />
+              className="w-11 h-11 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 active:bg-white/30 cursor-pointer border-none text-white">
+              <SwitchCamera size={19} />
             </button>
-          ) : <span className="w-12" />}
+          ) : <span className="w-11" />}
 
           {mode === "photo" ? (
             <button onClick={snap} disabled={!ready || busy} aria-label="Зураг авах"
-              className="w-18 h-18 w-[72px] h-[72px] rounded-full bg-white border-4 border-white/40 disabled:opacity-50 cursor-pointer flex items-center justify-center">
-              {busy ? <Loader2 size={26} className="animate-spin text-gray-700" /> : <span className="w-14 h-14 rounded-full bg-white ring-2 ring-gray-900/10" />}
+              className="w-16 h-16 rounded-full bg-white border-4 border-white/40 disabled:opacity-50 cursor-pointer flex items-center justify-center">
+              {busy ? <Loader2 size={24} className="animate-spin text-gray-700" /> : <span className="w-12 h-12 rounded-full bg-white ring-2 ring-gray-900/10" />}
             </button>
           ) : (
             <span className="text-white/80 text-[13px] text-center">Кодыг хүрээнд багтаана уу</span>
           )}
 
-          <label className="w-12 h-12 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 cursor-pointer text-white" aria-label="Галерейгээс">
-            <ImagePlus size={20} />
+          <label className="w-11 h-11 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 active:bg-white/30 cursor-pointer text-white" aria-label="Галерейгээс">
+            <ImagePlus size={19} />
             <input type="file" accept="image/*" className="hidden"
               onChange={(e) => onFallbackFile(e.target.files?.[0] || null)} />
           </label>

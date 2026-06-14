@@ -22,6 +22,7 @@ import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { Product } from "@/app/types";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { Loader2, X, MessageSquareQuote, Minus, Plus, Package } from "lucide-react";
 
 export default function RfqModal({
@@ -37,6 +38,9 @@ export default function RfqModal({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  // Phone / browser BACK closes the modal (it only mounts while open).
+  useBackClose(true, onClose);
 
   const productId = (product._id ?? product.id) as string;
   const image = product.images && product.images.length > 0 ? product.images[0] : null;

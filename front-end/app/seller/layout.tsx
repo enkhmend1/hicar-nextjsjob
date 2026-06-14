@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
 import NotificationBell from "@/app/components/NotificationBell";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { LayoutDashboard, Package, ShoppingBag, BarChart3, Settings, LogOut, Home, AlertCircle, Clock, Scale, Warehouse, MessageSquareQuote, Menu, X } from "lucide-react";
 
 const NAV = [
@@ -24,6 +25,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   // Mobile nav drawer — replaces the old crammed icon row.
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => { setNavOpen(false); }, [pathname]);
+  // Phone / browser BACK button closes the mobile nav drawer.
+  useBackClose(navOpen, () => setNavOpen(false));
 
   // Allow /seller/apply for any logged-in user (without sidebar chrome)
   const isApplyRoute = pathname === "/seller/apply";

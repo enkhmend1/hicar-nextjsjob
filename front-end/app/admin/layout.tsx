@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
 import NotificationBell from "@/app/components/NotificationBell";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { LayoutDashboard, Package, ShoppingBag, Users, Store, LogOut, Home, Brain, Scale, LayoutTemplate, Sparkles, UploadCloud, Receipt, Lightbulb, LifeBuoy, Menu, X } from "lucide-react";
 
 const NAV = [
@@ -29,6 +30,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // Mobile nav drawer — replaces the old crammed icon row.
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => { setNavOpen(false); }, [pathname]);
+  // Phone / browser BACK button closes the mobile nav drawer.
+  useBackClose(navOpen, () => setNavOpen(false));
 
   useEffect(() => {
     if (!_hasHydrated) return; // wait for zustand persist to load from localStorage

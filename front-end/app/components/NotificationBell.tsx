@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store";
 import { useNotifications } from "@/app/lib/notifications";
+import { useBackClose } from "@/app/lib/useBackClose";
 import { Bell, Check, X, ShoppingBag, Package, Store, AlertCircle, Star, MessageSquare, MessageSquareQuote, LifeBuoy } from "lucide-react";
 
 /**
@@ -76,6 +77,9 @@ export default function NotificationBell({ align = "right" }: { align?: "left" |
     if (open) document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+
+  // Phone / browser BACK button closes the (mobile) notification sheet.
+  useBackClose(open, () => setOpen(false));
 
   if (!user) return null;
 
