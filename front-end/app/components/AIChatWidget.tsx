@@ -13,7 +13,8 @@ import { createVoiceRecognition, isVoiceSupported } from "@/lib/voice";
 import { useAgent } from "@/app/hooks/useAgent";
 import { useAIChat } from "@/app/lib/aiChat";
 import { detectMongolianPlate, normalizeMongolianPlate } from "@/app/lib/plateDetector";
-import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Clock } from "lucide-react";
+import { MessageCircle, X, Minus, Send, Bot, Sparkles, FileSpreadsheet, AlertTriangle, Mic, MicOff, ImagePlus, Loader2, Car, ChevronDown, Clock, Camera } from "lucide-react";
+import CameraSheet from "./media/CameraSheet";
 // Chat-widget types + sub-renderers extracted to ./ai-chat/* (Phase: split a
 // 1.4k-line file). This component keeps only the orchestrating shell.
 import type { Message, Suggestion } from "./ai-chat/types";
@@ -121,6 +122,7 @@ export default function HiCarAIChat() {
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   /** Phase G — header dropdown open/close + plate-input value (pure UI state). */
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [plateInput,   setPlateInput]   = useState("");
@@ -422,6 +424,11 @@ export default function HiCarAIChat() {
       if (busy) setInput(q);
       else void send(q);
     }
+    // Image (vision) search handed in from another surface (e.g. the
+    // SearchCard "Зургаар" tab or a camera capture) → upload + ask.
+    const img = useAIChat.getState().consumeImage();
+    if (img) void handleImagePick(img);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askOpen, busy, send]);
 
   // ── Voice input ────────────────────────────────────────────────
@@ -863,6 +870,12 @@ export default function HiCarAIChat() {
       <div className="p-3 border-t border-gray-100 bg-white flex gap-1.5 items-center">
         {!isAdminPath && (
           <>
+            {/* Take a photo with the device camera (live), or pick from gallery. */}
+            <button onClick={() => setCameraOpen(true)} disabled={busy || uploadingImg}
+              title="Камераар авах"
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border border-gray-200 transition-colors shrink-0 disabled:opacity-50">
+              <Camera size={14} />
+            </button>
             <button onClick={() => fileInputRef.current?.click()} disabled={busy || uploadingImg}
               title="Зураг ачаалах"
               className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer bg-transparent border border-gray-200 transition-colors shrink-0 disabled:opacity-50">
@@ -903,6 +916,15 @@ export default function HiCarAIChat() {
           <Send size={14} />
         </button>
       </div>
+
+      {cameraOpen && (
+        <CameraSheet
+          mode="photo"
+          title="Сэлбэгийн зураг авах"
+          onCapture={(file) => handleImagePick(file)}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
     </div>
   );
 }

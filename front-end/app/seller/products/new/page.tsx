@@ -40,9 +40,11 @@ import {
 import {
   AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronRight, CornerDownRight,
   FolderTree, Loader2, Plus, Search, Trash2, Upload, X, ArrowLeft, PackagePlus,
+  Camera, ScanLine,
 } from "lucide-react";
 import Link from "next/link";
 import PageHeader from "@/app/seller/_components/PageHeader";
+import CameraSheet from "@/app/components/media/CameraSheet";
 
 // Shared form-API type so child components and the parent agree on the
 // exact UseFormReturn shape. Using a named alias avoids TS surfacing the
@@ -234,6 +236,7 @@ export default function NewProductPage() {
 // ─────────────────────────────────────────────────────────────────────
 function Step1Basics({ form }: { form: ProductForm }) {
   const { register, setValue, watch, formState: { errors } } = form;
+  const [oemScan, setOemScan] = useState(false);
   // Live category tree from /api/site-content/categories (same source as the
   // homepage + admin editor). Admin-added categories — and their sub-parts —
   // are available here instantly, no code change.
@@ -285,10 +288,21 @@ function Step1Basics({ form }: { form: ProductForm }) {
         <Field label="Брэнд" error={errors.brand?.message}>
           <input {...register("brand")} className={inputCls} placeholder="Toyota OEM, Bosch, …" />
         </Field>
-        <Field label="OEM код" hint="Заавал биш" error={errors.oem?.message}>
-          <input {...register("oem")} className={`${inputCls} font-mono`} placeholder="04465-0E010" />
+        <Field label="OEM код" hint="Заавал биш — баркод уншуулж болно" error={errors.oem?.message}>
+          <div className="flex gap-1.5">
+            <input {...register("oem")} className={`${inputCls} font-mono flex-1 min-w-0`} placeholder="04465-0E010" />
+            <button type="button" onClick={() => setOemScan(true)} title="Баркод/QR уншуулах"
+              className="w-11 shrink-0 flex items-center justify-center rounded-xl border border-gray-200 hover:border-blue-400 text-gray-500 hover:text-blue-600 cursor-pointer bg-white transition-colors">
+              <ScanLine size={16} />
+            </button>
+          </div>
         </Field>
       </div>
+      {oemScan && (
+        <CameraSheet mode="scan" title="OEM / баркод уншуулах"
+          onResult={(text) => { setValue("oem", text.trim(), { shouldValidate: true, shouldDirty: true }); setOemScan(false); }}
+          onClose={() => setOemScan(false)} />
+      )}
 
       {/* ── Step-by-step category picker ───────────────────────── */}
       <div>
@@ -516,13 +530,14 @@ function Step3Pricing({ form }: { form: ProductForm }) {
 
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState("");
+  const [camOpen, setCamOpen] = useState(false);
 
-  const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
+  const uploadFiles = async (arr: File[]) => {
+    if (!arr.length) return;
     setUploading(true); setUploadErr("");
     try {
       const uploaded: string[] = [];
-      for (const file of Array.from(files).slice(0, 10 - images.length)) {
+      for (const file of arr.slice(0, 10 - images.length)) {
         const { url } = await api.uploadImage(file);
         if (url) uploaded.push(url);
       }
@@ -533,6 +548,7 @@ function Step3Pricing({ form }: { form: ProductForm }) {
       setUploading(false);
     }
   };
+  const onFiles = (files: FileList | null) => uploadFiles(files ? Array.from(files) : []);
 
   return (
     <div className="space-y-4">
@@ -570,18 +586,31 @@ function Step3Pricing({ form }: { form: ProductForm }) {
             </div>
           ))}
           {images.length < 10 && (
-            <label className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${
-              uploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400"
-            }`}>
-              <input type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => onFiles(e.target.files)} disabled={uploading} />
-              {uploading
-                ? <Loader2 size={16} className="animate-spin text-blue-500" />
-                : <Upload size={16} className="text-gray-400" />}
-              <span className="text-[10px] text-gray-400 mt-1">{uploading ? "Хадгалж…" : "Нэмэх"}</span>
-            </label>
+            <>
+              {/* Live camera capture */}
+              <button type="button" onClick={() => setCamOpen(true)} disabled={uploading}
+                className="w-20 h-20 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors bg-transparent disabled:opacity-50">
+                <Camera size={16} className="text-gray-400" />
+                <span className="text-[10px] text-gray-400 mt-1">Камер</span>
+              </button>
+              <label className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                uploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400"
+              }`}>
+                <input type="file" accept="image/*" multiple className="hidden"
+                  onChange={(e) => onFiles(e.target.files)} disabled={uploading} />
+                {uploading
+                  ? <Loader2 size={16} className="animate-spin text-blue-500" />
+                  : <Upload size={16} className="text-gray-400" />}
+                <span className="text-[10px] text-gray-400 mt-1">{uploading ? "Хадгалж…" : "Зураг"}</span>
+              </label>
+            </>
           )}
         </div>
+        {camOpen && (
+          <CameraSheet mode="photo" title="Барааны зураг авах"
+            onCapture={(file) => uploadFiles([file])}
+            onClose={() => setCamOpen(false)} />
+        )}
         {uploadErr && (
           <div className="mt-1.5 text-[11px] text-red-500 inline-flex items-center gap-1">
             <AlertCircle size={11} /> {uploadErr}
